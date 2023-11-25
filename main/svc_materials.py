@@ -93,32 +93,27 @@ def vasp_load(file):
         c = [box[1][2], box[2][2], box[3][2]]
         # Elements quantity
         elements = lines[5:8] # elements[0] = type of element, elements[1] = number of elements
-        coord = lines[8:] # coord de todos los atomos, lines.index([]) cuando viene de vasp
-
         # convert elements to rows:
         #elem_numb = sum([int(x) for x in elements[1]])
         elements_row = [(elements[0][i] + ' ' ) * int(elements[1][i]) for i in range(0, len(elements[0]))]
         elements_row = ' '.join(elements_row)
         elements_row = elements_row.split()
 
-        # Create the row of x, y and z
-        x_col = [coord[0][0]]
-        y_col = [coord[0][1]]
-        z_col = [coord[0][2]]
+        # Load POSCAR file
+        atoms = read(file)
 
+        # Extract atom indices, element symbols, and Cartesian coordinates
+        elements = atoms.get_chemical_symbols()
+        cartesian_coordinates = atoms.get_positions()
 
-        for i in coord[1:]:  # Multiply coord * scale * vector_size
-            x_col.append(round(float(i[0]), 4))
-            y_col.append(round(float(i[1]), 4))
-            z_col.append(round(float(i[2]), 4))
+        # Create DataFrame
+        df = pd.DataFrame({'Element': elements, 'X': cartesian_coordinates[:, 0], 'Y': cartesian_coordinates[:, 1], 'Z': cartesian_coordinates[:, 2]})
+
 
         # Box contain all other information
         box = [[a, b, c], elements]
         # Save to csv
-        data = {'Element': elements_row, 'X': x_col, 'Y': y_col, 'Z': z_col}
-        MP = pd.DataFrame.from_dict(data)
-        MP.loc[:, 'X':'Z'] = MP.loc[:, 'X':'Z'].astype('float')
-        return MP, box
+        return df, box
     
     except ValueError:
         print('The Vasp file is not recognized')
@@ -416,6 +411,19 @@ def inclinate_molecule(df, angle_degrees):
 
     return df
 
+
+def direct_to_cartesian(df, lattice_vectors):
+    df = df
+    # Convert fractional coordinates to Cartesian coordinates
+    atomic_positions_direct = df[['x_direct', 'y_direct', 'z_direct']].values
+    cartesian_positions = np.dot(atomic_positions_direct, lattice_vectors)
+
+    # Create a new DataFrame with Cartesian coordinates
+    df_cartesian = pd.concat([df, pd.DataFrame(cartesian_positions, columns=['x_cartesian', 'y_cartesian', 'z_cartesian'])], axis=1)
+
+    return df_cartesian
+
+
 # The DJ class would be named as Dj_creator
 # We would create a class named Dj_analysis
 #  
@@ -514,12 +522,14 @@ class q2D_analysis:
         
         def isolate_spacer(self):
             crystal_df = self.perovskite_df
+            print(crystal_df)
             B = self.B
             # Find the planes of the perovskite.
             b_planes = crystal_df.query("Element == @B").sort_values(by='Z')
             b_planes['Z'] = b_planes['Z'].apply(lambda x: round(x, 1))
             b_planes.drop_duplicates(subset='Z', inplace=True)
             b_planes.reset_index(inplace=True, drop=True)
+            print(b_planes)
 
             print(len(b_planes.values))
             if len(b_planes.values) > 1:
@@ -532,13 +542,14 @@ class q2D_analysis:
                 # Now lets create a df with only the elements that are between that!
                 # We call that the salt
                 iso_df = crystal_df.query('Z <= @b_up_plane and Z >= @b_down_plane ')
-        
+            
             elif len(b_planes.values) == 1:
                 b_unique_plane = b_planes['Z'].values[0] + 1
                 iso_df = crystal_df.query('Z >= @b_unique_plane')
   
             else:
                 print('Try formatting your result to resemble the example file')
+
             # Update the box to be 10 amstrong in Z
             iso_df.loc[:, 'Z'] = iso_df['Z'] - iso_df['Z'].min()
             box = self.box
@@ -630,4 +641,3 @@ class q2D_analysis:
 
         def save_octahedra_draws(self, atom, coord, bond_cutoff=3.5):
             return oc.src.draw.DrawComplex_Matplotlib(atom=atom, coord=coord, cutoff_global=bond_cutoff)
-
