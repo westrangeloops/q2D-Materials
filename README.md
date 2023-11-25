@@ -1,4 +1,4 @@
-![Github_portada](https://github.com/westrangeloops/SVC-Maestra/assets/34012719/759685f8-0789-47a2-8302-471e389a86a8)
+![Github_portada](https://github.com/westrangeloops/SVC-Materials/blob/main/Logos/Github_portada.png)
 
 # SVC-Materials
 SVC-Maestra is a Python package for creating DJ perovskite, currently developed by the Theoritical materials science group of the University of Antioquia. SVC-Maestra simplifies the generation of initial input structures for quasi-2D perovskite systems, providing researchers with a reliable starting point for subsequent first principles calculations. By facilitating accurate structure generation, it supports systematic and rational analysis of electronic, optical, and structural properties of perovskite materials through physics-based simulations.
