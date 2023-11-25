@@ -93,7 +93,6 @@ def vasp_load(file):
         c = [box[1][2], box[2][2], box[3][2]]
         # Elements quantity
         elements = lines[5:8] # elements[0] = type of element, elements[1] = number of elements
-        coord = lines[8:] # coord de todos los atomos, lines.index([]) cuando viene de vasp
 
         # convert elements to rows:
         #elem_numb = sum([int(x) for x in elements[1]])
