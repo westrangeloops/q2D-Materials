@@ -1,1720 +1,645 @@
-# OctaDist  Copyright (C) 2019  Rangsiman Ketkaew et al.
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>.
-# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# To add a custom directory to sys.path
+from OctaDist import octadist as oc
 
-import base64
-import os
-import platform
-import subprocess
-import tkinter as tk
-import tkinter.scrolledtext as tkscrolled
-import webbrowser
-from datetime import datetime
-from tkinter import filedialog
-from tkinter import messagebox
-from tkinter import ttk
-from tkinter.messagebox import showinfo
-from urllib.request import urlopen
-
+# Imports
+import pandas as pd
 import numpy as np
+from ase.io import read
+from ase.visualize import view
+from rdkit import Chem
+from os import remove
+import numpy.linalg as LA
+
+from scipy.spatial import distance
+from ase.neighborlist import NeighborList
+from ase import Atoms, visualize
+from ase.geometry.analysis import Analysis
+import math
+from scipy.spatial.distance import cdist
+
+
+def rot_mol(data, degree):
+    df = data.copy()
+    # find the coordinates of the two nitrogen atoms
+    nitrogen_atoms = df[df['Element'] == 'N'][['X', 'Y', 'Z']].values
+
+    # calculate the axis of rotation as the vector between the two nitrogen atoms
+    axis = nitrogen_atoms[1] - nitrogen_atoms[0]
+
+    # normalize the axis vector
+    axis = np.linalg.norm(axis)
+
+    # convert the rotation angle from degrees to radians
+    angle = np.radians(degree)
+
+    # create the rotation matrix
+    c = np.cos(angle)
+    s = np.sin(angle)
+    t = 1 - c
+    rotation_matrix = np.array([[t*axis[0]**2 + c, t*axis[0]*axis[1] - s*axis[2], t*axis[0]*axis[2] + s*axis[1]],
+                                [t*axis[0]*axis[1] + s*axis[2], t*axis[1]**2 + c, t*axis[1]*axis[2] - s*axis[0]],
+                                [t*axis[0]*axis[2] - s*axis[1], t*axis[1]*axis[2] + s*axis[0], t*axis[2]**2 + c]])
+
+    # apply the rotation to all atoms in the dataframe
+    atoms = df[['X', 'Y', 'Z']].values
+    atoms -= nitrogen_atoms[0]
+    atoms = np.dot(atoms, rotation_matrix)
+    atoms += nitrogen_atoms[0]
+    df[['X', 'Y', 'Z']] = atoms
+    print('Spacer rotated!')
+    return df
+
+def mol_load(file):
+    # Load the molecule from the file
+    if file.endswith('.mol2'): 
+        mol = Chem.MolFromMol2File(file, removeHs=False)
+    elif file.endswith('.xyz'):
+        mol = Chem.MolFromXYZFile(file, removeHs=False)
+    else:
+        print('WARNING: Not currently supported format')
+
+    # Check if the molecule was loaded successfully
+    if mol is None:
+        raise ValueError(f"Could not load molecule from file {file}")
+
+    # Get the number of atoms in the molecule
+    num_atoms = mol.GetNumAtoms()
+
+    # Get the atomic symbols and 3D coordinates from the molecule
+    atoms = []
+    for i in range(num_atoms):
+        symbol = mol.GetAtomWithIdx(i).GetSymbol()
+        pos = mol.GetConformer().GetAtomPosition(i)
+        atoms.append([symbol, pos.x, pos.y, pos.z])
+
+    # Create a Pandas DataFrame with the atomic coordinates
+    df = pd.DataFrame(atoms, columns=['Element', 'X', 'Y', 'Z'])
+    return df
+
+
+def vasp_load(file):
+    try:
+        lines = []
+        f = open(file, 'r')
+        # Remove empty lines:
+        for line in f:
+            lines.append(line.split())
+        lines = [x for x in lines if x != []]
+        #Proc lines
+        box = lines[1:5] # box[0] es la escala box[1:4] a, b, c respectivamente, scale = box[0][0], a=box[1][0], b=[2][1] y c=[3][2]
+        # box array:
+        a = [box[1][0], box[2][0], box[3][0]]
+        b = [box[1][1], box[2][1], box[3][1]]
+        c = [box[1][2], box[2][2], box[3][2]]
+        # Elements quantity
+        elements = lines[5:8] # elements[0] = type of element, elements[1] = number of elements
+        coord = lines[8:] # coord de todos los atomos, lines.index([]) cuando viene de vasp
+
+        # convert elements to rows:
+        #elem_numb = sum([int(x) for x in elements[1]])
+        elements_row = [(elements[0][i] + ' ' ) * int(elements[1][i]) for i in range(0, len(elements[0]))]
+        elements_row = ' '.join(elements_row)
+        elements_row = elements_row.split()
+
+        # Load POSCAR file
+        atoms = read(file)
+
+        # Extract atom indices, element symbols, and Cartesian coordinates
+        elements = atoms.get_chemical_symbols()
+        cartesian_coordinates = atoms.get_positions()
+
+        # Create DataFrame
+        df = pd.DataFrame({'Element': elements, 'X': cartesian_coordinates[:, 0], 'Y': cartesian_coordinates[:, 1], 'Z': cartesian_coordinates[:, 2]})
+
+
+        # Box contain all other information
+        box = [[a, b, c], elements]
+        # Save to csv
+        return df, box
+    
+    except ValueError:
+        print('The Vasp file is not recognized')
+
+
+
+def align_nitrogens(molecule_df, tar='Z'):
+    # Find the coordinates of the two Nitrogen atoms
+    n1_coords = molecule_df.loc[molecule_df['Element'] == 'N', ['X', 'Y', 'Z']].iloc[0].values
+    n2_coords = molecule_df.loc[molecule_df['Element'] == 'N', ['X', 'Y', 'Z']].iloc[1].values
+
+    # Calculate the vector between the two Nitrogen atoms
+    v_ref = n1_coords - n2_coords
+
+    if tar == 'Z':
+        # Define the target vector (aligned with the z-axis)
+        v_tar = np.array([0, 0, np.linalg.norm(v_ref)])
+    else:
+        v_tar = tar
+
+    # Calculate the rotation matrix that transforms v_ref to v_tar
+    cos_theta = np.dot(v_ref, v_tar) / (np.linalg.norm(v_ref) * np.linalg.norm(v_tar))
+    sin_theta = np.sqrt(1 - cos_theta**2)
+    axis = np.cross(v_ref, v_tar) / np.linalg.norm(np.cross(v_ref, v_tar))
+    I = np.eye(3)
+    skew_axis = np.array([[0, -axis[2], axis[1]], [axis[2], 0, -axis[0]], [-axis[1], axis[0], 0]])
+    R = cos_theta * I + (1 - cos_theta) * np.outer(axis, axis) + sin_theta * skew_axis
 
-import octadist
-from octadist.logo import Icon_Base64
-from octadist.src import io, calc, draw, plot, popup, scripting, structure, tools
-
-
-class OctaDist:
-    """
-    OctaDist class initiates main program UI and create all widgets.
-
-    Program interface is structured as follows:
-
-    +-------------------+
-    |   Program Menu    |
-    +-------------------+
-    |     Frame 1       |
-    +---------+---------+
-    | Frame 2 | Frame 3 |
-    +---------+---------+
-    |     Frame 4       |
-    +-------------------+
-
-    - Frame 1 : Program name and short description
-    - Frame 2 : Program console
-    - Frame 3 : Textbox for showing summary output
-    - Frame 4 : textbox for showing detailed output
-
-    Examples
-    --------
-    >>> my_app = OctaDist()
-    >>> my_app.start_app()
-
-    """
-
-    def __init__(self):
-        self.master = tk.Tk()
-
-        # Initialize parameters
-        self.file_list = []  # Full path of input files.
-        self.file_name = []  # File name.
-        self.octa_index = []  # Octahedral structure index.
-        self.atom_coord_full = []  # Coordinates of metal complex.
-        self.atom_coord_octa = []  # Coordinates of octahedral structures.
-        self.all_zeta = []  # Zeta of all octahedral structures.
-        self.all_delta = []  # Delta of all octahedral structures.
-        self.all_sigma = []  # Sigma of all octahedral structures.
-        self.all_theta = []  # Theta of all octahedral structures.
-        self.comp_result = []  # Distortion parameters.
-
-        self.octadist_icon = None
-
-        # Default cutoff values
-        self.cutoff_metal_ligand = 2.8
-        self.cutoff_global = 2.0
-        self.cutoff_hydrogen = 1.2
-
-        # Default executable of text editor
-        self.text_editor = "notepad.exe"
-
-        # Default molecular visualizer
-        self.visualizer = "Matplotlib"
-
-        # Default display settings
-        self.show_title = True
-        self.show_axis = True
-        self.show_grid = True
-
-        self.backup_cutoff_metal_ligand = self.cutoff_metal_ligand
-        self.backup_cutoff_global = self.cutoff_global
-        self.backup_cutoff_hydrogen = self.cutoff_hydrogen
-        self.backup_text_editor = self.text_editor
-        self.backup_visualizer = self.visualizer
-        self.backup_show_title = self.show_title
-        self.backup_show_axis = self.show_axis
-        self.backup_show_grid = self.show_grid
-
-        # Create master frame, sub-frames, add menu, and add widgets
-        self.create_logo()
-        self.start_master()
-        self.add_menu()
-        self.add_widgets()
-        self.welcome_msg()
-        self.start_app()
-
-    def create_logo(self):
-        """
-        Create icon file from Base64 raw code.
-
-        This will be used only for Windows OS.
-
-        Other OS like Linux and macOS use default logo of Tkinter.
-
-        Examples
-        --------
-        >>> if self.octadist_icon is True:
-        >>>     self.create_logo()
-        >>> else:
-        >>>     pass
-
-        """
-        if platform.system() == "Windows":
-            icon_data = base64.b64decode(Icon_Base64.icon_base64)
-            temp_file = "icon.ico"
-            save_path = os.path.expanduser("~/AppData/Local/Temp")
-            self.octadist_icon = os.path.join(save_path, temp_file)
-            icon_file = open(self.octadist_icon, "wb")
-            icon_file.write(icon_data)
-            icon_file.close()
-            self.master.wm_iconbitmap(self.octadist_icon)
-
-    def start_master(self):
-        """
-        Start application with UI settings.
-
-        """
-        self.master.title(f"OctaDist {octadist.__version__}")
-        font = "Arial 10"
-        self.master.option_add("*Font", font)
-        center_width = (self.master.winfo_screenwidth() / 2.0) - (550 / 2.0)
-        center_height = (self.master.winfo_screenheight() / 2.0) - (750 / 2.0)
-        self.master.geometry("525x635+%d+%d" % (center_width, center_height))
-        self.master.resizable(0, 0)
-
-    def add_menu(self):
-        """
-        Add menu bar to master windows.
-
-        """
-        # Main menu
-        menu_bar = tk.Menu(self.master)
-        self.master.config(menu=menu_bar)
-        file_menu = tk.Menu(self.master, tearoff=0)
-        edit_menu = tk.Menu(self.master, tearoff=0)
-        disp_menu = tk.Menu(self.master, tearoff=0)
-        tools_menu = tk.Menu(self.master, tearoff=0)
-        help_menu = tk.Menu(self.master, tearoff=0)
-
-        # Sub-menu
-        copy_menu = tk.Menu(self.master, tearoff=0)
-        data_menu = tk.Menu(self.master, tearoff=0)
-        strct_menu = tk.Menu(self.master, tearoff=0)
-
-        # File
-        menu_bar.add_cascade(label="File", menu=file_menu)
-        file_menu.add_command(label="New", command=lambda: self.clear_cache())
-        file_menu.add_command(label="Open...", command=lambda: self.open_file())
-        file_menu.add_command(label="Save Results", command=lambda: self.save_results())
-        file_menu.add_command(label="Save Coordinates", command=lambda: self.save_coord())
-        file_menu.add_separator()
-        file_menu.add_command(label="Settings", command=lambda: self.settings())
-        file_menu.add_separator()
-        file_menu.add_command(label="Exit", command=lambda: self.master.destroy())
-
-        # Edit
-        menu_bar.add_cascade(label="Edit", menu=edit_menu)
-        edit_menu.add_cascade(label="Copy... to clipboard", menu=copy_menu)
-        copy_menu.add_command(label="File Name", command=lambda: self.copy_name())
-        copy_menu.add_command(label="File Path", command=lambda: self.copy_path())
-        copy_menu.add_command(label="Computed Distortion Parameters", command=lambda: self.copy_results())
-        copy_menu.add_command(label="Coordinates of Octahedral Structure", command=lambda: self.copy_octa())
-        edit_menu.add_separator()
-        edit_menu.add_command(label="Edit File", command=lambda: self.edit_file())
-        edit_menu.add_command(label="Run Scripting Console", command=lambda: self.scripting_console())
-        edit_menu.add_separator()
-        edit_menu.add_command(label="Clear All Results", command=lambda: self.clear_cache())
-
-        # Display
-        menu_bar.add_cascade(label="Display", menu=disp_menu)
-        disp_menu.add_command(label="Complex", command=lambda: self.draw_all_atom())
-        disp_menu.add_command(label="Complex and Eight Faces", command=lambda: self.draw_all_atom_and_face())
-        disp_menu.add_separator()
-        disp_menu.add_command(label="Octahedron", command=lambda: self.draw_octa())
-        disp_menu.add_command(label="Octahedron and Eight Faces", command=lambda: self.draw_octa_and_face())
-        disp_menu.add_separator()
-        disp_menu.add_command(label="Projection Planes", command=lambda: self.draw_projection())
-        disp_menu.add_command(label="Twisting Triangular Faces", command=lambda: self.draw_twisting_plane())
-
-        # Tools
-        menu_bar.add_cascade(label="Tools", menu=tools_menu)
-        tools_menu.add_cascade(label="Data Summary", command=lambda: self.show_data_complex())
-        tools_menu.add_cascade(label="Show Structural Parameter", command=lambda: self.show_param_octa())
-        tools_menu.add_command(label="Calculate Surface Area", command=lambda: self.show_surface_area())
-        tools_menu.add_separator()
-        tools_menu.add_command(
-            label="Relationship Plot between ζ and Σ", command=lambda: self.plot_zeta_sigma()
-        )
-        tools_menu.add_command(
-            label="Relationship Plot between Σ and Θ", command=lambda: self.plot_sigma_theta()
-        )
-        tools_menu.add_separator()
-        tools_menu.add_command(
-            label="Calculate Jahn-Teller Distortion", command=lambda: self.tool_jahn_teller()
-        )
-        tools_menu.add_command(label="Calculate RMSD", command=lambda: self.tool_rmsd())
-
-        # Help
-        menu_bar.add_cascade(label="Help", menu=help_menu)
-        help_menu.add_command(
-            label="User Documentation", command=lambda: webbrowser.open_new_tab(octadist.__help__)
-        )
-        example_mol = "https://github.com/OctaDist/OctaDist/tree/master/example-input"
-        help_menu.add_command(label="Example molecules", command=lambda: webbrowser.open_new_tab(example_mol))
-        help_menu.add_separator()
-        submit_issue = "https://github.com/OctaDist/OctaDist/issues"
-        help_menu.add_command(label="Report Issue", command=lambda: webbrowser.open_new_tab(submit_issue))
-        help_menu.add_command(
-            label="Github Repository", command=lambda: webbrowser.open_new_tab(octadist.__github__)
-        )
-        help_menu.add_command(label="Homepage", command=lambda: webbrowser.open_new_tab(octadist.__website__))
-        help_menu.add_separator()
-        help_menu.add_command(label="License", command=lambda: self.show_license())
-        help_menu.add_separator()
-        help_menu.add_command(label="Check for Updates...", command=self.check_update)
-        help_menu.add_command(label="About Program", command=lambda: self.show_about())
-
-    def add_widgets(self):
-        """
-        Add all widgets and components to master windows.
-
-        GUI style of widgets in master windows use ttk style.
-
-        """
-        # my personal ttk style #
-        gui_ttk = ttk.Style()
-        gui_ttk.configure("TButton", relief="sunken", padding=5)
-        gui_ttk.configure("My.TLabel", foreground="black")
-        gui_ttk.configure("My.TLabelframe", foreground="brown")
-
-        ###########
-        # Frame 1 #
-        ###########
-
-        frame1 = tk.Frame(self.master)
-        frame1.grid(padx=5, pady=5, row=0, column=0, columnspan=2)
-
-        title = octadist.__title__
-        lbl = tk.Label(frame1, text=title)
-        lbl.configure(foreground="blue", font=("Arial", 16, "bold"))
-        lbl.grid(pady="5", row=0, columnspan=4)
-
-        description = octadist.__description__
-        lbl = tk.Label(frame1, text=description)
-        lbl.grid(pady="5", row=1, columnspan=4)
-
-        ###########
-        # Frame 2 #
-        ###########
-
-        frame2 = tk.LabelFrame(self.master, text="Program Console")
-        frame2.grid(padx=5, pady=5, ipadx=2, ipady=2, sticky=tk.N, row=1, column=0)
-
-        btn = ttk.Button(frame2, text="Browse file", command=self.open_file)
-        btn.config(width=14)
-        btn.grid(padx="10", pady="5", row=0)
-
-        btn = ttk.Button(frame2, text="Compute", command=self.calc_distortion)
-        btn.config(width=14)
-        btn.grid(padx="10", pady="5", row=1)
-
-        btn = ttk.Button(frame2, text="Clear cache", command=self.clear_cache)
-        btn.config(width=14)
-        btn.grid(padx="10", pady="5", row=2)
-
-        btn = ttk.Button(frame2, text="Save Results", command=self.save_results)
-        btn.config(width=14)
-        btn.grid(padx="10", pady="5", row=3)
-
-        ###########
-        # Frame 3 #
-        ###########
-
-        frame3 = tk.LabelFrame(self.master, text="Distortion Parameters")
-        frame3.grid(padx=5, pady=5, ipadx=3, ipady=2, sticky=tk.N, row=1, column=1)
-
-        # D_mean
-        lbl = tk.Label(frame3, text="<D>   =   ")
-        lbl.grid(sticky=tk.E, pady="5", row=0, column=0)
-
-        self.box_d_mean = tk.Entry(frame3)
-        self.box_d_mean.configure(width="12", justify="center")
-        self.box_d_mean.grid(row=0, column=1)
-
-        lbl = tk.Label(frame3, text="  Angstrom")
-        lbl.grid(pady="5", row=0, column=2)
-
-        # Zeta
-        lbl = tk.Label(frame3, text="ζ   =   ")
-        lbl.grid(sticky=tk.E, pady="5", row=1, column=0)
-
-        self.box_zeta = tk.Entry(frame3)
-        self.box_zeta.configure(width="12", justify="center")
-        self.box_zeta.grid(row=1, column=1)
-
-        lbl = tk.Label(frame3, text="  Angstrom")
-        lbl.grid(pady="5", row=1, column=2)
-
-        # Delta
-        lbl_delta = tk.Label(frame3, text="Δ   =   ")
-        lbl_delta.grid(sticky=tk.E, pady="5", row=2, column=0)
-
-        self.box_delta = tk.Entry(frame3)
-        self.box_delta.configure(width="12", justify="center")
-        self.box_delta.grid(row=2, column=1)
-
-        # Sigma
-        lbl = tk.Label(frame3, text="Σ   =   ")
-        lbl.grid(sticky=tk.E, pady="5", row=3, column=0)
-
-        self.box_sigma = tk.Entry(frame3)
-        self.box_sigma.configure(width="12", justify="center")
-        self.box_sigma.grid(row=3, column=1)
-
-        lbl = tk.Label(frame3, text="  degree")
-        lbl.grid(pady="5", row=3, column=2)
-
-        # Theta_mean
-        lbl = tk.Label(frame3, text="Θ   =   ")
-        lbl.grid(sticky=tk.E, pady="5", row=4, column=0)
-
-        self.box_theta_mean = tk.Entry(frame3)
-        self.box_theta_mean.configure(width="12", justify="center")
-        self.box_theta_mean.grid(row=4, column=1)
-
-        lbl = tk.Label(frame3, text="  degree")
-        lbl.grid(pady="5", row=4, column=2)
-
-        ###########
-        # Frame 4 #
-        ###########
-
-        frame4 = tk.Frame(self.master)
-        frame4.grid(padx=5, pady=10, row=2, column=0, columnspan=2)
-
-        self.box_result = tkscrolled.ScrolledText(frame4)
-        self.box_result.configure(height="19", width="70", wrap="word", undo="True")
-        self.box_result.grid(row=0)
-
-    def show_text(self, text):
-        """
-        Insert text to result box
-
-        Parameters
-        ----------
-        text : str
-            Text to show in result box.
-
-        Returns
-        -------
-        None : None
-
-        """
-        self.box_result.insert(tk.INSERT, text + "\n")
-        self.box_result.see(tk.END)
-
-    def welcome_msg(self):
-        """
-        Show welcome message in result box:
-
-        1. Program name, version, and release.
-        2. Full author names.
-        3. Official website: https://octadist.github.io.
-
-        """
-        full_version = octadist.__version__ + " " + f"({octadist.__release__})"
-
-        self.show_text(f"Welcome to OctaDist version {full_version}\n")
-        self.show_text(f"Developed by {octadist.__author_full__}.\n")
-        self.show_text(octadist.__website__ + "\n")
-
-    #####################
-    # Manipulating File #
-    #####################
-
-    def open_file(self):
-        """
-        Open file dialog where the user will browse input files.
-
-        """
-        self.clear_cache()
-
-        input_file = filedialog.askopenfilenames(
-            title="Choose input file",
-            filetypes=(
-                ("All Files", "*.*"),
-                ("CIF File", "*.cif"),
-                ("XYZ File", "*.xyz"),
-                ("Gaussian Output File", "*.out"),
-                ("Gaussian Output File", "*.log"),
-                ("NWChem Output File", "*.out"),
-                ("NWChem Output File", "*.log"),
-                ("ORCA Output File", "*.out"),
-                ("ORCA Output File", "*.log"),
-                ("Q-Chem Output File", "*.out"),
-                ("Q-Chem Output File", "*.log"),
-            ),
-        )
-
-        self.file_list = list(input_file)
-        self.search_coord()
-
-    def search_coord(self):
-        """
-        Search and extract atomic symbols and coordinates from input file.
-
-        See Also
-        --------
-        octadist.src.io.extract_coord :
-            Extract atomic symbols and atomic coordinates from input file.
-        octadist.src.io.extract_octa :
-            Extract octahedral structure from complex.
-
-        """
-        try:
-            open(self.file_list[0], "r")
-        except IndexError:
-            return 1
-
-        for i in range(len(self.file_list)):
-
-            ########################################
-            # Extract atomic coordinates from file #
-            ########################################
-
-            atom_full, coord_full = io.extract_coord(self.file_list[i])
-            self.atom_coord_full.append([atom_full, coord_full])
-
-            # If either lists is empty, then continue to next file
-            if len(list(atom_full)) == 0 or len(coord_full) == 0:
-                continue
-
-            #################################################
-            # Extract octahedral structure from the complex #
-            #################################################
-
-            atom_metal, coord_metal, index_metal = io.find_metal(atom_full, coord_full)
-
-            if len(atom_metal) == 0:
-                popup.warn_no_metal(i + 1)
-
-            # loop over the number of metal atoms found in the complex
-            for j in range(len(atom_metal)):
-                atom_octa, coord_octa = io.extract_octa(
-                    atom_full, coord_full, index_metal[j], self.cutoff_metal_ligand
-                )
-
-                # If no atomic coordinates inside, raise error
-                if np.any(coord_octa) == 0:
-                    popup.err_no_coord(i + 1)
-                    continue
-
-                if len(coord_octa) < 7:
-                    self.clear_result_box()
-                    popup.err_less_ligands(i + 1)
-                    continue
-
-                # File number and file name
-                file_name = self.file_list[i].split("/")[-1]
-                self.file_name.append([i + 1, file_name])
-
-                # Metal center atom
-                self.octa_index.append(atom_octa[0])
-
-                # Atomic labels and atomic coordinates
-                # Example:
-                #
-                # atom = ['Fe', 'O', 'O', 'N', 'N', 'N', 'N']
-                # coord = [[2.298354, 5.161785, 7.971898],
-                #          [1.885657, 4.804777, 6.183726],
-                #          [1.747515, 6.960963, 7.932784],
-                #          [4.094380, 5.807257, 7.588689],
-                #          [0.539005, 4.482809, 8.460004],
-                #          [2.812425, 3.266553, 8.131637],
-                #          [2.886404, 5.392925, 9.848966]]
-
-                self.atom_coord_octa.append([atom_octa, coord_octa])
-
-        self.show_coord()
-
-    def show_coord(self):
-        """
-        Show coordinates in box.
-
-        """
-        # loop over complex
-        for i in range(len(self.atom_coord_octa)):
-            if i == 0:
-                self.show_text("XYZ coordinates of extracted octahedral structure")
-
-            self.show_text(f"File {self.file_name[i][0]}: {self.file_name[i][1]}")
-            self.show_text(f"Metal center atom: {self.octa_index[i]}")
-            self.show_text("Atom\t\tCartesian coordinate")
-
-            # loop over atoms in octahedron
-            for k in range(7):
-                self.show_text(
-                    " {0:>2}      {1:14.9f}  {2:14.9f}  {3:14.9f}".format(
-                        self.atom_coord_octa[i][0][k],
-                        self.atom_coord_octa[i][1][k][0],
-                        self.atom_coord_octa[i][1][k][1],
-                        self.atom_coord_octa[i][1][k][2],
-                    )
-                )
-            self.show_text("")
-
-    def save_results(self):
-        """
-        Save results as output file. Default file extension is .txt.
-
-        """
-        f = filedialog.asksaveasfile(
-            mode="w",
-            defaultextension=".txt",
-            title="Save results",
-            filetypes=(("TXT File", "*.txt"), ("All Files", "*.*")),
-        )
-
-        f.write(f"{octadist.__copyright__}\n")
-        f.write("=" * 60 + "\n")
-        f.write("\n")
-        f.write(f"OctaDist version {octadist.__version__} ({octadist.__release__})\n")
-        f.write("Octahedral Distortion Calculator\n")
-        f.write(f"{octadist.__website__}\n")
-        today = datetime.now().strftime("%b-%d-%y %H:%M:%S")
-        f.write(f"{today}\n")
-        f.write("\n")
-        f.write("=" * 60 + "\n")
-        f.write("\n")
-        get_result = self.box_result.get("1.0", tk.END + "-1c")
-        f.write(get_result)
-        f.write("\n")
-        f.write("=" * 60 + "\n")
-        f.close()
-
-        popup.info_save_results(f.name)
-
-    def save_coord(self):
-        """
-        Save atomic coordinates (Cartesian coordinate) of octahedral structure.
-        Default file extension is .xyz.
-
-        """
-        if len(self.file_list) == 0:
-            popup.err_no_file()
-            return 1
-
-        if len(self.file_list) > 1:
-            popup.err_many_files()
-            return 1
-
-        f = filedialog.asksaveasfile(
-            mode="w",
-            defaultextension=".xyz",
-            title="Save atomic coordinates",
-            filetypes=(("XYZ File", "*.xyz"), ("TXT File", "*.txt"), ("All Files", "*.*")),
-        )
-
-        file_name = self.file_list[0].split("/")[-1]
-        atoms = self.atom_coord_octa[0][0]
-        coord = self.atom_coord_octa[0][1]
-        num_atom = 7
-
-        f.write(f"{num_atom}\n")
-        full_version = octadist.__version__ + " " + f"({octadist.__release__})"
-        f.write(f"{file_name} : this file was generated by OctaDist version {full_version}.\n")
-        for i in range(num_atom):
-            f.write(
-                "{0:2s}\t{1:9.6f}\t{2:9.6f}\t{3:9.6f}\n".format(
-                    atoms[i], coord[i][0], coord[i][1], coord[i][2]
-                )
-            )
-        f.write("\n")
-        f.close()
-
-        popup.info_save_results(f.name)
-
-    ###################################
-    # Calculate distortion parameters #
-    ###################################
-
-    def calc_distortion(self):
-        """
-        Calculate all distortion parameters:
-
-        - D_mean
-        - Zeta
-        - Delta
-        - Sigma
-        - Theta
-
-        See Also
-        --------
-        octadist.src.calc.CalcDistortion.calc_d_mean :
-            Calculate mean metal-ligand bond length.
-        octadist.src.calc.CalcDistortion.calc_zeta :
-            Calculate Zeta parameter.
-        octadist.src.calc.CalcDistortion.calc_delta :
-            Calculate Delta parameter.
-        octadist.src.calc.CalcDistortion.calc_sigma :
-            Calculate Sigma parameter.
-        octadist.src.calc.CalcDistortion.calc_theta :
-            Calculate Theta parameter.
-
-        """
-        if len(self.atom_coord_octa) >= 1:
-            self.clear_param_box()
+    # Apply the rotation to the molecule coordinates
+    coords = molecule_df[['X', 'Y', 'Z']].values
+    coords_tar = (R @ coords.T).T
+    molecule_df[['X', 'Y', 'Z']] = coords_tar
+
+    return molecule_df
+
+def transform_mol(mol, T1, T2, T3):
+    molecule_df = mol.molecule_df.copy()
+
+    # Define reference and target points
+    A_ref = mol.molecule_D1
+    B_ref = mol.molecule_D2
+    H_ref = mol.molecule_D3
+    A_tar = T1
+    B_tar = T2
+    H_tar = T3
+
+    # Calculate normal vectors to reference and target planes
+    N_ref = np.cross(B_ref - A_ref, H_ref - A_ref)
+    N_tar = np.cross(B_tar - A_tar, H_tar - A_tar)
+
+    # Calculate rotation matrix that transforms reference plane to target plane
+    cos_theta = np.dot(N_ref, N_tar) / (np.linalg.norm(N_ref) * np.linalg.norm(N_tar))
+    sin_theta = np.sqrt(1 - cos_theta**2)
+    axis = np.cross(N_ref, N_tar) / np.linalg.norm(np.cross(N_ref, N_tar))
+    I = np.eye(3)
+    skew_axis = np.array([[0, -axis[2], axis[1]], [axis[2], 0, -axis[0]], [-axis[1], axis[0], 0]])
+    R = cos_theta * I + (1 - cos_theta) * np.outer(axis, axis) + sin_theta * skew_axis
+
+    # Calculate translation vector that moves reference plane to target plane
+    p_ref = (A_ref + B_ref + H_ref) / 3
+    p_tar = (A_tar + B_tar + H_tar) / 3
+    T = p_tar - R @ p_ref
+
+    # Apply transformation to molecule coordinates
+    coords = molecule_df[['X', 'Y', 'Z']].values
+    coords_tar = (R @ coords.T + T.reshape(-1, 1)).T
+    molecule_df[['X', 'Y', 'Z']] = coords_tar
+
+    return molecule_df
+
+def pi(argu):
+    return np.array(list(map(float,argu.strip().split()))[:3])
+
+
+def make_svc(DF_MA_1, DF_MA_2):
+    dis_1 = DF_MA_1.sort_values(by='Z').iloc[0, 3]
+    DF_MA_1['Z'] = DF_MA_1['Z'].apply(lambda x: x - dis_1)
+    dis_2 = DF_MA_2.sort_values(by='Z').iloc[0, 3]
+    DF_MA_2['Z'] = DF_MA_2['Z'].apply(lambda x: x - dis_2)
+    organic_spacers = pd.concat([DF_MA_1, DF_MA_2])
+    organic_spacers.reset_index(drop=True, inplace=True)
+    return organic_spacers
+
+
+# USE THIS TO SAVE TO VASP FILE
+
+def save_vasp(dt, box, name='svc', dynamics=False, order=False, B=False):
+    a = box[0][0]
+    b = box[0][1]
+    c = box[0][2]
+    elements = box[1]
+    MP = dt
+
+    if order is False:
+        pass
+    else:
+        print('Working')
+        atom_order = order
+        MP.sort_values(by='Element', key=lambda column: column.map(lambda x: elements[0].index(x)), inplace=True)
+        # Define the desired atom order
+        print('Hey')
+
+        # Reorder the dataframe based on the desired atom order
+        MP['Element'] = pd.Categorical(MP['Element'], categories=atom_order, ordered=True)
+
+
+    MP.sort_values('Element', inplace=True)
+
+
+    if dynamics:
+        # Calculate length based on largest atom in 'Z' coordinate
+        length = np.amax(MP['Z']) / 2.0
+
+        # Find the first B atom below and above the length
+        first_pb_below = MP.loc[(MP['Element'] == '{}'.format(B)) & (MP['Z'] < length), 'Z'].max()
+        first_pb_above = MP.loc[(MP['Element'] == '{}'.format(B)) & (MP['Z'] > length), 'Z'].min()
+
+        # Boolean array indicating atoms between first_B_below and first_B_above with elements N, C, H
+        mask = (MP['Element'].isin(['N', 'C', 'H'])) & (MP['Z'] > first_pb_below) & (MP['Z'] < first_pb_above)
+
+        # Create the 'DYN' column with 'F   F   F' or 'T   T   T'
+        MP['DYN'] = np.where(mask, 'T   T   T', 'F   F   F')
+
+    # Elements to print
+    elem_idx = MP.groupby('Element', sort=False).count().index
+    elem_val = MP.groupby('Element', sort=False).count()['X']
+
+    with open('{}'.format(name), 'w') as vasp_file:
+        # Vasp name
+        vasp_file.write(''.join(name)+'\n')
+        vasp_file.write('1'+'\n') # Scale
+        for n in range(0, 3): # Vectors of a, b and c
+            vasp_file.write('            ' + str(a[n]) + ' ' + str(b[n]) + ' ' + str(c[n])+'\n')
+        # Vasp number of atoms
+        vasp_file.write('      ' + '   '.join(elem_idx)+'\n')
+        vasp_file.write('      ' + '   '.join([str(x) for x in elem_val])+'\n')
+        # Vasp box vectors
+        if dynamics:
+            vasp_file.write('Selective dynamics'+'\n')
+            vasp_file.write(elements[-1][0]+'\n')
+            # Vasp Atoms and positions (with 'DYN' column)
+            vasp_file.write(MP.loc[:, 'X':'DYN'].to_string(index=False, header=False))
         else:
-            popup.err_no_file()
-            return 1
+            vasp_file.write(elements[-1][0]+'\n')
+            # Vasp Atoms and positions (original)
+            vasp_file.write(MP.loc[:, 'X':'Z'].to_string(index=False, header=False))
 
-        # if comp_result is not empty, clean it to avoid over loop.
-        if self.comp_result:
-            self.comp_result = []
+    vasp_file.close()
+    #print('{} was saved, enjoy it!'.format(name))
 
-        # loop over number of metal complexes
-        for i in range(len(self.atom_coord_octa)):
-            atom_octa, coord_octa = self.atom_coord_octa[i]
+def pos_finder(mol):
+    perov = read(mol.perovskite_file)
 
-            # Calculate distortion parameters
-            calc_dist = calc.CalcDistortion(coord_octa)
+def bulk_creator(mol, slab, hn):
+    # Create ATOMS class from ase and call the spacer
+    spacer = mol.svc
+    B = mol.B
+    X = mol.X
 
-            d_mean = calc_dist.d_mean
-            zeta = calc_dist.zeta
-            delta = calc_dist.delta
-            sigma = calc_dist.sigma
-            theta = calc_dist.theta
-            non_octa = calc_dist.non_octa
+    if slab % 2 != 0: # Odd
+        slab_ss = int(slab/2 + 1)
+    else:
+        slab_ss = int(slab/2)
 
-            if non_octa:
-                popup.warn_not_octa()
+    # If we want a slab
+    # Supercell that would be cut in half
+    super_cell = read(mol.perovskite_file)
+    super_cell = super_cell*[1, 1, slab_ss]
 
-            # Collect results
-            self.all_zeta.append(zeta)
-            self.all_delta.append(delta)
-            self.all_sigma.append(sigma)
-            self.all_theta.append(theta)
+    # Extract symbols and positions from Atoms object
+    symbols = super_cell.get_chemical_symbols()
+    positions = super_cell.positions
+    supa_df = pd.DataFrame({'Element': symbols, 'X': positions[:, 0], 'Y': positions[:, 1], 'Z': positions[:, 2]})[['Element', 'X', 'Y', 'Z']]
 
-            self.comp_result.append([d_mean, zeta, delta, sigma, theta])
+    # B planes, this would be used to slice in two parts the perovskite
+    b_planes = supa_df.query("Element == @B").sort_values(by='Z')
+    ub_planes = b_planes.round(1).drop_duplicates(subset='Z')
+    # Len of the axial bond of B and X:
+    gh = ub_planes.iloc[0, 3]
+    bond_len = supa_df.query('Element == @X and Z >= @gh + 1').sort_values(by='Z').iloc[0, 3]
+    bond_len = bond_len - b_planes.iloc[0, 3]
+    up_df = supa_df.query('Z >= @gh + 1')
+    dwn_df = supa_df.query('Z <= @gh + 1')
 
-        # Print results to each unique box.
+    # Clean the up_df, ereasing all that is lower than the lowest B plane in the up_df and is not X
+    # First copy the terminal X and add it to the dwn_df
+    terminal_X = up_df.query("Element == @X").iloc[:, 3].min() # Search for the minimum X plane
+    terminal_X = up_df.query("Element == @X and abs(Z - @terminal_X) <= 1") # Copy the entire plane
+    # Update the value copied X plane to be over the b_plane in the dwn_df
+    terminal_X.loc[:, 'Z'] = terminal_X['Z'].apply(lambda x: b_planes.iloc[:, 3].min() + bond_len) 
+    dwn_df = pd.concat([dwn_df, terminal_X], axis=0, ignore_index=True)
+    
+    # Now we account for the up_df which is different from the upper and the dwn
+    if slab == 1:
+        list_I = supa_df.query('Element == @X').sort_values(by='Z').iloc[-1, 3]
+        up_df = supa_df.query('Z >= @list_I - 1 and Element == @X')
+    elif slab % 2 != 0 : # Odd, we copy the highest X plane
+        terminal_X = up_df.query("Element == @X").iloc[:, 3].max()
+        # Also we erase one perovskite slab, all that is below the second B plane is erased
+        sec_B_plane = up_df.query("Element == @B").sort_values(by='Z').loc[:,'Z'].round(2).drop_duplicates().iloc[1]
+        up_df = up_df.query("Z >= @sec_B_plane - 1")
+        # Copy the plane and align it with bond len
+        terminal_X = up_df.query("Element == @X and abs(Z - @terminal_X) <= 1") # Copy the entire plane
+        terminal_X['Z'] = terminal_X['Z'].apply(lambda x: sec_B_plane - bond_len) 
+        # Now we clean the up_df:
+        high_B = up_df.query("Element == @B").iloc[:, 3].min()
+        up_df = up_df.query("Z > @high_B - 1")
+        # Finally concat the DF
+        up_df = pd.concat([up_df, terminal_X], axis=0, ignore_index=True)
+    else:
+        # Erase all thath is below the plane of lowest B
+        low_B = up_df.query("Element == @B").sort_values(by='Z').iloc[0, 3]
+        up_df = up_df.query("Z >= @low_B - 1")
+        # Copy the terminal_X in the up_df and the dwn_df
+        up_df = pd.concat([up_df, terminal_X], axis=0, ignore_index=True)
 
-        if len(self.atom_coord_octa) == 1:
-            d_mean, zeta, delta, sigma, theta = self.comp_result[0]
+    
+    # ADJUST THE HEIGHT:
+    spacer['Z'] = spacer['Z'].apply(lambda x: x - spacer['Z'].min() + b_planes.iloc[:, 3].min() + bond_len - hn)
+    up_df.loc[:, 'Z'] = up_df['Z'].apply(lambda x: x - up_df['Z'].min() + spacer['Z'].max() - hn)
 
-            self.box_d_mean.insert(tk.INSERT, f"{d_mean:3.6f}")
-            self.box_zeta.insert(tk.INSERT, f"{zeta:3.6f}")
-            self.box_delta.insert(tk.INSERT, f"{delta:3.6f}")
-            self.box_sigma.insert(tk.INSERT, f"{sigma:3.6f}")
-            self.box_theta_mean.insert(tk.INSERT, f"{theta:3.6f}")
+
+    # Concatenate the bulk
+    bulk = pd.concat([dwn_df, spacer, up_df], axis=0, ignore_index=True)
+
+    # The box:
+    box = mol.box
+    # The lowest X plane in the dwn df needs to maintain the bond len:
+    correction = bond_len - b_planes.iloc[:, 3].min()
+
+    # Update box
+    up_B = bulk.query("Element == @X").sort_values(by='Z', ascending=False).iloc[0].to_list()[3]
+    box[0][2][2] = up_B + correction # Highest atom in the Z vector in the box
+
+    return bulk, box
+
+def find_min_max_coordinates(df):
+    min_x = df['X'].min()
+    max_x = df['X'].max()
+    min_y = df['Y'].min()
+    max_y = df['Y'].max()
+    min_z = df['Z'].min()
+    max_z = df['Z'].max()
+    return min_x, max_x, min_y, max_y, min_z, max_z
+
+def iso(molecule):
+    db = mol_load(molecule.molecule_file)
+    min_x, max_x, min_y, max_y, min_z, max_z = find_min_max_coordinates(db)
+
+    db['X'] += 5 + abs(min_x)
+    db['Y'] += 5 + abs(min_y)
+    db['Z'] += 5 + abs(min_z)
+
+    max_latx = 5 + abs(min_x) + max_x + 5
+    max_laty = 5 + abs(min_y) + max_y + 5
+    max_latz = 5 + abs(min_z) + max_z + 5
+
+    X = [str(max_latx), '0.0000000000', '0.0000000000']
+    Y = ['0.0000000000', str(max_laty), '0.0000000000']
+    Z = ['0.0000000000', '0.0000000000', str(max_latz)]
+
+    db.sort_values(by='Element')
+    element = [i for i in set(db['Element'].to_list())]
+    n_ele = db.groupby(by='Element').count()
+    n_ele = n_ele['X'].to_list()
+    box = [[X, Y, Z], [element, n_ele, ['Cartesian']]]
+    return db, box
+
+def inclinate_molecule(df, angle_degrees):
+    # Convert angle from degrees to radians
+    angle_radians = np.radians(angle_degrees)
+
+    # Rotation matrix around the x-axis
+    rotation_matrix = np.array([
+        [1, 0, 0],
+        [0, np.cos(angle_radians), -np.sin(angle_radians)],
+        [0, np.sin(angle_radians), np.cos(angle_radians)]
+    ])
+
+    # Extract the z, y, and x coordinates from the DataFrame
+    z_coords = df['Z'].to_numpy()
+    y_coords = df['Y'].to_numpy()
+    x_coords = df['X'].to_numpy()
+
+    # Stack the coordinates into a single matrix for matrix multiplication
+    coords = np.column_stack((x_coords, y_coords, z_coords))
+
+    # Apply the rotation matrix to the coordinates
+    rotated_coords = np.dot(coords, rotation_matrix.T)
+
+    # Update the DataFrame with the new rotated coordinates
+    df['X'] = rotated_coords[:, 0]
+    df['Y'] = rotated_coords[:, 1]
+    df['Z'] = rotated_coords[:, 2]
+
+    return df
+
+
+def direct_to_cartesian(df, lattice_vectors):
+    df = df
+    # Convert fractional coordinates to Cartesian coordinates
+    atomic_positions_direct = df[['x_direct', 'y_direct', 'z_direct']].values
+    cartesian_positions = np.dot(atomic_positions_direct, lattice_vectors)
+
+    # Create a new DataFrame with Cartesian coordinates
+    df_cartesian = pd.concat([df, pd.DataFrame(cartesian_positions, columns=['x_cartesian', 'y_cartesian', 'z_cartesian'])], axis=1)
+
+    return df_cartesian
+
+
+# The DJ class would be named as Dj_creator
+# We would create a class named Dj_analysis
+#  
+class q2D_creator:
+    def __init__(self, B, X, molecule_xyz, perov_vasp, P1, P2, P3, Q1, Q2, Q3, name, vac=0, n=1):
+        self.B = B
+        self.X = X
+        self.name = name
+        self.vac = vac
+        self.molecule_file = molecule_xyz
+        self.perovskite_file = perov_vasp
+        self.P1, self.P2, self.P3, self.Q1, self.Q2, self.Q3 = pi(P1), pi(P2), pi(P3), pi(Q1), pi(Q2), pi(Q3)
+        self.molecule_df = align_nitrogens(mol_load(self.molecule_file))
+        self.perovskite_df, self.box = vasp_load(perov_vasp)
+        self.molecule_D1 = self.molecule_df.loc[self.molecule_df['Element'] == 'N', 'X':'Z'].sort_values(by='Z').values[0]
+        self.molecule_D2 = self.molecule_df.loc[self.molecule_df['Element'] == 'C', 'X':'Z'].sort_values(by='Z', ascending=False).values[0]
+        self.molecule_D3 = self.molecule_df.loc[self.molecule_df['Element'] == 'N', 'X':'Z'].sort_values(by='Z').values[1]
+        self.DF_MA_1 = transform_mol(self, self.P1, self.P2, self.P3)
+        self.DF_MA_2 = transform_mol(self, self.Q1, self.Q2, self.Q3)
+        self.svc = make_svc(self.DF_MA_1, self.DF_MA_2)
+        #self.salt, self.saltbox = make_salt(self)
+
+
+    def write_svc(self):
+        name =  'svc_' + self.name + '.vasp'
+        svc = self.svc.copy()
+        svc_box = self.box.copy()
+        svc_box[0][2][2] = svc['Z'].sort_values(ascending=False).iloc[0] + self.vac  # Z vector in the box
+        save_vasp(svc, svc_box, name)
+
+
+    def rot_spacer(self, degree1, degree2):
+        self.DF_MA_1 = rot_mol(self.DF_MA_1, degree1)
+        self.DF_MA_2 = rot_mol(self.DF_MA_2, degree2)
+        self.svc = make_svc(self.DF_MA_1, self.DF_MA_2)
+
+
+    def inc_spacer(self, degree):
+        self.DF_MA_1 = inclinate_molecule(self.DF_MA_1, degree)
+        self.DF_MA_2 = inclinate_molecule(self.DF_MA_2, degree)
+        self.svc = make_svc(self.DF_MA_1, self.DF_MA_2)
+
+    def show_svc(self, m=[1, 1, 1]):
+        svc_box = self.box.copy()
+        svc_box[0][2][2] = self.svc['Z'].sort_values(ascending=False).iloc[0] + self.vac  # Z vector in the box
+        # Read the VASP POSCAR file
+        save_vasp(self.svc, svc_box, 'temporal_svc.vasp')
+        #save_vasp(self.DF_MA_2, svc_box, 'temporal_svc.vasp')
+        #save_vasp(self.DF_MA_1, svc_box, 'temporal_svc.vasp')
+        # Read in the POSCAR file
+        atoms = read('temporal_svc.vasp')
+        atoms = atoms*m
+        remove('temporal_svc.vasp')
+        
+        return view(atoms)
+
+
+    def write_bulk(self, slab=1, m=[1,1,1], hn=0, dynamics=False, order=False):
+        if dynamics:
+            name = 'bulk_' + self.name + '_SD'+ '.vasp'
         else:
-            self.box_d_mean.insert(tk.INSERT, "See below")
-            self.box_zeta.insert(tk.INSERT, "See below")
-            self.box_delta.insert(tk.INSERT, "See below")
-            self.box_sigma.insert(tk.INSERT, "See below")
-            self.box_theta_mean.insert(tk.INSERT, "See below")
+            name = 'bulk_' + self.name + '.vasp'
+        bulk, bulk_box = bulk_creator(self, slab, hn)
+        save_vasp(bulk, bulk_box, name, dynamics, order, self.B)
 
-        # Print results to result box
-        self.show_text("Computed octahedral distortion parameters for all complexes\n")
-        self.show_text("No. - Metal\t\tD_mean\tZeta\tDelta\tSigma\tTheta")
-        self.show_text("*" * 71)
-        for i in range(len(self.comp_result)):
-            self.show_text(
-                "{0:2d}  -  {1}\t\t{2:9.4f}\t{3:9.6f}\t{4:9.6f}\t{5:9.4f}\t{6:9.4f}".format(
-                    i + 1,
-                    self.octa_index[i],
-                    self.comp_result[i][0],
-                    self.comp_result[i][1],
-                    self.comp_result[i][2],
-                    self.comp_result[i][3],
-                    self.comp_result[i][4],
-                )
-            )
 
-    ###################
-    # Program Setting #
-    ###################
+    def show_bulk(self, slab=1,m=1, hn=0):
+        bulk, bulk_box = bulk_creator(self, slab, hn)
+        # Read the VASP POSCAR file
+        save_vasp(bulk, bulk_box, 'temporal.vasp')
+        # Read in the POSCAR file
+        atoms = read('temporal.vasp')
+        atoms = atoms*m
+        remove('temporal.vasp')
+        return view(atoms)
 
-    def settings(self):
-        """
-        Program settings allows the user to configure the values of variables
-        that used in molecular display function.
+    def write_iso(self):
+        db, box = iso(self)
+        save_vasp(db, box, name=self.name + '_iso.vasp', dynamics=False, order=False)
 
-        For example, cutoff distance for screening bond distance between atoms.
+    def show_iso(self):
+        db, box = iso(self)
+        save_vasp(db, box, name='temporal.vasp')
+        # Read in the POSCAR file
+        atoms = read('temporal.vasp')
+        view(atoms)
 
-        """
+class q2D_analysis:
+        def __init__(self, B, X, crystal):
+            self = self
+            self.path = '/'.join(crystal.split('/')[0:-1])
+            self.name = crystal.split('/')[-1]
+            self.B = B
+            self.X = X
+            self.perovskite_df, self.box = vasp_load(crystal)
+        
+        def isolate_spacer(self):
+            crystal_df = self.perovskite_df
+            print(crystal_df)
+            B = self.B
+            # Find the planes of the perovskite.
+            b_planes = crystal_df.query("Element == @B").sort_values(by='Z')
+            b_planes['Z'] = b_planes['Z'].apply(lambda x: round(x, 1))
+            b_planes.drop_duplicates(subset='Z', inplace=True)
+            b_planes.reset_index(inplace=True, drop=True)
+            print(b_planes)
 
-        def open_exe():
-            """
-            Program setting: Open dialog in which the user will choose text editor.
-
-            """
-            try:
-                input_file = filedialog.askopenfilename(
-                    title="Choose text editor executable", filetypes=[("EXE file", "*.exe")],
-                )
-
-                file_list = str(input_file)
-                entry_exe.delete(0, tk.END)
-                entry_exe.insert(tk.INSERT, file_list)
-
-            except IndexError:
-                return 1
-
-        def is_show_title():
-            """
-            Check if title of figure will be set to show or not.
-
-            """
-            if var_title.get():
-                var_title.set(True)
+            print(len(b_planes.values))
+            if len(b_planes.values) > 1:
+                b_planes['Diff'] = b_planes['Z'].diff()
+                id_diff_max = b_planes['Diff'].idxmax()
+                b_down_plane = b_planes.iloc[id_diff_max - 1:id_diff_max] 
+                b_up_plane = b_planes.iloc[id_diff_max:id_diff_max + 1]
+                b_down_plane = b_down_plane['Z'].values[0] + 1
+                b_up_plane = b_up_plane['Z'].values[0] - 1
+                # Now lets create a df with only the elements that are between that!
+                # We call that the salt
+                iso_df = crystal_df.query('Z <= @b_up_plane and Z >= @b_down_plane ')
+            
+            elif len(b_planes.values) == 1:
+                b_unique_plane = b_planes['Z'].values[0] + 1
+                iso_df = crystal_df.query('Z >= @b_unique_plane')
+  
             else:
-                var_title.set(False)
+                print('Try formatting your result to resemble the example file')
 
-        def is_show_axis():
-            """
-            Check if axis of figure will be set to show or not.
+            # Update the box to be 10 amstrong in Z
+            iso_df.loc[:, 'Z'] = iso_df['Z'] - iso_df['Z'].min()
+            box = self.box
+            box[0][2][2] = iso_df['Z'].sort_values(ascending=False).iloc[0] + 10
+            # Save the system
+            name = self.path + '/' + 'salt_' + self.name
+            print('Your isolated salt file was save as: ', name)
+            save_vasp(iso_df, box, name)
+        
 
-            """
-            if var_axis.get():
-                var_axis.set(True)
+        def octahedra(self, cell_cutoff=0.5, bond_cutoff=3.5):
+            ###################################################
+            #             POWERED BY OctaDist PyPI            #
+            ###################################################
+            # Create the atoms object:
+            atoms = read(self.path + '/' + self.name)
+            cell = atoms.cell
+            B = self.B
+            len_a = math.sqrt(cell[0][0] ** 2 + cell[0][1] ** 2 + cell[0][2] ** 2)
+            len_b = math.sqrt(cell[1][0] ** 2 + cell[1][1] ** 2 + cell[1][2] ** 2)
+            len_c = math.sqrt(cell[2][0] ** 2 + cell[2][1] ** 2 + cell[2][2] ** 2)
+
+            # We have the atom and now we create a supercell of 3x3x3
+            atoms = atoms * [3, 3, 3]
+
+            # Extract Element, X, Y, and Z coordinates
+            elements = atoms.get_chemical_symbols()
+            positions = atoms.get_positions()
+
+            # Create a super data frame, we erase all atoms Pb that are not in the supercell center cell (a rubik cube center)
+            df = pd.DataFrame({'Element': elements, 'X': positions[:, 0], 'Y': positions[:, 1], 'Z': positions[:, 2]})
+            # We dont need the organic part:
+            exclude_categories = ['C', 'H', 'O', 'N']
+            df = df[~df['Element'].isin(exclude_categories)] # Create a mask df in, and exclude with ~
+            df.reset_index(drop=True, inplace=True)
+
+            # Rubik center with a margin to complete all octahedra
+            rubik_center = df.query("X >= @len_a - (@cell_cutoff * @len_a) and X <= (2 * @len_a) + (@cell_cutoff * @len_a)")
+            rubik_center = rubik_center.query("Y >= @len_b - (@cell_cutoff * @len_b) and Y <= (2 * @len_b) + (@cell_cutoff * @len_b)")
+            rubik_center = rubik_center.query("Z >= @len_c - (@cell_cutoff* @len_c) and Z <= (2 * @len_c) + (@cell_cutoff * @len_c)")
+            # Now i want to erase all Pb that are not in the true center cell, we dont want more octahedra just to complete the ones in the center
+            rubik_center = rubik_center.query("(X >= @len_a and X <= (2 * @len_a)) or Element != @B")
+            rubik_center = rubik_center.query("(Y >= @len_b and Y <= (2 * @len_b)) or Element != @B")
+            rubik_center = rubik_center.query("(Z >= @len_c and Z <= (2 * @len_c)) or Element != @B")
+            # We now have complete octahedra and extra atoms of X
+            rubik_center.reset_index(drop=True, inplace=True)
+            #save_vasp(rubik_center, self.box, name='prueba.vasp', dynamics=False, order=False, B=False)
+
+            # Verify the result
+            b_list = rubik_center.query('Element == @B')
+            x_list = rubik_center.query('Element != @B')
+            #print(b_list)
+            # Create the dict to return atoms and coord
+            octa = {}
+            b_x_prop = len(x_list) / len(b_list)
+            if b_x_prop >= 6: # The b x proportion in the octahedra must be more than 6
+                print('B:X proportion = ', b_x_prop)
+                df = b_list.copy()
+                octahedron_list = []
+                # Get the octahedra:
+                for b, indx in zip(b_list.values, b_list.index):
+                    atoms = [b[0]]
+                    atoms.extend([x for x in x_list['Element'].values])
+                    coord = [[b[1], b[2], b[3]]]
+                    coord.extend([[i, j, k] for i, j, k in zip(x_list['X'], x_list['Y'], x_list['Z'])])
+                    #print([distance.euclidean(coord[0], coord[i]) for i in range(1, 7)]) # Really useful to calc distances
+                    atoms, coord = oc.io.extract_octa(atoms, coord, cutoff_ref_ligand=bond_cutoff) #It was empty because this cutoff def is 2.8
+
+                    dist = oc.CalcDistortion(coord)
+
+                    df.loc[indx, 'd_mean'] = dist.d_mean  # d_mean
+                    df.loc[indx, 'Zeta'] = dist.zeta  # Zeta
+                    df.loc[indx, 'Delta'] = dist.delta  # Delta
+                    df.loc[indx, 'Sigma'] = dist.sigma  # Sigma
+                    df.loc[indx, 'theta'] = dist.theta  # Theta
+                    df.loc[indx, 'theta_min'] = dist.theta_min
+                    df.loc[indx, 'theta_max'] = dist.theta_max
+
+                    # Fill the dict:
+                    octa[indx] = {'Metal': B, 'atom': atoms, 'coord': coord, 'dist': dist}
+
+                    # Add the OctaDistClass to a list that can be used by the user:
+                    indx += 1
+
+                return df, octa
+
             else:
-                var_axis.set(False)
+                print('Try with a bigger cutoff, the octahedra proportion is not greater than 1:6')
 
-        def is_show_grid():
-            """
-            Check if grid of figure will be set to show or not.
-
-            """
-            if var_grid.get():
-                var_grid.set(True)
-            else:
-                var_grid.set(False)
-
-        def restore_settings(self):
-            """
-            Restore all settings.
-
-            """
-            self.cutoff_metal_ligand = self.backup_cutoff_metal_ligand
-            self.cutoff_global = self.backup_cutoff_global
-            self.cutoff_hydrogen = self.backup_cutoff_hydrogen
-            self.text_editor = self.backup_text_editor
-            self.visualizer = self.backup_visualizer
-            self.show_title = self.backup_show_title
-            self.show_axis = self.backup_show_axis
-            self.show_grid = self.backup_show_grid
-
-            var_1.set(self.cutoff_metal_ligand)
-            var_2.set(self.cutoff_global)
-            var_3.set(self.cutoff_hydrogen)
-            var_title.set(self.show_title)
-            var_axis.set(self.show_axis)
-            var_grid.set(self.show_grid)
-
-            entry_exe.delete(0, tk.END)
-            entry_exe.insert(tk.INSERT, self.text_editor)
-
-        def click_ok(self):
-            """
-            If the user click OK, it will save all settings and show info in output box.
-
-            """
-            self.cutoff_metal_ligand = float(var_1.get())
-            self.cutoff_global = float(var_2.get())
-            self.cutoff_hydrogen = float(var_3.get())
-            self.text_editor = str(entry_exe.get())
-            self.visualizer = str(var_vis.get())
-            self.show_title = bool(var_title.get())
-            self.show_axis = bool(var_axis.get())
-            self.show_grid = bool(var_grid.get())
-
-            self.show_text("Updated program settings")
-            self.show_text("************************")
-            self.show_text(f"Metal-ligand bond cutoff\t\t\t{self.cutoff_metal_ligand}")
-            self.show_text(f"Global bond cutoff\t\t\t{self.cutoff_global}")
-            self.show_text(f"Hydrogen bond cutoff\t\t\t{self.cutoff_hydrogen}")
-            self.show_text(f"Text editor\t\t\t{self.text_editor}")
-            self.show_text(f"Molecular visualizer\t\t\t{self.visualizer}")
-            self.show_text(f"Show Title\t\t\t{self.show_title}")
-            self.show_text(f"Show Axis\t\t\t{self.show_axis}")
-            self.show_text(f"Show Grid\t\t\t{self.show_grid}\n")
-
-            wd.destroy()
-
-        def click_cancel():
-            """
-            If the user click CANCEL, close window.
-
-            """
-            wd.destroy()
-
-        ###################
-        # Setting: Widget #
-        ###################
-
-        wd = tk.Toplevel(self.master)
-        if self.octadist_icon is not None:
-            wd.wm_iconbitmap(self.octadist_icon)
-        wd.title("Program settings")
-        wd.option_add("*Font", "Arial 10")
-
-        frame = tk.Frame(wd)
-        frame.grid()
-
-        ###################
-        # Setting: Cutoff #
-        ###################
-
-        frame_cutoff = tk.LabelFrame(frame, text="Bond Cutoff:")
-        frame_cutoff.grid(padx=5, pady=5, ipadx=5, ipady=5, sticky="W", row=0, columnspan=4)
-
-        label_1 = tk.Label(frame_cutoff, text="Metal-Ligand Bond")
-        label_1.grid(padx="10", pady="5", ipadx="10", row=0, column=0)
-
-        var_1 = tk.DoubleVar()
-        var_1.set(self.cutoff_metal_ligand)
-
-        scale_1 = tk.Scale(frame_cutoff, orient="horizontal", variable=var_1, to=5, resolution=0.1)
-        scale_1.configure(width=20, length=100)
-        scale_1.grid(padx="10", pady="5", ipadx="10", row=1, column=0)
-
-        label_2 = tk.Label(frame_cutoff, text="Global Distance")
-        label_2.grid(padx="10", pady="5", ipadx="10", row=0, column=1)
-
-        var_2 = tk.DoubleVar()
-        var_2.set(self.cutoff_global)
-
-        scale_2 = tk.Scale(frame_cutoff, orient="horizontal", variable=var_2, to=5, resolution=0.1)
-        scale_2.configure(width=20, length=100)
-        scale_2.grid(padx="10", pady="5", ipadx="10", row=1, column=1)
-
-        label_3 = tk.Label(frame_cutoff, text="Hydrogen Distance")
-        label_3.grid(padx="10", pady="5", ipadx="10", row=0, column=2)
-
-        var_3 = tk.DoubleVar()
-        var_3.set(self.cutoff_hydrogen)
-
-        scale_3 = tk.Scale(frame_cutoff, orient="horizontal", variable=var_3, to=5, resolution=0.1)
-        scale_3.configure(width=20, length=100)
-        scale_3.grid(padx="10", pady="5", ipadx="10", row=1, column=2)
-
-        ########################
-        # Setting: Text editor #
-        ########################
-
-        frame_text_editor = tk.LabelFrame(frame, text="Text editor:")
-        frame_text_editor.grid(padx=5, pady=5, ipadx=5, ipady=5, sticky="W", row=1, columnspan=4)
-
-        label = tk.Label(frame_text_editor, text="Enter the EXE:")
-        label.grid(padx="5", sticky=tk.E, row=0, column=0)
-
-        entry_exe = tk.Entry(frame_text_editor, bd=2, width=60)
-        entry_exe.grid(row=0, column=1)
-
-        button = tk.Button(frame_text_editor, text="Browse...", command=open_exe)
-        button.grid(padx="5", pady="5", sticky=tk.W, row=0, column=2)
-
-        entry_exe.insert(tk.INSERT, self.text_editor)
-
-        ########################
-        # Setting : Visualizer #
-        ########################
-
-        frame_visualizer = tk.LabelFrame(frame, text="Visualizer:")
-        frame_visualizer.grid(padx=5, pady=5, ipadx=5, ipady=5, sticky="W", row=2)
-
-        visualizers = ["Matplotlib", "Plotly"]
-        var_vis = tk.StringVar()
-        var_vis.set(self.visualizer)
-
-        vis = ttk.Combobox(frame_visualizer, textvariable=var_vis, values=visualizers)
-        vis.grid(padx=5, pady=5, ipadx=5, ipady=5, sticky="W")
-
-        ####################
-        # Setting: Figures #
-        ####################
-
-        frame_figures = tk.LabelFrame(frame, text="Displays:")
-        frame_figures.grid(padx=5, pady=5, ipadx=5, ipady=5, sticky="W", row=3, columnspan=4)
-
-        # Show title of plot?
-        var_title = tk.BooleanVar()
-        var_title.set(self.show_title)
-
-        show_title = ttk.Checkbutton(
-            frame_figures,
-            text="Show Figure Title",
-            onvalue=True,
-            offvalue=False,
-            variable=var_title,
-            command=lambda: is_show_title(),
-        )
-        show_title.grid(padx="5", pady="5", ipadx="25", sticky=tk.E, row=0, column=0)
-
-        # Show axis?
-        var_axis = tk.BooleanVar()
-        var_axis.set(self.show_axis)
-
-        show_axis = ttk.Checkbutton(
-            frame_figures,
-            text="Show Axis",
-            onvalue=True,
-            offvalue=False,
-            variable=var_axis,
-            command=lambda: is_show_axis(),
-        )
-        show_axis.grid(padx="5", pady="5", ipadx="25", sticky=tk.E, row=0, column=1)
-
-        # Show grid?
-        var_grid = tk.BooleanVar()
-        var_grid.set(self.show_grid)
-
-        show_grid = ttk.Checkbutton(
-            frame_figures,
-            text="Show Gridlines",
-            onvalue=True,
-            offvalue=False,
-            variable=var_grid,
-            command=lambda: is_show_grid(),
-        )
-        show_grid.grid(padx="5", pady="5", ipadx="5", sticky=tk.E, row=0, column=2)
-
-        ####################
-        # Setting: Console #
-        ####################
-
-        button = tk.Button(frame, text="Restore settings", command=lambda: restore_settings(self))
-        button.configure(width=15)
-        button.grid(padx="10", pady="10", sticky=tk.W, row=4, column=0)
-
-        button = tk.Button(frame, text="OK", command=lambda: click_ok(self))
-        button.configure(width=15)
-        button.grid(padx="5", pady="10", sticky=tk.E, row=4, column=2)
-
-        button = tk.Button(frame, text="Cancel", command=lambda: click_cancel())
-        button.configure(width=15)
-        button.grid(padx="5", pady="10", row=4, column=3)
-
-        frame.mainloop()
-
-    #################
-    # Copy and Edit #
-    #################
-
-    def copy_name(self):
-        """
-        Copy input file name to clipboard.
-
-        See Also
-        --------
-        copy_path :
-            Copy absolute path of input file to clibboard.
-        copy_results :
-            Copy results to clibboard.
-        copy_octa :
-            Copy octahedral structure coordinates to clibboard.
-
-        """
-        if len(self.file_list) == 0:
-            popup.err_no_file()
-            return 1
-
-        name = self.file_list[0].split("/")[-1]
-
-        clip = tk.Tk()
-        clip.withdraw()
-        clip.clipboard_clear()
-        clip.clipboard_append(name)
-        clip.destroy()
-
-    def copy_path(self):
-        """
-        Copy absolute path of input file to clipboard.
-
-        See Also
-        --------
-        copy_name
-            Copy input file name to clibboard.
-        copy_results :
-            Copy results to clibboard.
-        copy_octa :
-            Copy octahedral structure coordinates to clibboard.
-
-        """
-        if len(self.file_list) == 0:
-            popup.err_no_file()
-            return 1
-
-        clip = tk.Tk()
-        clip.withdraw()
-        clip.clipboard_clear()
-        clip.clipboard_append(self.file_list[0])
-        clip.destroy()
-
-    def copy_results(self):
-        """
-        Copy the results and computed distortion parameters to clipboard.
-
-        See Also
-        --------
-        copy_name
-            Copy input file name to clibboard.
-        copy_path :
-            Copy absolute path of input file to clibboard.
-        copy_octa :
-            Copy octahedral structure coordinates to clibboard.
-
-        """
-        if len(self.file_list) == 0:
-            popup.err_no_file()
-            return 1
-
-        if len(self.all_zeta) == 0:
-            popup.err_no_calc()
-            return 1
-
-        results = "Zeta, Delta, Sigma, Gamma\n" "{0:3.6f}, {1:3.6f}, {2:3.6f}, {3:3.6f}".format(
-            self.all_zeta[0], self.all_delta[0], self.all_sigma[0], self.all_theta[0],
-        )
-
-        clip = tk.Tk()
-        clip.withdraw()
-        clip.clipboard_clear()
-        clip.clipboard_append(results)
-        clip.destroy()
-
-    def copy_octa(self):
-        """
-        Copy atomic coordinates of octahedral structure to clipboard.
-
-        See Also
-        --------
-        copy_name
-            Copy input file name to clibboard.
-        copy_path :
-            Copy absolute path of input file to clibboard.
-        copy_results :
-            Copy results to clibboard.
-
-        """
-        if len(self.file_list) == 0:
-            popup.err_no_file()
-            return 1
-
-        clip = tk.Tk()
-        clip.withdraw()
-        clip.clipboard_clear()
-        clip.clipboard_append(self.atom_coord_octa[0][2])
-        clip.destroy()
-
-    def edit_file(self):
-        """
-        Edit file by specified text editor on Windows.
-
-        See Also
-        --------
-        settings
-
-        """
-        if len(self.file_list) == 0:
-            popup.err_no_file()
-            return 1
-
-        if self.text_editor == "":
-            popup.err_no_editor()
-            return 1
-
-        try:
-            for i in range(len(self.file_list)):
-                program_name = self.text_editor
-                file_name = self.file_list[i]
-                subprocess.Popen([program_name, file_name])
-
-        except FileNotFoundError:
-            return 1
-
-    #########################
-    # Interactive scripting #
-    #########################
-
-    def scripting_console(self):
-        """
-        Start scripting interface for an interactive code.
-
-        User can access to class variable (dynamic variable).
-
-        +------------+
-        | Output box |
-        +------------+
-        | Input box  |
-        +------------+
-
-        See Also
-        --------
-        settings :
-            Program settings.
-
-        """
-        my_app = scripting.ScriptingConsole(self)
-        my_app.scripting_start()
-
-    ##################
-    # Visualizations #
-    ##################
-
-    def draw_all_atom(self):
-        """
-        Display 3D complex.
-
-        See Also
-        --------
-        octadist.src.draw.DrawComplex :
-            Show 3D molecule.
-
-        """
-        if len(self.atom_coord_full) == 0:
-            popup.err_no_file()
-            return 1
-        elif len(self.atom_coord_full) > 1:
-            popup.err_many_files()
-            return 1
-
-        atom_full, coord_full = self.atom_coord_full[0]
-
-        if self.visualizer == "Matplotlib":
-            my_plot = draw.DrawComplex_Matplotlib(
-                atom=atom_full,
-                coord=coord_full,
-                cutoff_global=self.cutoff_global,
-                cutoff_hydrogen=self.cutoff_hydrogen,
-            )
-            my_plot.add_atom()
-            my_plot.add_bond()
-            my_plot.add_legend()
-            my_plot.config_plot(
-                show_title=self.show_title, show_axis=self.show_axis, show_grid=self.show_grid,
-            )
-            my_plot.show_plot()
-
-        elif self.visualizer == "Plotly":
-            my_plot = draw.DrawComplex_Plotly(
-                atom=atom_full,
-                coord=coord_full,
-                cutoff_global=self.cutoff_global,
-                cutoff_hydrogen=self.cutoff_hydrogen,
-            )
-            my_plot.add_atom()
-            my_plot.add_bond()
-            my_plot.show_plot()
-        else:
-            popup.err_visualizer_not_found()
-
-    def draw_all_atom_and_face(self):
-        """
-        Display 3D complex with the faces.
-
-        See Also
-        --------
-        octadist.src.draw.DrawComplex :
-            Show 3D molecule.
-
-        """
-        if len(self.atom_coord_full) == 0:
-            popup.err_no_file()
-            return 1
-        elif len(self.atom_coord_full) > 1:
-            popup.err_many_files()
-            return 1
-
-        atom_full, coord_full = self.atom_coord_full[0]
-
-        my_plot = draw.DrawComplex_Matplotlib(
-            atom=atom_full,
-            coord=coord_full,
-            cutoff_global=self.cutoff_global,
-            cutoff_hydrogen=self.cutoff_hydrogen,
-        )
-        my_plot.add_atom()
-        my_plot.add_bond()
-
-        for i in range(len(self.atom_coord_octa)):
-            _, coord_octa = self.atom_coord_octa[i]
-            my_plot.add_face(coord_octa)
-
-        my_plot.add_legend()
-        my_plot.config_plot(
-            show_title=self.show_title, show_axis=self.show_axis, show_grid=self.show_grid,
-        )
-        my_plot.show_plot()
-
-    def draw_octa(self):
-        """
-        Display 3D octahedral structure.
-
-        See Also
-        --------
-        octadist.src.draw.DrawComplex :
-            Show 3D molecule.
-
-        """
-        if len(self.atom_coord_octa) == 0:
-            popup.err_no_file()
-            return 1
-        elif len(self.atom_coord_octa) > 1:
-            popup.err_many_files()
-            return 1
-
-        atom_octa, coord_octa = self.atom_coord_octa[0]
-
-        my_plot = draw.DrawComplex_Matplotlib(
-            atom=atom_octa,
-            coord=coord_octa,
-            cutoff_global=self.cutoff_global,
-            cutoff_hydrogen=self.cutoff_hydrogen,
-        )
-        my_plot.add_atom()
-        my_plot.add_bond()
-        my_plot.add_legend()
-        my_plot.config_plot(
-            show_title=self.show_title, show_axis=self.show_axis, show_grid=self.show_grid,
-        )
-        my_plot.show_plot()
-
-    def draw_octa_and_face(self):
-        """
-        Display 3D octahedral structure with the faces.
-
-        See Also
-        --------
-        octadist.src.draw.DrawComplex :
-            Show 3D molecule.
-
-        """
-        if len(self.atom_coord_octa) == 0:
-            popup.err_no_file()
-            return 1
-        elif len(self.atom_coord_octa) > 1:
-            popup.err_many_files()
-            return 1
-
-        atom_octa, coord_octa = self.atom_coord_octa[0]
-
-        my_plot = draw.DrawComplex_Matplotlib(
-            atom=atom_octa,
-            coord=coord_octa,
-            cutoff_global=self.cutoff_global,
-            cutoff_hydrogen=self.cutoff_hydrogen,
-        )
-        my_plot.add_atom()
-        my_plot.add_bond()
-        my_plot.add_legend()
-
-        for i in range(len(self.atom_coord_octa)):
-            _, coord = self.atom_coord_octa[i]
-            my_plot.add_face(coord)
-
-        my_plot.config_plot(
-            show_title=self.show_title, show_axis=self.show_axis, show_grid=self.show_grid,
-        )
-        my_plot.show_plot()
-
-    def draw_projection(self):
-        """
-        Draw projection planes.
-
-        See Also
-        --------
-        octadist.src.draw.DrawProjection :
-            Show graphical projections.
-
-        """
-        if len(self.atom_coord_full) == 0:
-            popup.err_no_file()
-            return 1
-        elif len(self.atom_coord_full) > 1:
-            popup.err_many_files()
-            return 1
-
-        atom_full, coord_full = self.atom_coord_full[0]
-
-        my_plot = draw.DrawProjection(atom=atom_full, coord=coord_full)
-        my_plot.add_atom()
-        my_plot.add_symbol()
-        my_plot.add_plane()
-        my_plot.show_plot()
-
-    def draw_twisting_plane(self):
-        """
-        Draw twisting triangular planes.
-
-        See Also
-        --------
-        octadist.src.draw.DrawTwistingPlane :
-            Show graphical triangular twisting planes.
-
-        """
-        if len(self.atom_coord_full) == 0:
-            popup.err_no_file()
-            return 1
-        elif len(self.atom_coord_full) > 1:
-            popup.err_many_files()
-            return 1
-
-        atom_full, coord_full = self.atom_coord_full[0]
-
-        my_plot = draw.DrawTwistingPlane(atom=atom_full, coord=coord_full)
-        my_plot.add_plane()
-        my_plot.add_symbol()
-        my_plot.add_bond()
-        my_plot.show_plot()
-
-    #####################
-    # Show data summary #
-    #####################
-
-    def show_data_complex(self):
-        """
-        Show info of input complex.
-
-        See Also
-        --------
-        octadist.src.structure.DataComplex :
-            Show data summary of complex.
-
-        """
-        if len(self.file_list) == 0:
-            popup.err_no_file()
-            return 1
-
-        my_app = structure.DataComplex(master=self.master, icon=self.octadist_icon)
-
-        for i in range(len(self.file_list)):
-            atom = self.atom_coord_full[i][0]
-            coord = self.atom_coord_full[i][1]
-            my_app.add_name(self.file_list[i])
-            my_app.add_coord(atom, coord)
-
-    def show_param_octa(self):
-        """
-        Show structural parameters of selected octahedral structure.
-
-        See Also
-        --------
-        octadist.src.structure.StructParam :
-            Show structural parameter symmary of complex.
-
-        """
-        if len(self.atom_coord_octa) == 0:
-            popup.err_no_file()
-            return 1
-
-        my_app = structure.StructParam(master=self.master, icon=self.octadist_icon)
-
-        for i in range(len(self.atom_coord_octa)):
-            metal = self.octa_index[i]
-            atom, coord = self.atom_coord_octa[i]
-            my_app.add_metal(metal)
-            my_app.add_coord(atom, coord)
-
-    def show_surface_area(self):
-        """
-        Calculate the area of eight triangular faces of octahedral structure.
-
-        See Also
-        --------
-        octadist.src.structure.SurfaceArea :
-            Show the area of the faces of octahedral structure.
-
-        """
-        if len(self.atom_coord_octa) == 0:
-            popup.err_no_file()
-            return 1
-
-        my_app = structure.SurfaceArea(master=self.master, icon=self.octadist_icon)
-
-        for i in range(len(self.atom_coord_octa)):
-            metal = self.octa_index[i]
-            atom, coord = self.atom_coord_octa[i]
-            my_app.add_metal(metal)
-            my_app.add_octa(coord)
-
-    ##############################
-    # Plot between two data sets #
-    ##############################
-
-    def plot_zeta_sigma(self):
-        """
-        Plot relationship between zeta and sigma.
-
-        See Also
-        --------
-        octadist.src.plot.Plot :
-            Show relationship plot.
-
-        """
-        if len(self.all_sigma) == 0:
-            popup.err_no_calc()
-            return 1
-
-        my_plot = plot.Plot(self.all_zeta, self.all_sigma, name1="zeta", name2="sigma")
-        my_plot.add_point()
-        my_plot.add_text()
-        my_plot.add_legend()
-        my_plot.show_plot()
-
-    def plot_sigma_theta(self):
-        """
-        Plot relationship between sigma and theta.
-
-        See Also
-        --------
-        octadist.src.plot.Plot :
-            Show relationship plot.
-
-        """
-        if len(self.all_sigma) == 0:
-            popup.err_no_calc()
-            return 1
-
-        my_plot = plot.Plot(self.all_sigma, self.all_theta, name1="sigma", name2="theta")
-        my_plot.add_point()
-        my_plot.add_text()
-        my_plot.add_legend()
-        my_plot.show_plot()
-
-    ##################
-    # Analysis tools #
-    ##################
-
-    def tool_jahn_teller(self):
-        """
-        Calculate Jahn-Teller distortion parameter.
-
-        See Also
-        --------
-        octadist.src.tools.CalcJahnTeller :
-            Calculate Jahn-Teller distortion parameter.
-
-        """
-        if len(self.atom_coord_full) == 0:
-            popup.err_no_file()
-            return 1
-        elif len(self.atom_coord_full) > 1:
-            popup.err_many_files()
-            return 1
-
-        atom_full, coord_full = self.atom_coord_full[0]
-
-        run_jt = tools.CalcJahnTeller(
-            atom=atom_full,
-            coord=coord_full,
-            cutoff_global=self.cutoff_global,
-            cutoff_hydrogen=self.cutoff_hydrogen,
-            master=self.master,
-            icon=self.octadist_icon,
-        )
-        run_jt.start_app()
-        run_jt.find_bond()
-        run_jt.show_app()
-
-    def tool_rmsd(self):
-        """
-        Calculate root mean squared displacement of atoms in complex, RMSD.
-
-        See Also
-        --------
-        octadist.src.tools.CalcRMSD :
-            Calculate RMSD.
-
-        """
-        if len(self.atom_coord_full) != 2:
-            popup.err_only_2_files()
-            return 1
-
-        complex_1 = self.atom_coord_full[0]
-        complex_2 = self.atom_coord_full[1]
-
-        atom_complex_1, coord_complex_1 = complex_1
-        atom_complex_2, coord_complex_2 = complex_2
-
-        # Check if two complexes are consistent
-        if len(atom_complex_1) != len(atom_complex_2):
-            popup.err_not_equal_atom()
-            return 1
-
-        for i in range(len(atom_complex_1)):
-            if atom_complex_1[i] != atom_complex_2[i]:
-                popup.err_atom_not_match(i + 1)
-                return 1
-
-        run_rmsd = tools.CalcRMSD(
-            coord_complex_1,
-            coord_complex_2,
-            atom_1=atom_complex_1,
-            atom_2=atom_complex_2,
-            master=self.master,
-            icon=self.octadist_icon,
-        )
-
-        run_rmsd.start_app()
-        run_rmsd.show_app()
-
-    ################
-    # Check Update #
-    ################
-
-    @staticmethod
-    def check_update():
-        """
-        Check program update by comparing version of program user is using with
-        that of the latest version released on github.
-
-        References
-        ----------
-        File: https://www.github.com/OctaDist/OctaDist/version_update.txt.
-
-        """
-        data = urlopen("https://raw.githubusercontent.com/OctaDist/OctaDist/master/version_update.txt").read()
-        # decode
-        data = data.decode("utf-8")
-        data = data.split()
-
-        user_rev = float(octadist.__revision__)
-        server_ver = data[1]
-        server_rev = float(data[3])  # code version
-
-        os_name = platform.system()  # find the OS name
-
-        if server_rev > user_rev:
-            popup.info_new_update()
-
-            text = f"A new version {server_ver} is ready for download.\n\n" "Do you want to download now?"
-            msg_box = messagebox.askquestion("Updates available", text, icon="warning")
-
-            if msg_box == "yes":
-                dl_link = "https://github.com/OctaDist/OctaDist/releases/download/"
-                main_link = dl_link + "v." + server_ver + "/OctaDist-" + server_ver
-                if os_name == "Windows":
-                    link_windows = main_link + "-Win-x86-64.exe"
-                    webbrowser.open_new_tab(link_windows)
-                elif os_name == "Darwin" or os_name == "Linux":
-                    link_linux = main_link + "-src-x86-64.tar.gz"
-                    webbrowser.open_new_tab(link_linux)
-                else:
-                    popup.err_cannot_update()
-
-                # Open Thank You page at the same time download the program
-                webbrowser.open_new_tab("https://octadist.github.io/thanks.html")
-            else:
-                pass
-        elif server_rev < user_rev:
-            popup.info_using_dev()
-        else:
-            popup.info_no_update()
-
-    #####################
-    # Show program info #
-    #####################
-
-    @staticmethod
-    def callback(event):
-        """
-        On-clink open web browser.
-
-        Parameters
-        ----------
-        event : object
-            Event object for callback.
-
-        """
-        webbrowser.open_new(event.widget.cget("text"))
-
-    @staticmethod
-    def show_about():
-        """
-        Show author details on a sub-window.
-
-        1. Name of authors
-        2. Official program website
-        3. Citation
-
-        """
-        text = (
-            f"OctaDist version {octadist.__version__} ({octadist.__release__})\n\n"
-            f"Authors: {octadist.__author_full__}.\n\n"
-            f"Website: {octadist.__website__}\n\n"
-            f"Please cite this project if you use OctaDist for scientific publication:\n\n"
-            "Ketkaew, R.; Tantirungrotechai, Y.; Harding, P.; Chastanet, G.; Guionneau, P.; Marchivie, M.; Harding, D. J.\n"
-            "OctaDist: A Tool for Calculating Distortion Parameters in Spin Crossover and Coordination Complexes. "
-            "Dalton Trans. 2021. \nhttps://doi.org/10.1039/D0DT03988H"
-        )
-
-        showinfo("About program", text)
-
-    @staticmethod
-    def show_license():
-        """
-        Show license details on a sub-window.
-
-        GNU General Public License version 3.0.
-
-        References
-        ----------
-        Link: https://www.gnu.org/licenses/gpl-3.0.en.html.
-
-        """
-        text = """\
-OctaDist  Copyright (C) 2019  Rangsiman Ketkaew et al.
-
-This program is free software: you can redistribute it and/or modify \
-it under the terms of the GNU General Public License as published by \
-the Free Software Foundation, either version 3 of the License, or \
-(at your option) any later version.
-
-This program is distributed in the hope that it will be useful, \
-but WITHOUT ANY WARRANTY; without even the implied warranty of \
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the \
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License \
-along with this program.  If not, see <https://www.gnu.org/licenses/>.
-"""
-
-        showinfo("License", text)
-
-    ###################
-    # Clear All Cache #
-    ###################
-
-    def clear_cache(self):
-        """
-        Clear program cache by nullifying all default variables
-        and clear both of parameter and result boxes.
-
-        """
-        for name in dir():
-            if not name.startswith("_"):
-                del locals()[name]
-
-        self.file_list = []
-        self.file_name = []
-        self.octa_index = []
-        self.atom_coord_full = []
-        self.atom_coord_octa = []
-        self.all_zeta = []
-        self.all_delta = []
-        self.all_sigma = []
-        self.all_theta = []
-        self.comp_result = []
-
-        self.clear_param_box()
-        self.clear_result_box()
-
-    def clear_param_box(self):
-        """
-        Clear parameter box.
-
-        """
-        self.box_delta.delete(0, tk.END)
-        self.box_sigma.delete(0, tk.END)
-        self.box_d_mean.delete(0, tk.END)
-        self.box_zeta.delete(0, tk.END)
-        self.box_theta_mean.delete(0, tk.END)
-
-    def clear_result_box(self):
-        """
-        Clear result box.
-
-        """
-        self.box_result.delete(1.0, tk.END)
-
-    def start_app(self):
-        """
-        Start application.
-
-        """
-        self.master.mainloop()
-
-
-def main():
-    app = OctaDist()
-    app.start_app()
-
-    # Delete icon after closing app
-    if app.octadist_icon is not None:
-        os.remove(app.octadist_icon)
-
-
-if __name__ == "__main__":
-    main()
+        def save_octahedra_draws(self, atom, coord, bond_cutoff=3.5):
+            return oc.src.draw.DrawComplex_Matplotlib(atom=atom, coord=coord, cutoff_global=bond_cutoff)
