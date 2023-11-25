@@ -93,7 +93,6 @@ def vasp_load(file):
         c = [box[1][2], box[2][2], box[3][2]]
         # Elements quantity
         elements = lines[5:8] # elements[0] = type of element, elements[1] = number of elements
-
         # convert elements to rows:
         #elem_numb = sum([int(x) for x in elements[1]])
         elements_row = [(elements[0][i] + ' ' ) * int(elements[1][i]) for i in range(0, len(elements[0]))]
