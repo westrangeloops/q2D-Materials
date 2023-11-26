@@ -7,6 +7,11 @@ The script needs the position of the six coordinates to correctly work; it is im
 ## Installation
 ​Just clone the repo and use the workspace Jupyter notebook
 
+## Requeriments
+```
+pip install rdkit ase pandas numpy matplotlib octadist
+```  
+
 ## Usage
 
 #To use SVC-Maestra, you can import the package and use the following functions:
