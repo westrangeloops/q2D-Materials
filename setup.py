@@ -8,6 +8,7 @@ setup(
     'pandas',
     'ase',
     'rdkit'
+    'octadist'
     ],
     url='https://github.com/westrangeloops/SVC-Maestra.git',
     author='Jesus Camilo Díaz Olivella - MTSG-UDEA',
