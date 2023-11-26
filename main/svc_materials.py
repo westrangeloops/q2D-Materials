@@ -77,10 +77,10 @@ def mol_load(file):
     return df
 
 
-def vasp_load(file):
+def vasp_load(file_path):
     try:
         lines = []
-        f = open(file, 'r')
+        f = open(file_path, 'r')
         # Remove empty lines:
         for line in f:
             lines.append(line.split())
@@ -93,31 +93,94 @@ def vasp_load(file):
         c = [box[1][2], box[2][2], box[3][2]]
         # Elements quantity
         elements = lines[5:8] # elements[0] = type of element, elements[1] = number of elements
-        # convert elements to rows:
-        #elem_numb = sum([int(x) for x in elements[1]])
-        elements_row = [(elements[0][i] + ' ' ) * int(elements[1][i]) for i in range(0, len(elements[0]))]
-        elements_row = ' '.join(elements_row)
-        elements_row = elements_row.split()
+        # Box contain all other information
+        # [[[a], [b], [c]], [['H', 'Pb', 'C', 'I', 'N'], ['24', '4', '4', '12', '4'], ['Cartesian']]]
+        box = [[a, b, c], elements]
+        box[1][2] = ['Cartesian']
+    
+        atoms = read(file_path)
+        atoms.wrap()
 
-        # Load POSCAR file
-        atoms = read(file)
-
-        # Extract atom indices, element symbols, and Cartesian coordinates
-        elements = atoms.get_chemical_symbols()
-        cartesian_coordinates = atoms.get_positions()
+        # Extract atomic symbols and coordinates
+        symbols = atoms.get_chemical_symbols()
+        positions = atoms.get_positions()
 
         # Create DataFrame
-        df = pd.DataFrame({'Element': elements, 'X': cartesian_coordinates[:, 0], 'Y': cartesian_coordinates[:, 1], 'Z': cartesian_coordinates[:, 2]})
-
-
-        # Box contain all other information
-        box = [[a, b, c], elements]
-        # Save to csv
+        df = pd.DataFrame({
+            'Element': symbols,
+            'X': positions[:, 0],
+            'Y': positions[:, 1],
+            'Z': positions[:, 2]
+        })
+        
         return df, box
-    
-    except ValueError:
-        print('The Vasp file is not recognized')
 
+    except Exception as e:
+        print(f"Error reading VASP file: {e}")
+        return None
+    
+
+    # USE THIS TO SAVE TO VASP FILE
+def save_vasp(dt, box, name='svc', dynamics=False, order=False, B=False):
+    a = box[0][0]
+    b = box[0][1]
+    c = box[0][2]
+    elements = box[1]
+    MP = dt
+    MP.sort_values('Element', inplace=True)
+
+    if order is False:
+        pass
+    else:
+        print('The order is: {}'.format(order))
+        atom_order = order
+        MP.sort_values(by='Element', key=lambda column: column.map(lambda x: elements[0].index(x)), inplace=True)
+        # Define the desired atom order
+
+        # Reorder the dataframe based on the desired atom order
+        MP['Element'] = pd.Categorical(MP['Element'], categories=atom_order, ordered=True)
+
+
+    if dynamics:
+        # Calculate length based on largest atom in 'Z' coordinate
+        length = np.amax(MP['Z']) / 2.0
+
+        # Find the first B atom below and above the length
+        first_pb_below = MP.loc[(MP['Element'] == '{}'.format(B)) & (MP['Z'] < length), 'Z'].max()
+        first_pb_above = MP.loc[(MP['Element'] == '{}'.format(B)) & (MP['Z'] > length), 'Z'].min()
+
+        # Boolean array indicating atoms between first_B_below and first_B_above with elements N, C, H
+        mask = (MP['Element'].isin(['N', 'C', 'H'])) & (MP['Z'] > first_pb_below) & (MP['Z'] < first_pb_above)
+
+        # Create the 'DYN' column with 'F   F   F' or 'T   T   T'
+        MP['DYN'] = np.where(mask, 'T   T   T', 'F   F   F')
+
+    # Elements to print
+    elem_idx = MP.groupby('Element', sort=False).count().index
+    elem_val = MP.groupby('Element', sort=False).count()['X']
+
+    with open('{}'.format(name), 'w') as vasp_file:
+        # Vasp name
+        vasp_file.write(''.join(name)+'\n')
+        vasp_file.write('1'+'\n') # Scale
+        for n in range(0, 3): # Vectors of a, b and c
+            vasp_file.write('            ' + str(a[n]) + ' ' + str(b[n]) + ' ' + str(c[n])+'\n')
+        # Vasp number of atoms
+        vasp_file.write('      ' + '   '.join(elem_idx)+'\n')
+        vasp_file.write('      ' + '   '.join([str(x) for x in elem_val])+'\n')
+        # Vasp box vectors
+        if dynamics:
+            vasp_file.write('Selective dynamics'+'\n')
+            vasp_file.write(elements[-1][0]+'\n')
+            # Vasp Atoms and positions (with 'DYN' column)
+            vasp_file.write(MP.loc[:, 'X':'DYN'].to_string(index=False, header=False))
+        else:
+            vasp_file.write(elements[-1][0]+'\n')
+            # Vasp Atoms and positions (original)
+            vasp_file.write(MP.loc[:, 'X':'Z'].to_string(index=False, header=False))
+
+    vasp_file.close()
+    #print('Your file was saved as {}'.format(name))
 
 
 def align_nitrogens(molecule_df, tar='Z'):
@@ -197,72 +260,6 @@ def make_svc(DF_MA_1, DF_MA_2):
     organic_spacers.reset_index(drop=True, inplace=True)
     return organic_spacers
 
-
-# USE THIS TO SAVE TO VASP FILE
-
-def save_vasp(dt, box, name='svc', dynamics=False, order=False, B=False):
-    a = box[0][0]
-    b = box[0][1]
-    c = box[0][2]
-    elements = box[1]
-    MP = dt
-
-    if order is False:
-        pass
-    else:
-        print('Working')
-        atom_order = order
-        MP.sort_values(by='Element', key=lambda column: column.map(lambda x: elements[0].index(x)), inplace=True)
-        # Define the desired atom order
-        print('Hey')
-
-        # Reorder the dataframe based on the desired atom order
-        MP['Element'] = pd.Categorical(MP['Element'], categories=atom_order, ordered=True)
-
-
-    MP.sort_values('Element', inplace=True)
-
-
-    if dynamics:
-        # Calculate length based on largest atom in 'Z' coordinate
-        length = np.amax(MP['Z']) / 2.0
-
-        # Find the first B atom below and above the length
-        first_pb_below = MP.loc[(MP['Element'] == '{}'.format(B)) & (MP['Z'] < length), 'Z'].max()
-        first_pb_above = MP.loc[(MP['Element'] == '{}'.format(B)) & (MP['Z'] > length), 'Z'].min()
-
-        # Boolean array indicating atoms between first_B_below and first_B_above with elements N, C, H
-        mask = (MP['Element'].isin(['N', 'C', 'H'])) & (MP['Z'] > first_pb_below) & (MP['Z'] < first_pb_above)
-
-        # Create the 'DYN' column with 'F   F   F' or 'T   T   T'
-        MP['DYN'] = np.where(mask, 'T   T   T', 'F   F   F')
-
-    # Elements to print
-    elem_idx = MP.groupby('Element', sort=False).count().index
-    elem_val = MP.groupby('Element', sort=False).count()['X']
-
-    with open('{}'.format(name), 'w') as vasp_file:
-        # Vasp name
-        vasp_file.write(''.join(name)+'\n')
-        vasp_file.write('1'+'\n') # Scale
-        for n in range(0, 3): # Vectors of a, b and c
-            vasp_file.write('            ' + str(a[n]) + ' ' + str(b[n]) + ' ' + str(c[n])+'\n')
-        # Vasp number of atoms
-        vasp_file.write('      ' + '   '.join(elem_idx)+'\n')
-        vasp_file.write('      ' + '   '.join([str(x) for x in elem_val])+'\n')
-        # Vasp box vectors
-        if dynamics:
-            vasp_file.write('Selective dynamics'+'\n')
-            vasp_file.write(elements[-1][0]+'\n')
-            # Vasp Atoms and positions (with 'DYN' column)
-            vasp_file.write(MP.loc[:, 'X':'DYN'].to_string(index=False, header=False))
-        else:
-            vasp_file.write(elements[-1][0]+'\n')
-            # Vasp Atoms and positions (original)
-            vasp_file.write(MP.loc[:, 'X':'Z'].to_string(index=False, header=False))
-
-    vasp_file.close()
-    #print('{} was saved, enjoy it!'.format(name))
 
 def pos_finder(mol):
     perov = read(mol.perovskite_file)
@@ -520,18 +517,15 @@ class q2D_analysis:
             self.X = X
             self.perovskite_df, self.box = vasp_load(crystal)
         
-        def isolate_spacer(self):
+        def isolate_spacer(self, order=None):
             crystal_df = self.perovskite_df
-            print(crystal_df)
             B = self.B
             # Find the planes of the perovskite.
             b_planes = crystal_df.query("Element == @B").sort_values(by='Z')
             b_planes['Z'] = b_planes['Z'].apply(lambda x: round(x, 1))
             b_planes.drop_duplicates(subset='Z', inplace=True)
             b_planes.reset_index(inplace=True, drop=True)
-            print(b_planes)
 
-            print(len(b_planes.values))
             if len(b_planes.values) > 1:
                 b_planes['Diff'] = b_planes['Z'].diff()
                 id_diff_max = b_planes['Diff'].idxmax()
@@ -548,16 +542,22 @@ class q2D_analysis:
                 iso_df = crystal_df.query('Z >= @b_unique_plane')
   
             else:
-                print('Try formatting your result to resemble the example file')
+                print('There was not found {} planes'.format(B))
+                return None
 
             # Update the box to be 10 amstrong in Z
-            iso_df.loc[:, 'Z'] = iso_df['Z'] - iso_df['Z'].min()
-            box = self.box
-            box[0][2][2] = iso_df['Z'].sort_values(ascending=False).iloc[0] + 10
-            # Save the system
-            name = self.path + '/' + 'salt_' + self.name
-            print('Your isolated salt file was save as: ', name)
-            save_vasp(iso_df, box, name)
+            try:
+                iso_df.loc[:, 'Z'] = iso_df['Z'] - iso_df['Z'].min()
+                box = self.box
+                box[0][2][2] = iso_df['Z'].sort_values(ascending=False).iloc[0] + 10
+                # Save the system
+                name = self.path + '/' + 'salt_' + self.name
+                print('Your isolated salt file was save as: ', name)
+                save_vasp(iso_df, box, name, order=order)
+
+            except Exception as e:
+                print(f"Error creating the SALT: {e}")
+
         
 
         def octahedra(self, cell_cutoff=0.5, bond_cutoff=3.5):
@@ -606,7 +606,7 @@ class q2D_analysis:
             octa = {}
             b_x_prop = len(x_list) / len(b_list)
             if b_x_prop >= 6: # The b x proportion in the octahedra must be more than 6
-                print('B:X proportion = ', b_x_prop)
+                print('B:X proportion = ', b_x_prop, 'To be an octahedra this must be greater than 6')
                 df = b_list.copy()
                 octahedron_list = []
                 # Get the octahedra:
