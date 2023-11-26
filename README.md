@@ -8,9 +8,17 @@ The script needs the position of the six coordinates to correctly work; it is im
 ​Just clone the repo and use the workspace Jupyter notebook
 
 ## Requeriments
+# We recomend using a conda environment:
+```
+conda create SVC_Materials
+conda activate SVC_Materials
+```
+
+
+# Install the necessary libraries:
 ```
 pip install rdkit ase pandas numpy matplotlib octadist
-```  
+``` 
 
 ## Usage
 
