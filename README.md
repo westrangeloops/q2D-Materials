@@ -17,24 +17,19 @@ conda activate SVC_Materials
 
 ## Install the necessary libraries:
 ```
-pip install rdkit ase pandas numpy matplotlib octadist
+pip install rdkit ase pandas numpy matplotlib
 ``` 
 
 # Usage
 
-## To use SVC-Maestra, you can import the package and use the following functions:
+## To use SVC-Materials, you can import the package and use the following functions:
 
 ``` 
 from svc_maestra_lib.svc_maestra import q2D_creator
-form svc_maestra_lib.svc_maestra import q2D_analysis
 ```
 # Examples
 There is under the folder examples a jupyter notebook included
 ​
-# Important information:
-SVC-Materials is disitributed with a copy of OctaDist, if you want more information about all wonderful octadist capabilities please refer to the original page:
-https://octadist.github.io/
-
 # Contributing
 We welcome contributions to SVC-Materials. If you would like to contribute, please fork the repository and submit a pull request.
 
