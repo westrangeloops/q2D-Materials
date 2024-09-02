@@ -10,14 +10,16 @@ The script needs the position of the six coordinates to correctly work; it is im
 # Requeriments
 ## We recomend using a conda environment:
 ```
-conda create SVC_Materials
+conda create -n SVC_Materials pip
+```
+```
 conda activate SVC_Materials
 ```
 
 
 ## Install the necessary libraries:
 ```
-pip install rdkit ase pandas numpy matplotlib
+pip install ase pandas numpy matplotlib
 ``` 
 
 # Usage

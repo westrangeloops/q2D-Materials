@@ -3,17 +3,7 @@ import pandas as pd
 import numpy as np
 from ase.io import read
 from ase.visualize import view
-from rdkit import Chem
 from os import remove
-import numpy.linalg as LA
-
-from scipy.spatial import distance
-from ase.neighborlist import NeighborList
-from ase import Atoms, visualize
-from ase.geometry.analysis import Analysis
-import math
-from scipy.spatial.distance import cdist
-
 
 def rot_mol(data, degree):
     df = data.copy()
@@ -48,29 +38,21 @@ def rot_mol(data, degree):
 
 def mol_load(file):
     # Load the molecule from the file
-    if file.endswith('.mol2'): 
-        mol = Chem.MolFromMol2File(file, removeHs=False)
-    elif file.endswith('.xyz'):
-        mol = Chem.MolFromXYZFile(file, removeHs=False)
+    if file.endswith('.xyz'):
+        with open(file, 'r') as file:
+                lines = file.readlines()
+        # Skip the first two lines (atom count and comment)
+        atoms = [line.split() for line in lines[2:]]
+
     else:
-        print('WARNING: Not currently supported format')
-
-    # Check if the molecule was loaded successfully
-    if mol is None:
-        raise ValueError(f"Could not load molecule from file {file}")
-
-    # Get the number of atoms in the molecule
-    num_atoms = mol.GetNumAtoms()
-
-    # Get the atomic symbols and 3D coordinates from the molecule
-    atoms = []
-    for i in range(num_atoms):
-        symbol = mol.GetAtomWithIdx(i).GetSymbol()
-        pos = mol.GetConformer().GetAtomPosition(i)
-        atoms.append([symbol, pos.x, pos.y, pos.z])
+        print('WARNING: Not a valid XYZ')
 
     # Create a Pandas DataFrame with the atomic coordinates
     df = pd.DataFrame(atoms, columns=['Element', 'X', 'Y', 'Z'])
+    df['X'] = df['X'].astype('float')
+    df['Y'] = df['Y'].astype('float')
+    df['Z'] = df['Z'].astype('float')
+    #print(df)
     return df
 
 
