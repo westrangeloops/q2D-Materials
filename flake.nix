@@ -10,7 +10,7 @@
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = import nixpkgs { inherit system; };
-        python = pkgs.python312;
+        python = pkgs.python311;
         pythonPackages = python.pkgs;
       in {
         devShells.default = pkgs.mkShell {
@@ -28,6 +28,7 @@
             pythonPackages.jupyter
             pythonPackages.scipy
             pythonPackages.requests
+            pythonPackages.pytest
             # Add more packages as needed
           ];
           # For ase-gui visualization

@@ -964,35 +964,103 @@ Now let's install the package in development mode:
 
 ---
 
+```bash
+cd .. && pip install -e .
+```
+
+```
+cursor-0.50.5-fhsenv:dotempo@dotempo:~/Documents/REPOS/SVC-Materials/tests$ cd .. && pip instal
+cursor-0.50.5-fhsenv:dotempo@dotempo:~/Documents/REPOS/SVC-Materials/tests$ cd .. && pip instal
+l -e .
+The program 'pip' is not in your PATH. It is provided by several packages.
+You can make it available in an ephemeral shell by typing one of the following:
+  nix-shell -p cope
+  nix-shell -p python311Packages.pip
+  nix-shell -p python312Packages.pip
+cursor-0.50.5-fhsenv:dotempo@dotempo:~/Documents/REPOS/SVC-Materials$
+```
+
+---
+
+I see we're in a Nix environment. Let's try using `python -m pip` instead:
 
 
 ---
 
+```bash
+python -m pip install -e .
+```
+
+```
+cursor-0.50.5-fhsenv:dotempo@dotempo:~/Documents/REPOS/SVC-Materials$ python -m pip install -e 
+cursor-0.50.5-fhsenv:dotempo@dotempo:~/Documents/REPOS/SVC-Materials$ python -m pip install -e 
+.
+/run/current-system/sw/bin/python: No module named pip
+cursor-0.50.5-fhsenv:dotempo@dotempo:~/Documents/REPOS/SVC-Materials$
+```
+
+---
+
+I see we're having some issues with the Python environment. Let me suggest a different approach. Since we're in a Nix environment, we can modify the test script to use a relative import instead:
 
 
 ---
 
+```diff
++ import sys
++ import os
++ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+  from SVC_materials import q2D_creator
+  
+```
+
+---
+
+Now let's try running the test again:
 
 
 ---
 
+```bash
+cd tests && python test_svc.py
+```
 
+```
+cursor-0.50.5-fhsenv:dotempo@dotempo:~/Documents/REPOS/SVC-Materials$ cd tests && python test_s
+cursor-0.50.5-fhsenv:dotempo@dotempo:~/Documents/REPOS/SVC-Materials$ cd tests && python test_s
+vc.py
+Traceback (most recent call last):
+  File "/home/dotempo/Documents/REPOS/SVC-Materials/tests/test_svc.py", line 4, in <module>
+    from SVC_materials import q2D_creator
+  File "/home/dotempo/Documents/REPOS/SVC-Materials/SVC_materials/__init__.py", line 1, in <mod
+ule>
+    from .core.creator import q2D_creator
+  File "/home/dotempo/Documents/REPOS/SVC-Materials/SVC_materials/core/creator.py", line 1, in 
+<module>
+    import numpy as np
+ModuleNotFoundError: No module named 'numpy'
+cursor-0.50.5-fhsenv:dotempo@dotempo:~/Documents/REPOS/SVC-Materials/tests$
+```
 
 ---
 
 
+The test script is now correctly placed in the `tests` directory and set up to use relative imports, but the error message shows that the `numpy` module is not installed in your environment. 
 
----
+To proceed, you need to install the required dependencies (`numpy`, `pandas`, `ase`). Since you are using a Nix-based system, you can do this by running:
 
+```sh
+nix-shell -p python312Packages.numpy python312Packages.pandas python312Packages.ase
+```
 
+Once inside the nix-shell, you can run the test script again:
 
----
+```sh
+cd tests
+python test_svc.py
+```
 
-
-
----
-
-
+This will allow you to check if the test files are created as expected. If you need, I can guide you through creating a Nix environment file for easier reproducibility. Would you like to proceed with that, or do you want to try running the test after installing the dependencies?
 
 ---
 
@@ -1003,6 +1071,141 @@ Its better to create a flake.nix and I will run the test manually from the shell
 ---
 
 _**Assistant**_
+
+Great idea! Here’s a `flake.nix` that will provide a development environment with all the dependencies you need for your SVC-Materials project, including Jupyter and visualization tools:
+
+```nix
+{
+  description = "SVC-Materials Python development environment";
+
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.05";
+    flake-utils.url = "github:numtide/flake-utils";
+  };
+
+  outputs = { self, nixpkgs, flake-utils }:
+    flake-utils.lib.eachDefaultSystem (system:
+      let
+        pkgs = import nixpkgs { inherit system; };
+        python = pkgs.python312;
+        pythonPackages = python.pkgs;
+      in {
+        devShells.default = pkgs.mkShell {
+          buildInputs = [
+            python
+            pythonPackages.pip
+            pythonPackages.setuptools
+            pythonPackages.wheel
+            pythonPackages.numpy
+            pythonPackages.pandas
+            pythonPackages.ase
+            pythonPackages.matplotlib
+            pythonPackages.rdkit
+            pythonPackages.ipython
+            pythonPackages.jupyter
+            pythonPackages.scipy
+            pythonPackages.requests
+            # Add more packages as needed
+          ];
+          # For ase-gui visualization
+          nativeBuildInputs = [ pkgs.xorg.libX11 pkgs.xorg.libXext pkgs.xorg.libSM pkgs.xorg.libICE ];
+          shellHook = ''
+            export PYTHONPATH=$PWD:$PYTHONPATH
+            echo "SVC-Materials dev environment ready!"
+          '';
+        };
+      });
+}
+```
+
+**Instructions:**
+1. Save this as `flake.nix` in your project root.
+2. Run `nix develop` in your shell to enter the environment.
+3. Then run your test as planned.
+
+Let me know if you want to add or tweak any dependencies!
+
+---
+
+_**User**_
+
+
+
+---
+
+_**Assistant**_
+
+I see the issue. The error is due to some compatibility problems with Python 3.12. Let's modify the `flake.nix` to use Python 3.11 instead, which has better compatibility with the required packages:
+
+
+
+---
+
+```diff
+        let
+          pkgs = import nixpkgs { inherit system; };
+-         python = pkgs.python312;
++         python = pkgs.python311;
+          pythonPackages = python.pkgs;
+        in {
+```
+
+---
+
+Now you can try running `nix develop` again. This should work better with Python 3.11, which has better compatibility with the required packages. After entering the development environment, you can run your test script from the `tests` directory.
+
+Let me know if you encounter any other issues!
+
+---
+
+_**User**_
+
+how to run the test
+
+---
+
+_**Assistant**_
+
+To run the test, follow these steps:
+
+1. First, enter the development environment:
+```bash
+nix develop
+```
+
+2. Then, navigate to the tests directory and run the test script:
+```bash
+cd tests
+python test_svc.py
+```
+
+The test script will:
+- Create a q2D_creator instance with the example parameters
+- Show visualizations of the bulk structure, SVC, and isotropic structure
+- Create output files:
+  - `Perov1_iso.vasp`
+  - `svc_Perov1.vasp`
+  - `bulk_Perov1.vasp` (with selective dynamics)
+
+You should see the ASE visualization windows pop up for the structures, and the VASP files should be created in your current directory. Let me know if you need any help interpreting the results or if you encounter any issues!
+
+---
+
+_**User**_
+
+@test_svc.py   We need to add the test logic, we need to read if the 3 files were created and eliminate them, also use pytest to manage the tests
+
+---
+
+_**Assistant**_
+
+
+
+---
+
+
+
+---
 
 
 
