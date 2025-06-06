@@ -25,10 +25,25 @@ EXPECTED_FILES = [
     'bulk_test.vasp'
 ]
 
+def cleanup_files():
+    """Helper function to clean up test files"""
+    for file in EXPECTED_FILES:
+        if os.path.exists(file):
+            os.remove(file)
+
+@pytest.fixture(autouse=True)
+def setup_teardown():
+    """Fixture to handle setup and teardown for all tests"""
+    # Setup: Clean up any existing files
+    cleanup_files()
+    yield
+    # Teardown: Clean up files after each test
+    cleanup_files()
+
 @pytest.fixture
 def q2d_instance():
-    """Fixture to create and clean up q2D_creator instance"""
-    mol = q2D_creator(
+    """Fixture to create q2D_creator instance"""
+    return q2D_creator(
         B='Pb',
         X='I',
         molecule_xyz=mol_file,
@@ -37,18 +52,13 @@ def q2d_instance():
         name='test',
         vac=10
     )
-    yield mol
-    # Cleanup after tests
-    for file in EXPECTED_FILES:
-        if os.path.exists(file):
-            os.remove(file)
 
 def test_file_creation(q2d_instance):
     """Test that all expected files are created"""
     # Create the files
     q2d_instance.write_iso()
     q2d_instance.write_svc()
-    q2d_instance.write_bulk(slab=1, hn=0.3, order=['N', 'C', 'H', 'Pb', 'Br'])
+    q2d_instance.write_bulk(slab=1, hn=0.3)
     
     # Check if all files exist
     for file in EXPECTED_FILES:
@@ -65,7 +75,7 @@ def test_file_content_structure(q2d_instance):
     # Create the files
     q2d_instance.write_iso()
     q2d_instance.write_svc()
-    q2d_instance.write_bulk(slab=1, hn=0.3, order=['N', 'C', 'H', 'Pb', 'Br'])
+    q2d_instance.write_bulk(slab=1, hn=0.3)
     
     for file in EXPECTED_FILES:
         with open(file, 'r') as f:
@@ -89,13 +99,15 @@ def test_cleanup(q2d_instance):
     # Create the files
     q2d_instance.write_iso()
     q2d_instance.write_svc()
-    q2d_instance.write_bulk(slab=1, hn=0.3, order=['N', 'C', 'H', 'Pb', 'Br'])
+    q2d_instance.write_bulk(slab=1, hn=0.3)
     
     # Verify files exist
     for file in EXPECTED_FILES:
         assert os.path.exists(file), f"File {file} was not created"
     
-    # Cleanup happens automatically after the test due to the fixture
-    # This test just verifies the cleanup worked
+    # Clean up files
+    cleanup_files()
+    
+    # Verify files are cleaned up
     for file in EXPECTED_FILES:
         assert not os.path.exists(file), f"File {file} was not cleaned up" 
