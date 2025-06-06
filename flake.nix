@@ -29,6 +29,8 @@
             pythonPackages.scipy
             pythonPackages.requests
             pythonPackages.pytest
+            pythonPackages.pytest-cov
+            pythonPackages.pytest-xdist
             # Add more packages as needed
           ];
           # For ase-gui visualization
