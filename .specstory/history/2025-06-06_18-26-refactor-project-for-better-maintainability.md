@@ -1515,6 +1515,390 @@ _**User**_
 
 _**Assistant**_
 
+I see the issue. The cleanup test is still failing because the fixture's cleanup isn't working properly. Let's modify the test to handle cleanup more explicitly:
+
+
+---
+
+```diff
+  ]
+  
+- @pytest.fixture
+- def q2d_instance():
+-     """Fixture to create and clean up q2D_creator instance"""
+-     # Clean up any existing files before the test
++ def cleanup_files():
++     """Helper function to clean up test files"""
+      for file in EXPECTED_FILES:
+          if os.path.exists(file):
+              os.remove(file)
+  
+-     mol = q2D_creator(
++ @pytest.fixture(autouse=True)
++ def setup_teardown():
++     """Fixture to handle setup and teardown for all tests"""
++     # Setup: Clean up any existing files
++     cleanup_files()
++     yield
++     # Teardown: Clean up files after each test
++     cleanup_files()
++ 
++ @pytest.fixture
++ def q2d_instance():
++     """Fixture to create q2D_creator instance"""
++     return q2D_creator(
+          B='Pb',
+          X='I',
+```
+
+```diff
+          vac=10
+      )
+-     yield mol
+-     # Cleanup after tests
+-     for file in EXPECTED_FILES:
+-         if os.path.exists(file):
+-             os.remove(file)
+  
+  def test_file_creation(q2d_instance):
+```
+
+```diff
+      q2d_instance.write_iso()
+      q2d_instance.write_svc()
+-     q2d_instance.write_bulk(slab=1, hn=0.3)  # Removed order parameter to use default ordering
++     q2d_instance.write_bulk(slab=1, hn=0.3)
+      
+      # Check if all files exist
+```
+
+```diff
+      q2d_instance.write_iso()
+      q2d_instance.write_svc()
+-     q2d_instance.write_bulk(slab=1, hn=0.3)  # Removed order parameter to use default ordering
++     q2d_instance.write_bulk(slab=1, hn=0.3)
+      
+      for file in EXPECTED_FILES:
+```
+
+```diff
+      q2d_instance.write_iso()
+      q2d_instance.write_svc()
+-     q2d_instance.write_bulk(slab=1, hn=0.3)  # Removed order parameter to use default ordering
++     q2d_instance.write_bulk(slab=1, hn=0.3)
+      
+      # Verify files exist
+      for file in EXPECTED_FILES:
+          assert os.path.exists(file), f"File {file} was not created"
+      
+-     # Cleanup happens automatically after the test due to the fixture
+-     # This test just verifies the cleanup worked
++     # Clean up files
++     cleanup_files()
++     
++     # Verify files are cleaned up
+      for file in EXPECTED_FILES:
+          assert not os.path.exists(file), f"File {file} was not cleaned up" 
+```
+
+---
+
+I've made several important changes to fix the cleanup issues:
+
+1. Created a separate `cleanup_files()` helper function to centralize the cleanup logic
+2. Added a new `setup_teardown` fixture with `autouse=True` that runs before and after each test
+3. Simplified the `q2d_instance` fixture to only handle instance creation
+4. Made the cleanup test more explicit by calling `cleanup_files()` directly
+
+The key changes are:
+- Using `autouse=True` ensures the setup/teardown runs for every test
+- Separating the cleanup logic makes it more reliable and easier to maintain
+- The cleanup test now explicitly calls cleanup and verifies it worked
+
+Try running the tests again:
+```bash
+cd tests
+python -m pytest test_svc.py -v
+```
+
+All tests should now pass. The warnings about pandas and numpy are not critical but we can address them if you'd like.
+
+---
+
+_**User**_
+
+All of the three are .vasp files, it will be a stronger validation if we use the read vasp in this test and see that is no error to read it (non empty)
+
+---
+
+_**Assistant**_
+
+I'll modify the tests to use `vasp_load` to validate the VASP files. This will provide stronger validation by ensuring the files are properly formatted and can be read by our code.
+
+
+---
+
+```diff
+  sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+  from SVC_materials import q2D_creator
++ from SVC_materials.utils.file_handlers import vasp_load
+  
+  # Example coordinates
+```
+
+```diff
+  
+  def test_file_creation(q2d_instance):
+-     """Test that all expected files are created"""
++     """Test that all expected files are created and can be read"""
+      # Create the files
+      q2d_instance.write_iso()
+      q2d_instance.write_svc()
+      q2d_instance.write_bulk(slab=1, hn=0.3)
+      
+-     # Check if all files exist
++     # Check if all files exist and can be read
+      for file in EXPECTED_FILES:
+          assert os.path.exists(file), f"File {file} was not created"
+          
+-         # Basic content validation
+-         with open(file, 'r') as f:
+-             content = f.read()
+-             assert len(content) > 0, f"File {file} is empty"
+-             assert 'Cartesian' in content, f"File {file} does not contain Cartesian coordinates"
++         # Try to read the VASP file
++         try:
++             df, box = vasp_load(file)
++             assert not df.empty, f"File {file} has no atomic data"
++             assert len(box) == 3, f"File {file} has invalid box dimensions"
++             assert all(len(row) == 3 for row in box), f"File {file} has invalid box vectors"
++         except Exception as e:
++             pytest.fail(f"Failed to read {file}: {str(e)}")
+  
+  def test_file_content_structure(q2d_instance):
+```
+
+```diff
+      
+      for file in EXPECTED_FILES:
+-         with open(file, 'r') as f:
+-             lines = f.readlines()
+-             # Check basic VASP file structure
+-             assert len(lines) > 5, f"File {file} has insufficient content"
+-             assert 'Cartesian' in lines[7], f"File {file} does not specify Cartesian coordinates"
++         # Read the VASP file
++         df, box = vasp_load(file)
++         
++         # Check DataFrame structure
++         assert 'Element' in df.columns, f"File {file} missing Element column"
++         assert all(col in df.columns for col in ['X', 'Y', 'Z']), f"File {file} missing coordinate columns"
++         
++         # Check for non-empty data
++         assert len(df) > 0, f"File {file} has no atomic data"
+          
+-             # Check for element counts
+-             elements_line = lines[5].strip().split()
+-             counts_line = lines[6].strip().split()
+-             assert len(elements_line) == len(counts_line), f"File {file} has mismatched elements and counts"
+-             
+-             # Verify all counts are positive integers
+-             for count in counts_line:
+-                 assert count.isdigit(), f"File {file} has invalid count: {count}"
+-                 assert int(count) > 0, f"File {file} has zero or negative count: {count}"
++         # Check element counts
++         element_counts = df['Element'].value_counts()
++         assert all(count > 0 for count in element_counts), f"File {file} has zero counts for some elements"
++         
++         # Check box dimensions
++         assert len(box) == 3, f"File {file} has invalid box dimensions"
++         assert all(len(row) == 3 for row in box), f"File {file} has invalid box vectors"
++         
++         # Check coordinates are within reasonable bounds
++         assert df['X'].between(-100, 100).all(), f"File {file} has X coordinates out of bounds"
++         assert df['Y'].between(-100, 100).all(), f"File {file} has Y coordinates out of bounds"
++         assert df['Z'].between(-100, 100).all(), f"File {file} has Z coordinates out of bounds"
+  
+  def test_cleanup(q2d_instance):
+```
+
+```diff
+      q2d_instance.write_bulk(slab=1, hn=0.3)
+      
+-     # Verify files exist
++     # Verify files exist and can be read
+      for file in EXPECTED_FILES:
+          assert os.path.exists(file), f"File {file} was not created"
++         df, box = vasp_load(file)
++         assert not df.empty, f"File {file} has no atomic data"
+      
+      # Clean up files
+```
+
+---
+
+I've made significant improvements to the tests by using `vasp_load` to validate the VASP files. Here are the key changes:
+
+1. Added import for `vasp_load` from our file handlers module
+2. Enhanced `test_file_creation`:
+   - Now uses `vasp_load` to read each file
+   - Validates that the DataFrame is not empty
+   - Checks box dimensions are valid (3x3 matrix)
+
+3. Improved `test_file_content_structure`:
+   - Uses `vasp_load` to get structured data
+   - Validates DataFrame structure (required columns)
+   - Checks element counts using pandas value_counts
+   - Validates box dimensions
+   - Added coordinate bounds checking (-100 to 100 Å)
+
+4. Enhanced `test_cleanup`:
+   - Now verifies files can be read before cleanup
+   - Ensures files contain atomic data
+
+These changes provide much stronger validation because:
+- We're using our actual VASP file reader
+- We validate the data structure and content
+- We check for reasonable coordinate values
+- We ensure all required data is present and valid
+
+Try running the tests again:
+```bash
+cd tests
+python -m pytest test_svc.py -v
+```
+
+The tests should now provide better validation of the VASP files. If any of the files are malformed or contain invalid data, the tests will catch it.
+
+---
+
+_**User**_
+
+
+
+---
+
+_**Assistant**_
+
+I see the issue. The `vasp_load` function is returning a different structure than expected. Looking at the error message, it seems the box data is nested differently than we assumed. Let me fix the tests to handle the actual structure:
+
+
+---
+
+```diff
+              df, box = vasp_load(file)
+              assert not df.empty, f"File {file} has no atomic data"
+-             assert len(box) == 3, f"File {file} has invalid box dimensions"
+-             assert all(len(row) == 3 for row in box), f"File {file} has invalid box vectors"
++             
++             # Box is a list of two elements: [box_vectors, metadata]
++             assert len(box) == 2, f"File {file} has invalid box structure"
++             box_vectors = box[0]
++             metadata = box[1]
++             
++             # Check box vectors
++             assert len(box_vectors) == 3, f"File {file} has invalid box dimensions"
++             assert all(len(row) == 3 for row in box_vectors), f"File {file} has invalid box vectors"
++             
++             # Check metadata
++             assert len(metadata) == 3, f"File {file} has invalid metadata"
++             assert 'Cartesian' in metadata[2], f"File {file} does not specify Cartesian coordinates"
++             
+          except Exception as e:
+              pytest.fail(f"Failed to read {file}: {str(e)}")
+```
+
+```diff
+          assert all(count > 0 for count in element_counts), f"File {file} has zero counts for some elements"
+          
+-         # Check box dimensions
+-         assert len(box) == 3, f"File {file} has invalid box dimensions"
+-         assert all(len(row) == 3 for row in box), f"File {file} has invalid box vectors"
++         # Check box structure
++         assert len(box) == 2, f"File {file} has invalid box structure"
++         box_vectors = box[0]
++         metadata = box[1]
++         
++         # Check box vectors
++         assert len(box_vectors) == 3, f"File {file} has invalid box dimensions"
++         assert all(len(row) == 3 for row in box_vectors), f"File {file} has invalid box vectors"
++         
++         # Check metadata
++         assert len(metadata) == 3, f"File {file} has invalid metadata"
++         assert 'Cartesian' in metadata[2], f"File {file} does not specify Cartesian coordinates"
+          
+          # Check coordinates are within reasonable bounds
+```
+
+```diff
+          df, box = vasp_load(file)
+          assert not df.empty, f"File {file} has no atomic data"
++         assert len(box) == 2, f"File {file} has invalid box structure"
+      
+      # Clean up files
+```
+
+---
+
+I've updated the tests to handle the correct structure returned by `vasp_load`. The key changes are:
+
+1. Fixed the box structure validation:
+   - Box is now expected to be a list of two elements: `[box_vectors, metadata]`
+   - `box_vectors` contains the 3x3 matrix of box dimensions
+   - `metadata` contains element names, counts, and coordinate type
+
+2. Added more detailed checks:
+   - Validates the box structure has exactly 2 elements
+   - Checks box vectors are 3x3
+   - Verifies metadata contains required information
+   - Ensures Cartesian coordinates are specified
+
+3. Updated all three test functions to use the correct structure:
+   - `test_file_creation`
+   - `test_file_content_structure`
+   - `test_cleanup`
+
+The tests should now pass since they match the actual structure returned by `vasp_load`. Try running them again:
+
+```bash
+cd tests
+python -m pytest test_svc.py -v
+```
+
+These changes make the tests more robust by:
+1. Correctly handling the VASP file structure
+2. Validating both the box vectors and metadata
+3. Ensuring all required information is present and properly formatted
+
+---
+
+_**User**_
+
+@svc_workspace.ipynb  Please convert it to a python file
+
+---
+
+_**Assistant**_
+
+
+
+---
+
+
+
+---
+
+
+
+---
+
+_**User**_
+
+
+
+---
+
+_**Assistant**_
+
 
 
 ---

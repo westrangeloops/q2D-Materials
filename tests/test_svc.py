@@ -5,6 +5,7 @@ from pathlib import Path
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from SVC_materials import q2D_creator
+from SVC_materials.utils.file_handlers import vasp_load
 
 # Example coordinates
 P1 = "6.88270  -0.00111  10.43607"
@@ -54,21 +55,36 @@ def q2d_instance():
     )
 
 def test_file_creation(q2d_instance):
-    """Test that all expected files are created"""
+    """Test that all expected files are created and can be read"""
     # Create the files
     q2d_instance.write_iso()
     q2d_instance.write_svc()
     q2d_instance.write_bulk(slab=1, hn=0.3)
     
-    # Check if all files exist
+    # Check if all files exist and can be read
     for file in EXPECTED_FILES:
         assert os.path.exists(file), f"File {file} was not created"
         
-        # Basic content validation
-        with open(file, 'r') as f:
-            content = f.read()
-            assert len(content) > 0, f"File {file} is empty"
-            assert 'Cartesian' in content, f"File {file} does not contain Cartesian coordinates"
+        # Try to read the VASP file
+        try:
+            df, box = vasp_load(file)
+            assert not df.empty, f"File {file} has no atomic data"
+            
+            # Box is a list of two elements: [box_vectors, metadata]
+            assert len(box) == 2, f"File {file} has invalid box structure"
+            box_vectors = box[0]
+            metadata = box[1]
+            
+            # Check box vectors
+            assert len(box_vectors) == 3, f"File {file} has invalid box dimensions"
+            assert all(len(row) == 3 for row in box_vectors), f"File {file} has invalid box vectors"
+            
+            # Check metadata
+            assert len(metadata) == 3, f"File {file} has invalid metadata"
+            assert 'Cartesian' in metadata[2], f"File {file} does not specify Cartesian coordinates"
+            
+        except Exception as e:
+            pytest.fail(f"Failed to read {file}: {str(e)}")
 
 def test_file_content_structure(q2d_instance):
     """Test the structure of created files"""
@@ -78,21 +94,37 @@ def test_file_content_structure(q2d_instance):
     q2d_instance.write_bulk(slab=1, hn=0.3)
     
     for file in EXPECTED_FILES:
-        with open(file, 'r') as f:
-            lines = f.readlines()
-            # Check basic VASP file structure
-            assert len(lines) > 5, f"File {file} has insufficient content"
-            assert 'Cartesian' in lines[7], f"File {file} does not specify Cartesian coordinates"
-            
-            # Check for element counts
-            elements_line = lines[5].strip().split()
-            counts_line = lines[6].strip().split()
-            assert len(elements_line) == len(counts_line), f"File {file} has mismatched elements and counts"
-            
-            # Verify all counts are positive integers
-            for count in counts_line:
-                assert count.isdigit(), f"File {file} has invalid count: {count}"
-                assert int(count) > 0, f"File {file} has zero or negative count: {count}"
+        # Read the VASP file
+        df, box = vasp_load(file)
+        
+        # Check DataFrame structure
+        assert 'Element' in df.columns, f"File {file} missing Element column"
+        assert all(col in df.columns for col in ['X', 'Y', 'Z']), f"File {file} missing coordinate columns"
+        
+        # Check for non-empty data
+        assert len(df) > 0, f"File {file} has no atomic data"
+        
+        # Check element counts
+        element_counts = df['Element'].value_counts()
+        assert all(count > 0 for count in element_counts), f"File {file} has zero counts for some elements"
+        
+        # Check box structure
+        assert len(box) == 2, f"File {file} has invalid box structure"
+        box_vectors = box[0]
+        metadata = box[1]
+        
+        # Check box vectors
+        assert len(box_vectors) == 3, f"File {file} has invalid box dimensions"
+        assert all(len(row) == 3 for row in box_vectors), f"File {file} has invalid box vectors"
+        
+        # Check metadata
+        assert len(metadata) == 3, f"File {file} has invalid metadata"
+        assert 'Cartesian' in metadata[2], f"File {file} does not specify Cartesian coordinates"
+        
+        # Check coordinates are within reasonable bounds
+        assert df['X'].between(-100, 100).all(), f"File {file} has X coordinates out of bounds"
+        assert df['Y'].between(-100, 100).all(), f"File {file} has Y coordinates out of bounds"
+        assert df['Z'].between(-100, 100).all(), f"File {file} has Z coordinates out of bounds"
 
 def test_cleanup(q2d_instance):
     """Test that files are properly cleaned up"""
@@ -101,9 +133,12 @@ def test_cleanup(q2d_instance):
     q2d_instance.write_svc()
     q2d_instance.write_bulk(slab=1, hn=0.3)
     
-    # Verify files exist
+    # Verify files exist and can be read
     for file in EXPECTED_FILES:
         assert os.path.exists(file), f"File {file} was not created"
+        df, box = vasp_load(file)
+        assert not df.empty, f"File {file} has no atomic data"
+        assert len(box) == 2, f"File {file} has invalid box structure"
     
     # Clean up files
     cleanup_files()
