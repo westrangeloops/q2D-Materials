@@ -3,6 +3,7 @@
 from SVC_materials.core.creator import q2D_creator
 from SVC_materials.core.analyzer import q2D_analysis
 import os
+import numpy as np
 
 # Example coordinates
 P1 = "6.88270  -0.00111  10.43607"
@@ -45,46 +46,64 @@ def analyze_structures():
     cwd = os.getcwd()
     
     # Create analyzer instance for the bulk structure
-    bulk_file = os.path.join(cwd, 'bulk_Perov1.vasp')
-    if not os.path.exists(bulk_file):
-        print(f"Error: Bulk structure file not found at {bulk_file}")
-        return
-        
-    bulk_analyzer = q2D_analysis(
-        B='Pb',  # Metal center
-        X='I',   # Halogen
-        crystal=bulk_file  # Path to the bulk structure
-    )
+    structures_path = os.path.join(cwd, 'tests/structures')
+    for bulk_file in os.listdir(structures_path):
+        if bulk_file.endswith('.vasp'):  # Only process VASP files
+            full_path = os.path.join(structures_path, bulk_file)
+            if not os.path.exists(full_path):
+                print(f"Error: Bulk structure file not found at {full_path}")
+                continue
+                
+            print(f"\nAnalyzing structure: {bulk_file}")
+            bulk_analyzer = q2D_analysis(
+                B='Pb',  # Metal center
+                X='Br',   # Halogen
+                crystal=full_path  # Path to the bulk structure
+            )
 
-    # Show and save the isolated components
-    print("\nAnalyzing bulk structure...")
-    try:
-        bulk_analyzer.show_original()  # Show the original bulk structure
-        
-        # Isolate and visualize the spacer
-        print("\nIsolating spacer...")
-        bulk_analyzer.show_spacer()
-        #bulk_analyzer.save_spacer(name=os.path.join(cwd, 'bulk_spacer.vasp'))  # Save with custom name
-        
-        # Isolate and visualize the salt
-        print("\nIsolating salt...")
-        bulk_analyzer.show_salt()
-        #bulk_analyzer.save_salt(name=os.path.join(cwd, 'bulk_salt.vasp'))  # Save with custom name
-    except Exception as e:
-        print(f"Error analyzing bulk structure: {e}")
+            # Show and save the isolated components
+            try:
+                #bulk_analyzer.show_original()  # Show the original bulk structure
+                
+                # Analyze perovskite structure
+                print("\nAnalyzing perovskite structure parameters...")
+                bulk_structure_data = bulk_analyzer.analyze_perovskite_structure()
+                if bulk_structure_data:
+                    print("\nBulk Structure Analysis Summary:")
+                    print(f"Number of octahedra analyzed: {len(bulk_structure_data['per_octahedron'])}")
+                    print(f"Average axial angle: {np.mean(bulk_structure_data['axial_angles']):.2f}°")
+                    print(f"Average equatorial angle: {np.mean(bulk_structure_data['equatorial_angles']):.2f}°")
+                    print(f"Average axial length: {np.mean(bulk_structure_data['axial_lengths']):.3f} Å")
+                    print(f"Average equatorial length: {np.mean(bulk_structure_data['equatorial_lengths']):.3f} Å")
+                    print(f"Average out-of-plane distortion: {np.mean(bulk_structure_data['out_of_plane_distortions']):.2f}°")
+                
+                # Isolate and visualize the spacer
+                print("\nIsolating spacer...")
+                #bulk_analyzer.show_spacer()
+                #bulk_analyzer.save_spacer(name=os.path.join(cwd, 'bulk_spacer.vasp'))  # Save with custom name
+                
+                # Isolate and visualize the salt
+                print("\nIsolating salt...")
+                #bulk_analyzer.show_salt()
+                #bulk_analyzer.save_salt(name=os.path.join(cwd, 'bulk_salt.vasp'))  # Save with custom name
+            except Exception as e:
+                print(f"Error analyzing bulk structure: {e}")
 
     # Create analyzer instance for the SVC structure
-    svc_file = os.path.join(cwd, 'svc_Perov1.vasp')
+    svc_file = os.path.join(cwd, '/home/dotempo/Documents/REPOS/SVC-Materials/tests/structures/post_slab1.vasp')
     if not os.path.exists(svc_file):
         print(f"Error: SVC structure file not found at {svc_file}")
         return
         
     svc_analyzer = q2D_analysis(
         B='Pb',
-        X='I',
+        X='Br',
         crystal=svc_file  # Path to the SVC structure
     )
-
+    
+    # Analyze SVC structure
+    print("\nAnalyzing SVC structure...")
+    svc_analyzer.show_original()
 
 def main():
     """Main function to run the examples"""
