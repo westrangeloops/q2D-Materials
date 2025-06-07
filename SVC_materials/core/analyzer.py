@@ -72,11 +72,6 @@ class q2D_analysis:
                     lower_plane = plane_z_values[0]
                     upper_plane = plane_z_values[1]
                 
-                print(f"\nPlane detection for {element} atoms:")
-                print(f"Found {len(planes)} planes, using main planes at:")
-                print(f"Lower plane at Z = {lower_plane:.3f} Å")
-                print(f"Upper plane at Z = {upper_plane:.3f} Å")
-                
                 return lower_plane, upper_plane, True
             else:
                 # For X atoms, find the two main planes
@@ -92,17 +87,11 @@ class q2D_analysis:
                     lower_plane = plane_z_values[0]
                     upper_plane = plane_z_values[1]
                 
-                print(f"\nPlane detection for {element} atoms:")
-                print(f"Found {len(planes)} planes, using main planes at:")
-                print(f"Lower plane at Z = {lower_plane:.3f} Å")
-                print(f"Upper plane at Z = {upper_plane:.3f} Å")
-                
                 return lower_plane, upper_plane, True
             
         elif len(plane_z_values) == 1:
             # For B atoms in single slab case, use the same plane for both
             if element_type == 'B':
-                print(f"Note: Single slab case - using same plane for both lower and upper")
                 plane_z = plane_z_values[0]
                 return plane_z, plane_z, True
             return plane_z_values[0], None, False
@@ -112,20 +101,225 @@ class q2D_analysis:
 
     def _get_plane_equation(self, plane_z):
         """Calculate the equation of a plane at a given Z coordinate"""
-        # For a horizontal plane, the equation is z = plane_z
-        # In standard form: 0x + 0y + 1z - plane_z = 0
         return np.array([0, 0, 1, -plane_z])
 
     def _point_to_plane_distance(self, point, plane_eq):
         """Calculate the absolute distance from a point to a plane"""
-        # plane_eq is [a, b, c, d] for plane ax + by + cz + d = 0
-        # point is [x, y, z]
         a, b, c, d = plane_eq
         x, y, z = point
-        # Use absolute value for the numerator to get positive distance
         numerator = abs(a*x + b*y + c*z + d)
         denominator = np.sqrt(a*a + b*b + c*c)
-        return abs(numerator / denominator)  # Ensure positive distance
+        return abs(numerator / denominator)
+
+    def _classify_octahedral_distortion(self, eq_angles, axial_angles, eq_variance, axial_variance):
+        """Classify the type of octahedral distortion based on angles and variances
+        
+        Args:
+            eq_angles (list): List of equatorial angles
+            axial_angles (list): List of axial angles
+            eq_variance (float): Variance of equatorial angles
+            axial_variance (float): Variance of axial angles
+            
+        Returns:
+            tuple: (distortion_class, distortion_type)
+        """
+        if not eq_angles or not axial_angles:
+            return "Unknown", "Unknown"
+            
+        ideal_equatorial = 90.0
+        ideal_axial = 180.0
+        
+        # Calculate average deviations
+        avg_eq_dev = np.mean([angle - ideal_equatorial for angle in eq_angles])
+        avg_axial_dev = np.mean([angle - ideal_axial for angle in axial_angles])
+        
+        # Classify based on variance
+        if eq_variance < 1.0 and axial_variance < 1.0:
+            distortion_class = "Regular"
+        elif eq_variance < 1.0 and axial_variance >= 1.0:
+            distortion_class = "Axially Distorted"
+        elif eq_variance >= 1.0 and axial_variance < 1.0:
+            distortion_class = "Equatorially Distorted"
+        else:
+            distortion_class = "Highly Distorted"
+        
+        # Determine distortion type
+        if distortion_class != "Regular":
+            if avg_axial_dev < -5:  # Axial angles are compressed
+                distortion_type = "Compressed"
+            elif avg_axial_dev > 5:  # Axial angles are elongated
+                distortion_type = "Elongated"
+            elif abs(avg_eq_dev) > 5:  # Equatorial angles are distorted
+                distortion_type = "Rhombic"
+            else:
+                distortion_type = "Mixed"
+        else:
+            distortion_type = "Regular"
+            
+        return distortion_class, distortion_type
+
+    def analyze_perovskite_structure(self, cutoff_distance=3.5):
+        """Analyze the perovskite structure including bond angles, lengths, and distortions
+        
+        Args:
+            cutoff_distance (float): Maximum distance to consider atoms as neighbors (in Å)
+            
+        Returns:
+            dict: Dictionary containing all structural parameters
+        """
+        try:
+            # Convert the structure to ASE Atoms object
+            atoms = read(self.path + '/' + self.name)
+            
+            # Find the indices of B atoms
+            b_atom_indices = [atom.index for atom in atoms if atom.symbol == self.B]
+            if not b_atom_indices:
+                print(f"ERROR: No '{self.B}' atoms found in the structure.")
+                return None
+                
+            # Set up neighbor list
+            cutoffs = [cutoff_distance / 2.0] * len(atoms)
+            nl = NeighborList(cutoffs, skin=0.3, self_interaction=False, bothways=True)
+            nl.update(atoms)
+            
+            # Initialize storage for all measurements
+            structure_data = {
+                'inter_octahedral_angles': [],
+                'in_plane_angles': [],
+                'axial_angles': [],
+                'equatorial_angles': [],
+                'axial_lengths': [],
+                'equatorial_lengths': [],
+                'out_of_plane_distortions': [],
+                'per_octahedron': {},
+                'octahedral_variances': []
+            }
+            
+            # Loop through each B atom
+            for b_index in b_atom_indices:
+                # Get neighbors of the current B atom
+                neighbor_indices, offsets = nl.get_neighbors(b_index)
+                
+                # Filter for X neighbors and calculate bond vectors
+                x_neighbors_info = []
+                for i, offset in zip(neighbor_indices, offsets):
+                    if atoms[i].symbol == self.X:
+                        x_pos = atoms.get_positions()[i] + np.dot(offset, atoms.get_cell())
+                        b_pos = atoms.get_positions()[b_index]
+                        bond_vector = x_pos - b_pos
+                        bond_length = np.linalg.norm(bond_vector)
+                        x_neighbors_info.append({
+                            'index': i,
+                            'vector': bond_vector,
+                            'length': bond_length,
+                            'position': x_pos
+                        })
+                
+                if len(x_neighbors_info) != 6:
+                    print(f"  > WARNING: B atom at index {b_index} has {len(x_neighbors_info)} {self.X} neighbors, expected 6.")
+                    continue
+                
+                # Identify axial and equatorial bonds
+                max_parallel = -1
+                axial_pair = None
+                for i, j in combinations(range(len(x_neighbors_info)), 2):
+                    v1 = x_neighbors_info[i]['vector']
+                    v2 = x_neighbors_info[j]['vector']
+                    cos_theta = np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2))
+                    if abs(cos_theta) > max_parallel:
+                        max_parallel = abs(cos_theta)
+                        axial_pair = (i, j)
+                
+                # Separate axial and equatorial bonds
+                axial_bonds = [x_neighbors_info[i] for i in axial_pair]
+                equatorial_bonds = [x for i, x in enumerate(x_neighbors_info) if i not in axial_pair]
+                
+                # Calculate angles and store data
+                octahedron_data = self._analyze_octahedron(axial_bonds, equatorial_bonds)
+                structure_data['per_octahedron'][b_index] = octahedron_data
+                
+                # Update overall statistics
+                for key in ['axial_angles', 'equatorial_angles', 'axial_lengths', 'equatorial_lengths', 'out_of_plane_distortions']:
+                    structure_data[key].extend(octahedron_data[key])
+                
+                structure_data['octahedral_variances'].append(octahedron_data['equatorial_variance'])
+            
+            return structure_data
+                
+        except Exception as e:
+            print(f"Error analyzing structure: {e}")
+            return None
+
+    def _analyze_octahedron(self, axial_bonds, equatorial_bonds):
+        """Analyze a single octahedron and return its structural parameters
+        
+        Args:
+            axial_bonds (list): List of axial bond information
+            equatorial_bonds (list): List of equatorial bond information
+            
+        Returns:
+            dict: Dictionary containing octahedron parameters
+        """
+        # Calculate axial angle
+        v1 = axial_bonds[0]['vector']
+        v2 = axial_bonds[1]['vector']
+        cos_theta = np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2))
+        axial_angle = np.arccos(np.clip(cos_theta, -1.0, 1.0)) * 180 / np.pi
+        
+        # Calculate all angles between equatorial bonds
+        octahedron_eq_angles = []
+        octahedron_axial_angles = []
+        
+        for v1, v2 in combinations(equatorial_bonds, 2):
+            vec1 = v1['vector']
+            vec2 = v2['vector']
+            cos_theta = np.dot(vec1, vec2) / (np.linalg.norm(vec1) * np.linalg.norm(vec2))
+            angle = np.arccos(np.clip(cos_theta, -1.0, 1.0)) * 180 / np.pi
+            
+            if angle > 150:  # If angle is close to 180°
+                octahedron_axial_angles.append(angle)
+            else:  # Otherwise it's an equatorial angle
+                octahedron_eq_angles.append(angle)
+        
+        # Calculate variances
+        ideal_equatorial = 90.0
+        ideal_axial = 180.0
+        
+        eq_deviations = [(angle - ideal_equatorial)**2 for angle in octahedron_eq_angles]
+        axial_deviations = [(angle - ideal_axial)**2 for angle in octahedron_axial_angles]
+        
+        eq_variance = np.mean(eq_deviations) if eq_deviations else 0
+        axial_variance = np.mean(axial_deviations) if axial_deviations else 0
+        
+        # Classify the distortion
+        distortion_class, distortion_type = self._classify_octahedral_distortion(
+            octahedron_eq_angles, octahedron_axial_angles, eq_variance, axial_variance
+        )
+        
+        # Calculate out-of-plane distortions
+        axial_direction = np.mean([b['vector'] for b in axial_bonds], axis=0)
+        axial_direction = axial_direction / np.linalg.norm(axial_direction)
+        
+        out_of_plane_distortions = []
+        for bond in equatorial_bonds:
+            bond_vector = bond['vector'] / np.linalg.norm(bond['vector'])
+            projection = bond_vector - np.dot(bond_vector, axial_direction) * axial_direction
+            projection = projection / np.linalg.norm(projection)
+            distortion = np.arccos(np.clip(np.dot(projection, bond_vector), -1.0, 1.0)) * 180 / np.pi
+            out_of_plane_distortions.append(distortion)
+        
+        return {
+            'axial_angle': axial_angle,
+            'axial_angles': octahedron_axial_angles,
+            'equatorial_angles': octahedron_eq_angles,
+            'axial_lengths': [b['length'] for b in axial_bonds],
+            'equatorial_lengths': [b['length'] for b in equatorial_bonds],
+            'out_of_plane_distortions': out_of_plane_distortions,
+            'equatorial_variance': eq_variance,
+            'axial_variance': axial_variance,
+            'distortion_class': distortion_class,
+            'distortion_type': distortion_type
+        }
 
     def calculate_n_penetration(self):
         """Calculate the penetration depth of the 4 Nitrogen atoms from the organic molecule into both upper and lower perovskite layers"""
@@ -392,267 +586,4 @@ class q2D_analysis:
             atoms = read(self.path + '/' + self.name)
             view(atoms)
         except Exception as e:
-            print(f"Error visualizing original structure: {e}")
-
-
-    def analyze_perovskite_structure(self, cutoff_distance=3.5):
-        """Analyze the perovskite structure including bond angles, lengths, and distortions
-        
-        Args:
-            cutoff_distance (float): Maximum distance to consider atoms as neighbors (in Å)
-            
-        Returns:
-            dict: Dictionary containing all structural parameters
-        """
-        try:
-            # Convert the structure to ASE Atoms object
-            atoms = read(self.path + '/' + self.name)
-            print(f"\nAnalyzing perovskite structure:")
-            print(f"  Formula: {atoms.get_chemical_formula()}")
-            print(f"  Cell dimensions (Å): {np.diag(atoms.cell)}")
-            
-            # Find the indices of B atoms
-            b_atom_indices = [atom.index for atom in atoms if atom.symbol == self.B]
-            if not b_atom_indices:
-                print(f"ERROR: No '{self.B}' atoms found in the structure.")
-                return None
-                
-            print(f"Found {len(b_atom_indices)} '{self.B}' atom(s).")
-            
-            # Set up neighbor list
-            cutoffs = [cutoff_distance / 2.0] * len(atoms)
-            nl = NeighborList(cutoffs, skin=0.3, self_interaction=False, bothways=True)
-            nl.update(atoms)
-            
-            # Initialize storage for all measurements
-            structure_data = {
-                'inter_octahedral_angles': [],  # Pb-X-Pb angles between octahedra
-                'in_plane_angles': [],          # Pb-X-Pb angles in the same plane
-                'axial_angles': [],            # Angles between axial bonds
-                'equatorial_angles': [],       # Angles between equatorial bonds
-                'axial_lengths': [],           # Axial Pb-X bond lengths
-                'equatorial_lengths': [],      # Equatorial Pb-X bond lengths
-                'out_of_plane_distortions': [], # Deviation from normal direction
-                'per_octahedron': {},          # Store data for each octahedron
-                'octahedral_variances': []     # Store variance for each octahedron
-            }
-            
-            # Loop through each B atom
-            for b_index in b_atom_indices:
-                # Get neighbors of the current B atom
-                neighbor_indices, offsets = nl.get_neighbors(b_index)
-                
-                # Filter for X neighbors and calculate bond vectors
-                x_neighbors_info = []
-                for i, offset in zip(neighbor_indices, offsets):
-                    if atoms[i].symbol == self.X:
-                        x_pos = atoms.get_positions()[i] + np.dot(offset, atoms.get_cell())
-                        b_pos = atoms.get_positions()[b_index]
-                        bond_vector = x_pos - b_pos
-                        bond_length = np.linalg.norm(bond_vector)
-                        x_neighbors_info.append({
-                            'index': i,
-                            'vector': bond_vector,
-                            'length': bond_length,
-                            'position': x_pos
-                        })
-                
-                if len(x_neighbors_info) != 6:
-                    print(f"  > WARNING: B atom at index {b_index} has {len(x_neighbors_info)} {self.X} neighbors, expected 6.")
-                    continue
-                
-                # Identify axial and equatorial bonds
-                # First, find the two bonds that are most parallel to each other (axial)
-                max_parallel = -1
-                axial_pair = None
-                for i, j in combinations(range(len(x_neighbors_info)), 2):
-                    v1 = x_neighbors_info[i]['vector']
-                    v2 = x_neighbors_info[j]['vector']
-                    cos_theta = np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2))
-                    if abs(cos_theta) > max_parallel:
-                        max_parallel = abs(cos_theta)
-                        axial_pair = (i, j)
-                
-                # Separate axial and equatorial bonds
-                axial_bonds = [x_neighbors_info[i] for i in axial_pair]
-                equatorial_bonds = [x for i, x in enumerate(x_neighbors_info) if i not in axial_pair]
-                
-                # Calculate axial bond angle
-                v1 = axial_bonds[0]['vector']
-                v2 = axial_bonds[1]['vector']
-                cos_theta = np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2))
-                axial_angle = np.arccos(np.clip(cos_theta, -1.0, 1.0)) * 180 / np.pi
-                structure_data['axial_angles'].append(axial_angle)
-                
-                # Calculate equatorial bond angles for this octahedron
-                octahedron_eq_angles = []
-                octahedron_axial_angles = []
-                print(f"\nOctahedron centered at B atom {b_index}:")
-                
-                # First identify the axial direction
-                axial_direction = np.mean([b['vector'] for b in axial_bonds], axis=0)
-                axial_direction = axial_direction / np.linalg.norm(axial_direction)
-                
-                # Calculate angles between all bonds
-                for v1, v2 in combinations(equatorial_bonds, 2):
-                    vec1 = v1['vector']
-                    vec2 = v2['vector']
-                    
-                    # Calculate angle between bonds
-                    cos_theta = np.dot(vec1, vec2) / (np.linalg.norm(vec1) * np.linalg.norm(vec2))
-                    angle = np.arccos(np.clip(cos_theta, -1.0, 1.0)) * 180 / np.pi
-                    
-                    # Check if this is an axial angle (close to 180°)
-                    if angle > 150:  # If angle is close to 180°
-                        octahedron_axial_angles.append(angle)
-                        print(f"  Axial angle: {angle:.2f}°")
-                    else:  # Otherwise it's an equatorial angle
-                        octahedron_eq_angles.append(angle)
-                        print(f"  Equatorial angle: {angle:.2f}°")
-                
-                # Calculate variances separately
-                ideal_equatorial = 90.0
-                ideal_axial = 180.0
-                
-                eq_deviations = [(angle - ideal_equatorial)**2 for angle in octahedron_eq_angles]
-                axial_deviations = [(angle - ideal_axial)**2 for angle in octahedron_axial_angles]
-                
-                eq_variance = np.mean(eq_deviations) if eq_deviations else 0
-                axial_variance = np.mean(axial_deviations) if axial_deviations else 0
-                
-                structure_data['octahedral_variances'].append(eq_variance)  # Store only equatorial variance
-                
-                print(f"\n  Equatorial angles (target: 90°):")
-                for angle, deviation in zip(octahedron_eq_angles, eq_deviations):
-                    print(f"    {angle:.2f}° -> {(angle - ideal_equatorial):.2f}° deviation -> {deviation:.2f}°²")
-                print(f"  Equatorial variance: {eq_variance:.2f}°²")
-                
-                print(f"\n  Axial angles (target: 180°):")
-                for angle, deviation in zip(octahedron_axial_angles, axial_deviations):
-                    print(f"    {angle:.2f}° -> {(angle - ideal_axial):.2f}° deviation -> {deviation:.2f}°²")
-                print(f"  Axial variance: {axial_variance:.2f}°²")
-                
-                # Detailed distortion analysis
-                print("\n  Distortion Pattern Analysis:")
-                
-                # 1. Axial Distortion Analysis
-                if axial_deviations:
-                    axial_angles = np.array(octahedron_axial_angles)
-                    axial_deviations = np.array([angle - ideal_axial for angle in axial_angles])
-                    print("  1. Axial Distortion:")
-                    print(f"    • Average axial angle: {np.mean(axial_angles):.2f}°")
-                    print(f"    • Maximum deviation: {np.max(np.abs(axial_deviations)):.2f}°")
-                    print(f"    • Minimum deviation: {np.min(np.abs(axial_deviations)):.2f}°")
-                    print(f"    • Standard deviation: {np.std(axial_angles):.2f}°")
-                    
-                    # Determine if distortion is symmetric or asymmetric
-                    if np.all(axial_deviations < 0):
-                        print("    • Pattern: Symmetric inward bending")
-                    elif np.all(axial_deviations > 0):
-                        print("    • Pattern: Symmetric outward bending")
-                    else:
-                        print("    • Pattern: Asymmetric bending")
-                
-                # 2. Equatorial Distortion Analysis
-                if eq_deviations:
-                    eq_angles = np.array(octahedron_eq_angles)
-                    eq_deviations = np.array([angle - ideal_equatorial for angle in eq_angles])
-                    print("\n  2. Equatorial Distortion:")
-                    print(f"    • Average equatorial angle: {np.mean(eq_angles):.2f}°")
-                    print(f"    • Maximum deviation: {np.max(np.abs(eq_deviations)):.2f}°")
-                    print(f"    • Minimum deviation: {np.min(np.abs(eq_deviations)):.2f}°")
-                    print(f"    • Standard deviation: {np.std(eq_angles):.2f}°")
-                    
-                    # Analyze equatorial distortion pattern
-                    if np.all(eq_angles < ideal_equatorial):
-                        print("    • Pattern: All angles compressed")
-                    elif np.all(eq_angles > ideal_equatorial):
-                        print("    • Pattern: All angles expanded")
-                    else:
-                        print("    • Pattern: Mixed compression/expansion")
-                
-                # 3. Overall Octahedral Distortion
-                print("\n  3. Overall Octahedral Distortion:")
-                print(f"    • Total variance: {eq_variance + axial_variance:.2f}°²")
-                print(f"    • Distortion ratio (axial/equatorial): {axial_variance/eq_variance:.2f}" if eq_variance > 0 else "    • Distortion ratio: N/A (no equatorial variance)")
-                
-                # 4. Distortion Classification
-                print("\n  4. Distortion Classification:")
-                if axial_variance > 100 and eq_variance < 10:
-                    print("    • Primary: Axial distortion dominant")
-                elif eq_variance > 10 and axial_variance < 100:
-                    print("    • Primary: Equatorial distortion dominant")
-                elif axial_variance > 100 and eq_variance > 10:
-                    print("    • Primary: Mixed axial and equatorial distortion")
-                else:
-                    print("    • Primary: Minimal distortion")
-                
-                # Store bond lengths
-                structure_data['axial_lengths'].extend([b['length'] for b in axial_bonds])
-                structure_data['equatorial_lengths'].extend([b['length'] for b in equatorial_bonds])
-                
-                # Calculate out-of-plane distortion
-                # For each equatorial bond, calculate deviation from normal to axial direction
-                axial_direction = np.mean([b['vector'] for b in axial_bonds], axis=0)
-                axial_direction = axial_direction / np.linalg.norm(axial_direction)
-                
-                for bond in equatorial_bonds:
-                    bond_vector = bond['vector'] / np.linalg.norm(bond['vector'])
-                    # Project bond vector onto plane perpendicular to axial direction
-                    projection = bond_vector - np.dot(bond_vector, axial_direction) * axial_direction
-                    projection = projection / np.linalg.norm(projection)
-                    # Calculate angle between projection and ideal equatorial direction
-                    distortion = np.arccos(np.clip(np.dot(projection, bond_vector), -1.0, 1.0)) * 180 / np.pi
-                    structure_data['out_of_plane_distortions'].append(distortion)
-                
-                # Store data for this octahedron
-                structure_data['per_octahedron'][b_index] = {
-                    'axial_angle': axial_angle,
-                    'axial_lengths': [b['length'] for b in axial_bonds],
-                    'equatorial_lengths': [b['length'] for b in equatorial_bonds],
-                    'out_of_plane_distortions': structure_data['out_of_plane_distortions'][-4:],  # Last 4 distortions
-                    'equatorial_variance': eq_variance
-                }
-            
-            # Calculate overall statistics
-            print("\n--- Analysis Complete ---")
-            print(f"\nBond Angles:")
-            print(f"Average axial angle: {np.mean(structure_data['axial_angles']):.2f}°")
-            print(f"Average equatorial angle: {np.mean(structure_data['equatorial_angles']):.2f}°")
-            
-            print(f"\nBond Lengths:")
-            print(f"Average axial length: {np.mean(structure_data['axial_lengths']):.3f} Å")
-            print(f"Average equatorial length: {np.mean(structure_data['equatorial_lengths']):.3f} Å")
-            
-            print(f"\nDistortions:")
-            print(f"Average out-of-plane distortion: {np.mean(structure_data['out_of_plane_distortions']):.2f}°")
-            
-            # Calculate bond angle variance
-            ideal_axial = 180.0  # Ideal axial angle
-            axial_variance = np.mean([(angle - ideal_axial)**2 for angle in structure_data['axial_angles']])
-            equatorial_variance = np.mean(structure_data['octahedral_variances'])  # Average of per-octahedron variances
-            
-            print(f"\nBond Angle Variance:")
-            print(f"Axial variance: {axial_variance:.2f}°²")
-            print(f"Equatorial variance: {equatorial_variance:.2f}°²")
-            
-            # Calculate bond length quadratic elongation
-            ideal_length = np.mean(structure_data['axial_lengths'])  # Use average as reference
-            axial_elongation = np.mean([(length/ideal_length - 1)**2 for length in structure_data['axial_lengths']])
-            equatorial_elongation = np.mean([(length/ideal_length - 1)**2 for length in structure_data['equatorial_lengths']])
-            
-            print(f"\nBond Length Quadratic Elongation:")
-            print(f"Axial elongation: {axial_elongation:.4f}")
-            print(f"Equatorial elongation: {equatorial_elongation:.4f}")
-            
-            # Add variance and elongation to the return data
-            structure_data['axial_angle_variance'] = axial_variance
-            structure_data['equatorial_angle_variance'] = equatorial_variance
-            structure_data['axial_elongation'] = axial_elongation
-            structure_data['equatorial_elongation'] = equatorial_elongation
-            
-            return structure_data
-                
-        except Exception as e:
-            print(f"Error analyzing structure: {e}")
-            return None 
+            print(f"Error visualizing original structure: {e}") 

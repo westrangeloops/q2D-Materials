@@ -7715,7 +7715,130 @@ Would you like me to:
 
 _**User**_
 
-Add more detailed analysis of the distortion patterns? make a list with this 
+We want to add a classification based on the angles, make a proposal to add to the function
+
+---
+
+_**Assistant**_
+
+I'll propose adding a classification system for the octahedral distortions based on the angles. Here's my suggestion:
+
+
+---
+
+```diff
+                  axial_variance = np.mean(axial_deviations) if axial_deviations else 0
+                  
++                 # Classify the distortion
++                 distortion_class = "Unknown"
++                 distortion_type = "Unknown"
++                 
++                 # Check if we have both types of angles
++                 if octahedron_eq_angles and octahedron_axial_angles:
++                     # Calculate average deviations
++                     avg_eq_dev = np.mean([angle - ideal_equatorial for angle in octahedron_eq_angles])
++                     avg_axial_dev = np.mean([angle - ideal_axial for angle in octahedron_axial_angles])
++                     
++                     # Classify based on variance
++                     if eq_variance < 1.0 and axial_variance < 1.0:
++                         distortion_class = "Regular"
++                     elif eq_variance < 1.0 and axial_variance >= 1.0:
++                         distortion_class = "Axially Distorted"
++                     elif eq_variance >= 1.0 and axial_variance < 1.0:
++                         distortion_class = "Equatorially Distorted"
++                     else:
++                         distortion_class = "Highly Distorted"
++                     
++                     # Determine distortion type
++                     if distortion_class != "Regular":
++                         if avg_axial_dev < -5:  # Axial angles are compressed
++                             distortion_type = "Compressed"
++                         elif avg_axial_dev > 5:  # Axial angles are elongated
++                             distortion_type = "Elongated"
++                         elif abs(avg_eq_dev) > 5:  # Equatorial angles are distorted
++                             distortion_type = "Rhombic"
++                         else:
++                             distortion_type = "Mixed"
++                 
+                  structure_data['octahedral_variances'].append(eq_variance)  # Store only equatorial variance
+                  
+```
+
+```diff
+                      print(f"    {angle:.2f}° -> {(angle - ideal_axial):.2f}° deviation -> {deviation:.2f}°²")
+                  print(f"  Axial variance: {axial_variance:.2f}°²")
++                 
++                 print(f"\n  Distortion Classification:")
++                 print(f"    Class: {distortion_class}")
++                 print(f"    Type: {distortion_type}")
++                 
++                 # Store the classification in the structure data
++                 structure_data['per_octahedron'][b_index].update({
++                     'distortion_class': distortion_class,
++                     'distortion_type': distortion_type,
++                     'axial_variance': axial_variance,
++                     'equatorial_variance': eq_variance
++                 })
+                  
+                  # Store bond lengths
+```
+
+```diff
+                      distortion = np.arccos(np.clip(np.dot(projection, bond_vector), -1.0, 1.0)) * 180 / np.pi
+                      structure_data['out_of_plane_distortions'].append(distortion)
+-                 
+-                 # Store data for this octahedron
+-                 structure_data['per_octahedron'][b_index] = {
+-                     'axial_angle': axial_angle,
+-                     'axial_lengths': [b['length'] for b in axial_bonds],
+-                     'equatorial_lengths': [b['length'] for b in equatorial_bonds],
+-                     'out_of_plane_distortions': structure_data['out_of_plane_distortions'][-4:],  # Last 4 distortions
+-                     'equatorial_variance': eq_variance
+-                 }
+              
+              # Calculate overall statistics
+```
+
+---
+
+I've added a comprehensive classification system that includes:
+
+1. Distortion Class (based on variance):
+   - "Regular": Both axial and equatorial variances < 1.0°²
+   - "Axially Distorted": Only axial variance ≥ 1.0°²
+   - "Equatorially Distorted": Only equatorial variance ≥ 1.0°²
+   - "Highly Distorted": Both variances ≥ 1.0°²
+
+2. Distortion Type (based on average deviations):
+   - "Compressed": Axial angles are compressed (avg deviation < -5°)
+   - "Elongated": Axial angles are elongated (avg deviation > 5°)
+   - "Rhombic": Equatorial angles are distorted (avg deviation > 5°)
+   - "Mixed": Other types of distortion
+   - "Regular": No significant distortion
+
+The output will now include:
+```
+  Distortion Classification:
+    Class: Axially Distorted
+    Type: Compressed
+```
+
+This classification helps understand:
+1. Which part of the octahedron is distorted (axial, equatorial, or both)
+2. The nature of the distortion (compression, elongation, or rhombic)
+3. The severity of the distortion
+
+Would you like me to:
+1. Adjust the thresholds for classification?
+2. Add more detailed sub-classifications?
+3. Add visualization of the different distortion types?
+4. Add statistical analysis of distortion patterns across the structure?
+
+---
+
+_**User**_
+
+Pleae @analyzer.py  refactor it so its clean, also we can now erase the debugging lines
 
 ---
 
