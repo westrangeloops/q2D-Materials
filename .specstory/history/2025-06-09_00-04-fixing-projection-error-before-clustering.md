@@ -2137,3 +2137,602 @@ The documentation now provides a clear overview of the molecule isolation functi
 
 ---
 
+_**User**_
+
+I want to test it can you please do a little script that use them to perform the same as @isolate_molecule.py  but we the new interfaces
+
+---
+
+_**Assistant**_
+
+I'll help you create a test script that uses the new interfaces to perform the same functionality as `isolate_molecule.py`. I'll create a script that demonstrates both the file-based and Atoms-based approaches.
+
+
+---
+
+```diff
+- 
++ """
++ Test script demonstrating the new molecule isolation interfaces.
++ This script performs the same functionality as isolate_molecule.py but using
++ the new utility functions.
++ """
++ 
++ import os
++ from pathlib import Path
++ from ase.io import read, write
++ 
++ from SVC_materials.utils.isolate_molecule import (
++     isolate_molecule,
++     isolate_molecule_from_atoms
++ )
++ 
++ def process_single_file(
++     input_file: Path,
++     template_dir: Path,
++     output_dir: Path,
++     debug: bool = True
++ ) -> bool:
++     """
++     Process a single input file using the file-based interface.
++     
++     Args:
++         input_file: Path to the input VASP file
++         template_dir: Path to the template directory
++         output_dir: Path to save the output
++         debug: Whether to print debug information
++     
++     Returns:
++         bool: True if successful, False otherwise
++     """
++     # Parse the SMILES name from the input filename
++     base_name = input_file.stem
++     try:
++         smiles_name = '_'.join(base_name.split('_')[2:])
++     except IndexError:
++         print(f"  - WARNING: Could not parse SMILES name from '{base_name}'")
++         return False
++     
++     # Construct template and output paths
++     template_file = template_dir / smiles_name / 'CONTCAR'
++     output_file = output_dir / f"{base_name}_extracted.xyz"
++     
++     print(f"\n--- Processing: {input_file.name} ---")
++     print(f"Template: {template_file}")
++     print(f"Output: {output_file}")
++     
++     # Use the file-based interface
++     success = isolate_molecule(
++         crystal_file=input_file,
++         template_file=template_file,
++         output_file=output_file,
++         debug=debug
++     )
++     
++     if success:
++         print(f"  - SUCCESS: Isolated molecule saved to {output_file}")
++     else:
++         print(f"  - FAILURE: Could not isolate molecule from {input_file.name}")
++     
++     return success
++ 
++ def process_single_file_atoms(
++     input_file: Path,
++     template_dir: Path,
++     output_dir: Path,
++     debug: bool = True
++ ) -> bool:
++     """
++     Process a single input file using the Atoms-based interface.
++     
++     Args:
++         input_file: Path to the input VASP file
++         template_dir: Path to the template directory
++         output_dir: Path to save the output
++         debug: Whether to print debug information
++     
++     Returns:
++         bool: True if successful, False otherwise
++     """
++     # Parse the SMILES name from the input filename
++     base_name = input_file.stem
++     try:
++         smiles_name = '_'.join(base_name.split('_')[2:])
++     except IndexError:
++         print(f"  - WARNING: Could not parse SMILES name from '{base_name}'")
++         return False
++     
++     # Construct template and output paths
++     template_file = template_dir / smiles_name / 'CONTCAR'
++     output_file = output_dir / f"{base_name}_extracted_atoms.xyz"
++     
++     print(f"\n--- Processing (Atoms interface): {input_file.name} ---")
++     print(f"Template: {template_file}")
++     print(f"Output: {output_file}")
++     
++     try:
++         # Load the structures
++         crystal_atoms = read(input_file)
++         template_atoms = read(template_file)
++         
++         # Use the Atoms-based interface
++         isolated_molecule = isolate_molecule_from_atoms(
++             crystal_atoms=crystal_atoms,
++             template_atoms=template_atoms,
++             debug=debug
++         )
++         
++         if isolated_molecule is not None:
++             # Save the isolated molecule
++             write(output_file, isolated_molecule, format='xyz')
++             print(f"  - SUCCESS: Isolated molecule saved to {output_file}")
++             return True
++         else:
++             print(f"  - FAILURE: Could not isolate molecule from {input_file.name}")
++             return False
++             
++     except Exception as e:
++         print(f"  - ERROR: {str(e)}")
++         return False
++ 
++ def main():
++     # --- USER-DEFINED PATHS ---
++     INPUT_DIR = Path("SVC_materials/ml_isolator/data/original")
++     OUTPUT_DIR = Path("SVC_materials/ml_isolator/data/molecules")
++     TEMPLATE_DIR = Path("~/Documents/DION-JACOBSON/MOLECULES/").expanduser()
++     
++     # Create output directory
++     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
++     
++     # Get list of input files
++     input_files = sorted(INPUT_DIR.glob('*.vasp'))
++     print(f"Found {len(input_files)} input files in '{INPUT_DIR}'")
++     
++     # Process each file using both interfaces
++     successful_files = 0
++     for input_file in input_files:
++         # Try file-based interface
++         success1 = process_single_file(
++             input_file=input_file,
++             template_dir=TEMPLATE_DIR,
++             output_dir=OUTPUT_DIR,
++             debug=True
++         )
++         
++         # Try Atoms-based interface
++         success2 = process_single_file_atoms(
++             input_file=input_file,
++             template_dir=TEMPLATE_DIR,
++             output_dir=OUTPUT_DIR,
++             debug=True
++         )
++         
++         if success1 or success2:
++             successful_files += 1
++     
++     # Print summary
++     print(f"\n--- Final Summary ---")
++     print(f"Initial input files: {len(input_files)}")
++     print(f"Successfully processed files: {successful_files}")
++     print(f"Output directory: {OUTPUT_DIR.resolve()}")
++ 
++ if __name__ == "__main__":
++     main() 
+```
+
+---
+
+I've created a test script `test_isolate.py` that demonstrates both the file-based and Atoms-based interfaces for molecule isolation. Here's what the script does:
+
+1. **Two Processing Functions**:
+   - `process_single_file()`: Uses the file-based interface (`isolate_molecule`)
+   - `process_single_file_atoms()`: Uses the Atoms-based interface (`isolate_molecule_from_atoms`)
+
+2. **Main Features**:
+   - Processes all VASP files in the input directory
+   - Tries both interfaces for each file
+   - Maintains the same file naming convention as the original script
+   - Provides detailed debug output
+   - Creates a summary of successful isolations
+
+3. **Usage**:
+```bash
+python SVC_materials/ml_isolator/test_isolate.py
+```
+
+The script will:
+1. Look for VASP files in `SVC_materials/ml_isolator/data/original`
+2. For each file:
+   - Extract the SMILES name from the filename
+   - Find the corresponding template in the template directory
+   - Try to isolate the molecule using both interfaces
+   - Save successful isolations to `SVC_materials/ml_isolator/data/molecules`
+3. Print a summary of the results
+
+The main differences from the original script are:
+1. Uses the new utility functions instead of the internal functions
+2. Provides both file-based and Atoms-based approaches
+3. More modular design with separate functions for each interface
+4. Better error handling and reporting
+
+Would you like me to make any adjustments to the test script?
+
+---
+
+_**User**_
+
+we are we making all of this? we dont have an interface with the whole processs? 
+
+---
+
+_**Assistant**_
+
+Ah, you make a good point! You're right - we should create a higher-level interface that encapsulates the entire process, similar to how the original `isolate_molecule.py` had the `process_all_files` function. Let me create a more streamlined interface.
+
+
+---
+
+```diff
+              print(f"Error during molecule isolation: {str(e)}")
+          return None
++ 
++ def process_molecules(
++     input_dir: str | Path,
++     output_dir: str | Path,
++     template_dir: str | Path,
++     debug: bool = False
++ ) -> dict:
++     """
++     High-level interface to process all molecules in a directory.
++     
++     Args:
++         input_dir: Directory containing input VASP files
++         output_dir: Directory to save isolated molecules
++         template_dir: Directory containing template molecules
++         debug: Whether to print detailed debug information
++     
++     Returns:
++         dict: Processing statistics including:
++             - total_files: Total number of input files
++             - successful: Number of successfully processed files
++             - failed: Number of failed files
++             - output_dir: Path to output directory
++     
++     Example:
++         >>> stats = process_molecules(
++         ...     input_dir="data/original",
++         ...     output_dir="data/molecules",
++         ...     template_dir="~/templates",
++         ...     debug=True
++         ... )
++         >>> print(f"Processed {stats['successful']}/{stats['total_files']} files")
++     """
++     # Convert paths to Path objects
++     input_dir = Path(input_dir)
++     output_dir = Path(output_dir)
++     template_dir = Path(template_dir).expanduser()
++     
++     # Create output directory
++     output_dir.mkdir(parents=True, exist_ok=True)
++     
++     # Get list of input files
++     input_files = sorted(input_dir.glob('*.vasp'))
++     total_files = len(input_files)
++     
++     if debug:
++         print(f"Found {total_files} input files in '{input_dir}'")
++     
++     # Process each file
++     successful = 0
++     failed = 0
++     
++     for input_file in input_files:
++         if debug:
++             print(f"\nProcessing: {input_file.name}")
++         
++         # Parse SMILES name from filename
++         base_name = input_file.stem
++         try:
++             smiles_name = '_'.join(base_name.split('_')[2:])
++         except IndexError:
++             if debug:
++                 print(f"  - WARNING: Could not parse SMILES name from '{base_name}'")
++             failed += 1
++             continue
++         
++         # Construct paths
++         template_file = template_dir / smiles_name / 'CONTCAR'
++         output_file = output_dir / f"{base_name}_extracted.xyz"
++         
++         if debug:
++             print(f"  Template: {template_file}")
++             print(f"  Output: {output_file}")
++         
++         # Try to isolate molecule
++         success = isolate_molecule(
++             crystal_file=input_file,
++             template_file=template_file,
++             output_file=output_file,
++             debug=debug
++         )
++         
++         if success:
++             successful += 1
++             if debug:
++                 print(f"  - SUCCESS: Saved to {output_file}")
++         else:
++             failed += 1
++             if debug:
++                 print(f"  - FAILURE: Could not isolate molecule")
++     
++     # Return statistics
++     return {
++         'total_files': total_files,
++         'successful': successful,
++         'failed': failed,
++         'output_dir': output_dir.resolve()
++     }
+  
+```
+
+---
+
+Now let me create a simpler test script that uses this high-level interface:
+
+
+---
+
+```diff
+  """
+- Test script demonstrating the new molecule isolation interfaces.
+- This script performs the same functionality as isolate_molecule.py but using
+- the new utility functions.
++ Test script demonstrating the molecule isolation functionality.
+  """
+  
+- import os
+  from pathlib import Path
+- from ase.io import read, write
+- 
+- from SVC_materials.utils.isolate_molecule import (
+-     isolate_molecule,
+-     isolate_molecule_from_atoms
+- )
+- 
+- def process_single_file(
+-     input_file: Path,
+-     template_dir: Path,
+-     output_dir: Path,
+-     debug: bool = True
+- ) -> bool:
+-     """
+-     Process a single input file using the file-based interface.
+-     
+-     Args:
+-         input_file: Path to the input VASP file
+-         template_dir: Path to the template directory
+-         output_dir: Path to save the output
+-         debug: Whether to print debug information
+-     
+-     Returns:
+-         bool: True if successful, False otherwise
+-     """
+-     # Parse the SMILES name from the input filename
+-     base_name = input_file.stem
+-     try:
+-         smiles_name = '_'.join(base_name.split('_')[2:])
+-     except IndexError:
+-         print(f"  - WARNING: Could not parse SMILES name from '{base_name}'")
+-         return False
+-     
+-     # Construct template and output paths
+-     template_file = template_dir / smiles_name / 'CONTCAR'
+-     output_file = output_dir / f"{base_name}_extracted.xyz"
+-     
+-     print(f"\n--- Processing: {input_file.name} ---")
+-     print(f"Template: {template_file}")
+-     print(f"Output: {output_file}")
+-     
+-     # Use the file-based interface
+-     success = isolate_molecule(
+-         crystal_file=input_file,
+-         template_file=template_file,
+-         output_file=output_file,
+-         debug=debug
+-     )
+-     
+-     if success:
+-         print(f"  - SUCCESS: Isolated molecule saved to {output_file}")
+-     else:
+-         print(f"  - FAILURE: Could not isolate molecule from {input_file.name}")
+-     
+-     return success
+- 
+- def process_single_file_atoms(
+-     input_file: Path,
+-     template_dir: Path,
+-     output_dir: Path,
+-     debug: bool = True
+- ) -> bool:
+-     """
+-     Process a single input file using the Atoms-based interface.
+-     
+-     Args:
+-         input_file: Path to the input VASP file
+-         template_dir: Path to the template directory
+-         output_dir: Path to save the output
+-         debug: Whether to print debug information
+-     
+-     Returns:
+-         bool: True if successful, False otherwise
+-     """
+-     # Parse the SMILES name from the input filename
+-     base_name = input_file.stem
+-     try:
+-         smiles_name = '_'.join(base_name.split('_')[2:])
+-     except IndexError:
+-         print(f"  - WARNING: Could not parse SMILES name from '{base_name}'")
+-         return False
+-     
+-     # Construct template and output paths
+-     template_file = template_dir / smiles_name / 'CONTCAR'
+-     output_file = output_dir / f"{base_name}_extracted_atoms.xyz"
+-     
+-     print(f"\n--- Processing (Atoms interface): {input_file.name} ---")
+-     print(f"Template: {template_file}")
+-     print(f"Output: {output_file}")
+-     
+-     try:
+-         # Load the structures
+-         crystal_atoms = read(input_file)
+-         template_atoms = read(template_file)
+-         
+-         # Use the Atoms-based interface
+-         isolated_molecule = isolate_molecule_from_atoms(
+-             crystal_atoms=crystal_atoms,
+-             template_atoms=template_atoms,
+-             debug=debug
+-         )
+-         
+-         if isolated_molecule is not None:
+-             # Save the isolated molecule
+-             write(output_file, isolated_molecule, format='xyz')
+-             print(f"  - SUCCESS: Isolated molecule saved to {output_file}")
+-             return True
+-         else:
+-             print(f"  - FAILURE: Could not isolate molecule from {input_file.name}")
+-             return False
+-             
+-     except Exception as e:
+-         print(f"  - ERROR: {str(e)}")
+-         return False
++ from SVC_materials.utils.isolate_molecule import process_molecules
+  
+  def main():
+      # --- USER-DEFINED PATHS ---
+      INPUT_DIR = Path("SVC_materials/ml_isolator/data/original")
+      OUTPUT_DIR = Path("SVC_materials/ml_isolator/data/molecules")
+-     TEMPLATE_DIR = Path("~/Documents/DION-JACOBSON/MOLECULES/").expanduser()
+-     
+-     # Create output directory
+-     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+-     
+-     # Get list of input files
+-     input_files = sorted(INPUT_DIR.glob('*.vasp'))
+-     print(f"Found {len(input_files)} input files in '{INPUT_DIR}'")
+-     
+-     # Process each file using both interfaces
+-     successful_files = 0
+-     for input_file in input_files:
+-         # Try file-based interface
+-         success1 = process_single_file(
+-             input_file=input_file,
+-             template_dir=TEMPLATE_DIR,
++     TEMPLATE_DIR = Path("~/Documents/DION-JACOBSON/MOLECULES/")
++     
++     # Process all molecules
++     stats = process_molecules(
++         input_dir=INPUT_DIR,
+          output_dir=OUTPUT_DIR,
+-             debug=True
+-         )
+-         
+-         # Try Atoms-based interface
+-         success2 = process_single_file_atoms(
+-             input_file=input_file,
+          template_dir=TEMPLATE_DIR,
+-             output_dir=OUTPUT_DIR,
+          debug=True
+      )
+-         
+-         if success1 or success2:
+-             successful_files += 1
+      
+      # Print summary
+      print(f"\n--- Final Summary ---")
+-     print(f"Initial input files: {len(input_files)}")
+-     print(f"Successfully processed files: {successful_files}")
+-     print(f"Output directory: {OUTPUT_DIR.resolve()}")
++     print(f"Total input files: {stats['total_files']}")
++     print(f"Successfully processed: {stats['successful']}")
++     print(f"Failed: {stats['failed']}")
++     print(f"Output directory: {stats['output_dir']}")
+  
+  if __name__ == "__main__":
+```
+
+---
+
+I've made the following improvements:
+
+1. Added a high-level `process_molecules()` function to `isolate_molecule.py` that:
+   - Takes input directory, output directory, and template directory as parameters
+   - Handles all the file processing logic in one place
+   - Returns detailed statistics about the processing
+   - Provides debug output when needed
+
+2. Simplified the test script to just use this high-level interface:
+   - Much shorter and cleaner
+   - Same functionality as before
+   - Better error reporting with success/failure counts
+
+Now you can use the functionality in three ways:
+
+1. **High-level batch processing**:
+```python
+from SVC_materials.utils.isolate_molecule import process_molecules
+
+stats = process_molecules(
+    input_dir="data/original",
+    output_dir="data/molecules",
+    template_dir="~/templates",
+    debug=True
+)
+```
+
+2. **Single file processing**:
+```python
+from SVC_materials.utils.isolate_molecule import isolate_molecule
+
+success = isolate_molecule(
+    crystal_file="structure.vasp",
+    template_file="template/CONTCAR",
+    output_file="output.xyz"
+)
+```
+
+3. **Direct Atoms object processing**:
+```python
+from SVC_materials.utils.isolate_molecule import isolate_molecule_from_atoms
+
+molecule = isolate_molecule_from_atoms(
+    crystal_atoms=atoms,
+    template_atoms=template
+)
+```
+
+This gives you flexibility to use the functionality at different levels while keeping the code organized and maintainable. Would you like me to make any adjustments to this structure?
+
+---
+
+_**User**_
+
+Excelent! now update hte README please
+
+---
+
+_**Assistant**_
+
+I'll update the README to better reflect the new molecule isolation functionality and its usage.
+
+
+---
+
+
+
+---
+
+
+
+---
+

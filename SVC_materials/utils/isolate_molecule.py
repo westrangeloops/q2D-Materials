@@ -313,3 +313,100 @@ def isolate_molecule_from_atoms(
         if debug:
             print(f"Error during molecule isolation: {str(e)}")
         return None
+
+def process_molecules(
+    input_dir: str | Path,
+    output_dir: str | Path,
+    template_dir: str | Path,
+    debug: bool = False
+) -> dict:
+    """
+    High-level interface to process all molecules in a directory.
+    
+    Args:
+        input_dir: Directory containing input VASP files
+        output_dir: Directory to save isolated molecules
+        template_dir: Directory containing template molecules
+        debug: Whether to print detailed debug information
+    
+    Returns:
+        dict: Processing statistics including:
+            - total_files: Total number of input files
+            - successful: Number of successfully processed files
+            - failed: Number of failed files
+            - output_dir: Path to output directory
+    
+    Example:
+        >>> stats = process_molecules(
+        ...     input_dir="data/original",
+        ...     output_dir="data/molecules",
+        ...     template_dir="~/templates",
+        ...     debug=True
+        ... )
+        >>> print(f"Processed {stats['successful']}/{stats['total_files']} files")
+    """
+    # Convert paths to Path objects
+    input_dir = Path(input_dir)
+    output_dir = Path(output_dir)
+    template_dir = Path(template_dir).expanduser()
+    
+    # Create output directory
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Get list of input files
+    input_files = sorted(input_dir.glob('*.vasp'))
+    total_files = len(input_files)
+    
+    if debug:
+        print(f"Found {total_files} input files in '{input_dir}'")
+    
+    # Process each file
+    successful = 0
+    failed = 0
+    
+    for input_file in input_files:
+        if debug:
+            print(f"\nProcessing: {input_file.name}")
+        
+        # Parse SMILES name from filename
+        base_name = input_file.stem
+        try:
+            smiles_name = '_'.join(base_name.split('_')[2:])
+        except IndexError:
+            if debug:
+                print(f"  - WARNING: Could not parse SMILES name from '{base_name}'")
+            failed += 1
+            continue
+        
+        # Construct paths
+        template_file = template_dir / smiles_name / 'CONTCAR'
+        output_file = output_dir / f"{base_name}_extracted.xyz"
+        
+        if debug:
+            print(f"  Template: {template_file}")
+            print(f"  Output: {output_file}")
+        
+        # Try to isolate molecule
+        success = isolate_molecule(
+            crystal_file=input_file,
+            template_file=template_file,
+            output_file=output_file,
+            debug=debug
+        )
+        
+        if success:
+            successful += 1
+            if debug:
+                print(f"  - SUCCESS: Saved to {output_file}")
+        else:
+            failed += 1
+            if debug:
+                print(f"  - FAILURE: Could not isolate molecule")
+    
+    # Return statistics
+    return {
+        'total_files': total_files,
+        'successful': successful,
+        'failed': failed,
+        'output_dir': output_dir.resolve()
+    }

@@ -12,8 +12,12 @@ SVC-Maestra is a Python package for creating and analyzing DJ perovskite structu
   - Out-of-plane distortions
 - Analysis of organic spacer penetration
 - Visualization tools for structural components
-- Molecule isolation from crystal structures with template-based validation
-
+- Molecule isolation from crystal structures with template-based validation:
+  - Exact size matching with template
+  - Chemical formula validation
+  - Connectivity analysis
+  - N-N path validation
+  - Bond length validation
 
 ## Installation
 We recommend using a conda environment:
@@ -47,59 +51,61 @@ penetration_data = analyzer.calculate_n_penetration()
 analyzer.show_original()  # Show full structure
 analyzer.show_spacer()    # Show isolated spacer
 analyzer.show_salt()      # Show isolated salt
-
-# Isolate spacer molecule using a template
-isolated_molecule = analyzer.isolate_spacer_molecule(
-    template_file='path/to/template.xyz',
-    output_file='isolated_molecule.xyz'  # Optional
-)
 ```
 
 ### Molecule Isolation
-The package provides two ways to isolate molecules from crystal structures:
+The package provides three ways to isolate molecules from crystal structures:
 
-1. Using the analyzer class:
+1. **High-level batch processing**:
 ```python
-from SVC_materials.core.analyzer import q2D_analysis
+from SVC_materials.utils.isolate_molecule import process_molecules
 
-analyzer = q2D_analysis(B='Pb', X='I', crystal='structure.vasp')
-isolated_molecule = analyzer.isolate_spacer_molecule(
-    template_file='template.xyz',
-    output_file='output.xyz'  # Optional
+# Process all molecules in a directory
+stats = process_molecules(
+    input_dir="data/original",
+    output_dir="data/molecules",
+    template_dir="~/templates",
+    debug=True
 )
+
+# Check results
+print(f"Processed {stats['successful']}/{stats['total_files']} files")
 ```
 
-2. Using the utility function directly:
+2. **Single file processing**:
 ```python
 from SVC_materials.utils.isolate_molecule import isolate_molecule
 
-# File-based interface
+# Isolate a single molecule
 success = isolate_molecule(
-    crystal_file='structure.vasp',
-    template_file='template.xyz',
-    output_file='output.xyz',
-    debug=True  # Optional, for detailed output
+    crystal_file="structure.vasp",
+    template_file="template/CONTCAR",
+    output_file="output.xyz",
+    debug=True
 )
+```
 
-# Or work directly with ASE Atoms objects
+3. **Direct Atoms object processing**:
+```python
 from SVC_materials.utils.isolate_molecule import isolate_molecule_from_atoms
 from ase.io import read
 
-crystal_atoms = read('structure.vasp')
-template_atoms = read('template.xyz')
+# Work directly with ASE Atoms objects
+crystal_atoms = read("structure.vasp")
+template_atoms = read("template/CONTCAR")
 isolated_molecule = isolate_molecule_from_atoms(
     crystal_atoms=crystal_atoms,
     template_atoms=template_atoms,
-    debug=True  # Optional
+    debug=True
 )
 ```
 
 The isolation process includes several validation checks:
 - Exact size matching with template
 - Chemical formula matching
-- Connectivity validation
-- N-N path validation
-- Bond length validation
+- Connectivity validation (ensures all atoms are connected)
+- N-N path validation (ensures path exists between nitrogen atoms)
+- Bond length validation (checks for reasonable bond lengths)
 
 ### Analysis Output
 The `analyze_perovskite_structure()` method returns a dictionary containing:
@@ -116,7 +122,7 @@ Check the `examples` folder for detailed Jupyter notebooks demonstrating:
 - Structural analysis
 - Visualization
 - Data processing
-- Molecule isolation
+- Molecule isolation with different interfaces
 
 ## Contributing
 We welcome contributions to SVC-Materials! If you would like to contribute:
