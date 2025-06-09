@@ -1,10 +1,13 @@
 from ..utils.file_handlers import vasp_load, save_vasp
+from ..utils.isolate_molecule import analyze_molecule_deformation
 from ase.io import read, write
 from ase.visualize import view
 import os
 import numpy as np
 from ase.neighborlist import NeighborList
 from itertools import combinations
+from pathlib import Path
+import pandas as pd
 
 class q2D_analysis:
     def __init__(self, B, X, crystal):
@@ -586,4 +589,76 @@ class q2D_analysis:
             atoms = read(self.path + '/' + self.name)
             view(atoms)
         except Exception as e:
-            print(f"Error visualizing original structure: {e}") 
+            print(f"Error visualizing original structure: {e}")
+
+    def analyze_molecule_deformation(self, template_file: str, extracted_file: str, debug: bool = False, include_hydrogens: bool = False) -> dict:
+        """
+        Analyzes the structural deformation of an extracted molecule compared to its ideal template.
+        
+        Args:
+            template_file: Path to the ideal template molecule (XYZ or VASP format)
+            extracted_file: Path to the extracted molecule (XYZ or VASP format)
+            debug: Whether to print detailed debug information
+            include_hydrogens: Whether to include hydrogen atoms in the analysis
+            
+        Returns:
+            dict: Dictionary containing deformation metrics:
+                - bond_length_mae: Mean absolute error in bond lengths (Å)
+                - bond_angle_mae: Mean absolute error in bond angles (degrees)
+                - dihedral_angle_mae: Mean absolute error in dihedral angles (degrees)
+                - is_isomorphic: Whether the molecules have the same connectivity
+                - chemical_formula: Chemical formula of the molecules
+                - bond_details: List of tuples (bond_name, ideal_length, extracted_length)
+                - angle_details: List of tuples (angle_name, ideal_angle, extracted_angle)
+                - dihedral_details: List of tuples (dihedral_name, ideal_angle, extracted_angle)
+                - error: Error message if comparison failed
+                
+        Example:
+            >>> analyzer = q2D_analysis(B='Pb', X='I', crystal='structure.vasp')
+            >>> metrics = analyzer.analyze_molecule_deformation(
+            ...     template_file='template.xyz',
+            ...     extracted_file='extracted.xyz',
+            ...     debug=True,
+            ...     include_hydrogens=False
+            ... )
+            >>> print(f"Bond length MAE: {metrics['bond_length_mae']:.4f} Å")
+        """
+        # Get the base metrics
+        metrics = analyze_molecule_deformation(
+            ideal_file=template_file,
+            extracted_file=extracted_file,
+            debug=debug,
+            include_hydrogens=include_hydrogens
+        )
+        
+        if 'error' in metrics:
+            return metrics
+            
+        # Create output directory if it doesn't exist
+        output_dir = Path(extracted_file).parent
+        molecule_name = Path(extracted_file).stem.replace('_extracted', '')
+        molecule_dir = output_dir / molecule_name
+        molecule_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Save bond details
+        if metrics['bond_details']:
+            bond_df = pd.DataFrame(metrics['bond_details'], 
+                                 columns=['bond', 'ideal_length', 'extracted_length'])
+            bond_df['error'] = abs(bond_df['ideal_length'] - bond_df['extracted_length'])
+            bond_df.to_csv(molecule_dir / "bonds.csv", index=False)
+            
+        # Save angle details
+        if metrics['angle_details']:
+            angle_df = pd.DataFrame(metrics['angle_details'], 
+                                  columns=['angle', 'ideal_angle', 'extracted_angle'])
+            angle_df['error'] = abs(angle_df['ideal_angle'] - angle_df['extracted_angle'])
+            angle_df.to_csv(molecule_dir / "angles.csv", index=False)
+            
+        # Save dihedral details
+        if metrics['dihedral_details']:
+            dihedral_df = pd.DataFrame(metrics['dihedral_details'], 
+                                     columns=['dihedral', 'ideal_angle', 'extracted_angle'])
+            dihedral_df['error'] = abs(dihedral_df['ideal_angle'] - dihedral_df['extracted_angle'])
+            dihedral_df.to_csv(molecule_dir / "dihedrals.csv", index=False)
+            
+        return metrics 

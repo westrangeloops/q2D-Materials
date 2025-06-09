@@ -1,0 +1,40 @@
+2025-06-09 16:39:45,669 - INFO - 
+Deformation Analysis Summary:
+2025-06-09 16:39:45,670 - INFO - ---------------------------
+2025-06-09 16:39:45,670 - INFO - Chemical Formula: C7H20N2
+2025-06-09 16:39:45,670 - INFO - Isomorphic: True
+2025-06-09 16:39:45,670 - INFO - 
+Bond Length Analysis:
+2025-06-09 16:39:45,670 - INFO -   Mean Error: 0.0128 ± 0.0056 Å
+2025-06-09 16:39:45,670 - INFO -   Range: [0.0060, 0.0210] Å
+2025-06-09 16:39:45,670 - INFO -   Classification: Normal bond fluctuations
+2025-06-09 16:39:45,670 - INFO - 
+Bond Angle Analysis:
+2025-06-09 16:39:45,670 - INFO -   Mean Error: 1.1134 ± 1.3865°
+2025-06-09 16:39:45,670 - INFO -   Range: [0.0259, 3.6820]°
+2025-06-09 16:39:45,670 - INFO -   Classification: Normal angle flexibility
+2025-06-09 16:39:45,670 - INFO - 
+Dihedral Angle Analysis:
+2025-06-09 16:39:45,670 - INFO -   Mean Error: 119.9445 ± 118.0095°
+2025-06-09 16:39:45,670 - INFO -   Range: [0.0318, 242.2202]°
+2025-06-09 16:39:45,670 - INFO -   Classification: Moderate conformational change
+2025-06-09 16:48:19,252 - INFO - 
+Deformation Analysis Summary:
+2025-06-09 16:48:19,252 - INFO - ---------------------------
+2025-06-09 16:48:19,252 - INFO - Chemical Formula: C7H20N2
+2025-06-09 16:48:19,252 - INFO - Isomorphic: True
+2025-06-09 16:48:19,252 - INFO - 
+Bond Length Analysis:
+2025-06-09 16:48:19,252 - INFO -   Mean Error: 0.0128 ± 0.0056 Å
+2025-06-09 16:48:19,252 - INFO -   Range: [0.0060, 0.0210] Å
+2025-06-09 16:48:19,252 - INFO -   Classification: Normal bond fluctuations
+2025-06-09 16:48:19,252 - INFO - 
+Bond Angle Analysis:
+2025-06-09 16:48:19,252 - INFO -   Mean Error: 1.1134 ± 1.3865°
+2025-06-09 16:48:19,252 - INFO -   Range: [0.0259, 3.6820]°
+2025-06-09 16:48:19,252 - INFO -   Classification: Normal angle flexibility
+2025-06-09 16:48:19,252 - INFO - 
+Dihedral Angle Analysis:
+2025-06-09 16:48:19,252 - INFO -   Mean Error: 119.9445 ± 118.0095°
+2025-06-09 16:48:19,252 - INFO -   Range: [0.0318, 242.2202]°
+2025-06-09 16:48:19,252 - INFO -   Classification: Moderate conformational change

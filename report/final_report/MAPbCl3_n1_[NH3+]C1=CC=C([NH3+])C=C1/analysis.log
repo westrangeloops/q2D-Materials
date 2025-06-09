@@ -1,0 +1,40 @@
+2025-06-09 16:40:16,633 - INFO - 
+Deformation Analysis Summary:
+2025-06-09 16:40:16,633 - INFO - ---------------------------
+2025-06-09 16:40:16,633 - INFO - Chemical Formula: C6H10N2
+2025-06-09 16:40:16,633 - INFO - Isomorphic: True
+2025-06-09 16:40:16,633 - INFO - 
+Bond Length Analysis:
+2025-06-09 16:40:16,633 - INFO -   Mean Error: 0.0399 ± 0.0172 Å
+2025-06-09 16:40:16,633 - INFO -   Range: [0.0101, 0.0514] Å
+2025-06-09 16:40:16,634 - INFO -   Classification: Normal bond fluctuations
+2025-06-09 16:40:16,634 - INFO - 
+Bond Angle Analysis:
+2025-06-09 16:40:16,634 - INFO -   Mean Error: 4.3369 ± 1.3551°
+2025-06-09 16:40:16,634 - INFO -   Range: [2.9052, 6.1592]°
+2025-06-09 16:40:16,634 - INFO -   Classification: Normal angle flexibility
+2025-06-09 16:40:16,634 - INFO - 
+Dihedral Angle Analysis:
+2025-06-09 16:40:16,634 - INFO -   Mean Error: 226.8398 ± 155.9479°
+2025-06-09 16:40:16,634 - INFO -   Range: [35.4370, 354.4760]°
+2025-06-09 16:40:16,634 - INFO -   Classification: Local torsional oscillation
+2025-06-09 16:48:48,550 - INFO - 
+Deformation Analysis Summary:
+2025-06-09 16:48:48,550 - INFO - ---------------------------
+2025-06-09 16:48:48,550 - INFO - Chemical Formula: C6H10N2
+2025-06-09 16:48:48,550 - INFO - Isomorphic: True
+2025-06-09 16:48:48,550 - INFO - 
+Bond Length Analysis:
+2025-06-09 16:48:48,550 - INFO -   Mean Error: 0.0399 ± 0.0172 Å
+2025-06-09 16:48:48,550 - INFO -   Range: [0.0101, 0.0514] Å
+2025-06-09 16:48:48,550 - INFO -   Classification: Normal bond fluctuations
+2025-06-09 16:48:48,550 - INFO - 
+Bond Angle Analysis:
+2025-06-09 16:48:48,550 - INFO -   Mean Error: 4.3369 ± 1.3551°
+2025-06-09 16:48:48,550 - INFO -   Range: [2.9052, 6.1592]°
+2025-06-09 16:48:48,550 - INFO -   Classification: Normal angle flexibility
+2025-06-09 16:48:48,550 - INFO - 
+Dihedral Angle Analysis:
+2025-06-09 16:48:48,550 - INFO -   Mean Error: 226.8398 ± 155.9479°
+2025-06-09 16:48:48,550 - INFO -   Range: [35.4370, 354.4760]°
+2025-06-09 16:48:48,550 - INFO -   Classification: Local torsional oscillation

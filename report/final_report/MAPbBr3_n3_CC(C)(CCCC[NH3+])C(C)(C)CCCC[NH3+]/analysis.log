@@ -1,0 +1,40 @@
+2025-06-09 16:39:47,352 - INFO - 
+Deformation Analysis Summary:
+2025-06-09 16:39:47,352 - INFO - ---------------------------
+2025-06-09 16:39:47,352 - INFO - Chemical Formula: C14H34N2
+2025-06-09 16:39:47,353 - INFO - Isomorphic: True
+2025-06-09 16:39:47,353 - INFO - 
+Bond Length Analysis:
+2025-06-09 16:39:47,353 - INFO -   Mean Error: 0.0047 ± 0.0057 Å
+2025-06-09 16:39:47,353 - INFO -   Range: [0.0001, 0.0204] Å
+2025-06-09 16:39:47,353 - INFO -   Classification: Normal bond fluctuations
+2025-06-09 16:39:47,353 - INFO - 
+Bond Angle Analysis:
+2025-06-09 16:39:47,353 - INFO -   Mean Error: 0.4694 ± 0.3734°
+2025-06-09 16:39:47,353 - INFO -   Range: [0.0460, 1.4746]°
+2025-06-09 16:39:47,353 - INFO -   Classification: Normal angle flexibility
+2025-06-09 16:39:47,353 - INFO - 
+Dihedral Angle Analysis:
+2025-06-09 16:39:47,353 - INFO -   Mean Error: 120.5737 ± 115.2988°
+2025-06-09 16:39:47,353 - INFO -   Range: [0.9203, 256.5302]°
+2025-06-09 16:39:47,353 - INFO -   Classification: Moderate conformational change
+2025-06-09 16:48:20,971 - INFO - 
+Deformation Analysis Summary:
+2025-06-09 16:48:20,972 - INFO - ---------------------------
+2025-06-09 16:48:20,972 - INFO - Chemical Formula: C14H34N2
+2025-06-09 16:48:20,972 - INFO - Isomorphic: True
+2025-06-09 16:48:20,972 - INFO - 
+Bond Length Analysis:
+2025-06-09 16:48:20,972 - INFO -   Mean Error: 0.0047 ± 0.0057 Å
+2025-06-09 16:48:20,972 - INFO -   Range: [0.0001, 0.0204] Å
+2025-06-09 16:48:20,972 - INFO -   Classification: Normal bond fluctuations
+2025-06-09 16:48:20,972 - INFO - 
+Bond Angle Analysis:
+2025-06-09 16:48:20,972 - INFO -   Mean Error: 0.4694 ± 0.3734°
+2025-06-09 16:48:20,972 - INFO -   Range: [0.0460, 1.4746]°
+2025-06-09 16:48:20,972 - INFO -   Classification: Normal angle flexibility
+2025-06-09 16:48:20,972 - INFO - 
+Dihedral Angle Analysis:
+2025-06-09 16:48:20,972 - INFO -   Mean Error: 120.5737 ± 115.2988°
+2025-06-09 16:48:20,972 - INFO -   Range: [0.9203, 256.5302]°
+2025-06-09 16:48:20,972 - INFO -   Classification: Moderate conformational change

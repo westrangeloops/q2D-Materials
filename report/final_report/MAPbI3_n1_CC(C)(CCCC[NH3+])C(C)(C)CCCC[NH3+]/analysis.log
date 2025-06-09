@@ -1,0 +1,40 @@
+2025-06-09 16:39:48,393 - INFO - 
+Deformation Analysis Summary:
+2025-06-09 16:39:48,393 - INFO - ---------------------------
+2025-06-09 16:39:48,393 - INFO - Chemical Formula: C14H34N2
+2025-06-09 16:39:48,393 - INFO - Isomorphic: True
+2025-06-09 16:39:48,393 - INFO - 
+Bond Length Analysis:
+2025-06-09 16:39:48,393 - INFO -   Mean Error: 0.0089 ± 0.0053 Å
+2025-06-09 16:39:48,393 - INFO -   Range: [0.0047, 0.0215] Å
+2025-06-09 16:39:48,393 - INFO -   Classification: Normal bond fluctuations
+2025-06-09 16:39:48,393 - INFO - 
+Bond Angle Analysis:
+2025-06-09 16:39:48,393 - INFO -   Mean Error: 0.5615 ± 0.5170°
+2025-06-09 16:39:48,393 - INFO -   Range: [0.0982, 2.0146]°
+2025-06-09 16:39:48,393 - INFO -   Classification: Normal angle flexibility
+2025-06-09 16:39:48,393 - INFO - 
+Dihedral Angle Analysis:
+2025-06-09 16:39:48,394 - INFO -   Mean Error: 3.5882 ± 3.6842°
+2025-06-09 16:39:48,394 - INFO -   Range: [0.0262, 13.2733]°
+2025-06-09 16:39:48,394 - INFO -   Classification: Local torsional oscillation
+2025-06-09 16:48:22,695 - INFO - 
+Deformation Analysis Summary:
+2025-06-09 16:48:22,695 - INFO - ---------------------------
+2025-06-09 16:48:22,695 - INFO - Chemical Formula: C14H34N2
+2025-06-09 16:48:22,695 - INFO - Isomorphic: True
+2025-06-09 16:48:22,696 - INFO - 
+Bond Length Analysis:
+2025-06-09 16:48:22,696 - INFO -   Mean Error: 0.0089 ± 0.0053 Å
+2025-06-09 16:48:22,696 - INFO -   Range: [0.0047, 0.0215] Å
+2025-06-09 16:48:22,696 - INFO -   Classification: Normal bond fluctuations
+2025-06-09 16:48:22,696 - INFO - 
+Bond Angle Analysis:
+2025-06-09 16:48:22,696 - INFO -   Mean Error: 0.5615 ± 0.5170°
+2025-06-09 16:48:22,696 - INFO -   Range: [0.0982, 2.0146]°
+2025-06-09 16:48:22,696 - INFO -   Classification: Normal angle flexibility
+2025-06-09 16:48:22,696 - INFO - 
+Dihedral Angle Analysis:
+2025-06-09 16:48:22,696 - INFO -   Mean Error: 3.5882 ± 3.6842°
+2025-06-09 16:48:22,696 - INFO -   Range: [0.0262, 13.2733]°
+2025-06-09 16:48:22,696 - INFO -   Classification: Local torsional oscillation

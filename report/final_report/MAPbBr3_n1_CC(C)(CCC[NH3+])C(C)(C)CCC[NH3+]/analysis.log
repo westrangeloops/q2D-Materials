@@ -1,0 +1,40 @@
+2025-06-09 16:40:54,516 - INFO - 
+Deformation Analysis Summary:
+2025-06-09 16:40:54,516 - INFO - ---------------------------
+2025-06-09 16:40:54,516 - INFO - Chemical Formula: C12H30N2
+2025-06-09 16:40:54,516 - INFO - Isomorphic: True
+2025-06-09 16:40:54,516 - INFO - 
+Bond Length Analysis:
+2025-06-09 16:40:54,516 - INFO -   Mean Error: 0.0062 ± 0.0054 Å
+2025-06-09 16:40:54,516 - INFO -   Range: [0.0003, 0.0192] Å
+2025-06-09 16:40:54,516 - INFO -   Classification: Normal bond fluctuations
+2025-06-09 16:40:54,516 - INFO - 
+Bond Angle Analysis:
+2025-06-09 16:40:54,516 - INFO -   Mean Error: 0.7791 ± 0.4440°
+2025-06-09 16:40:54,516 - INFO -   Range: [0.0656, 1.7285]°
+2025-06-09 16:40:54,516 - INFO -   Classification: Normal angle flexibility
+2025-06-09 16:40:54,516 - INFO - 
+Dihedral Angle Analysis:
+2025-06-09 16:40:54,516 - INFO -   Mean Error: 80.1609 ± 94.4702°
+2025-06-09 16:40:54,516 - INFO -   Range: [1.9354, 253.8289]°
+2025-06-09 16:40:54,516 - INFO -   Classification: Moderate conformational change
+2025-06-09 16:49:25,485 - INFO - 
+Deformation Analysis Summary:
+2025-06-09 16:49:25,485 - INFO - ---------------------------
+2025-06-09 16:49:25,485 - INFO - Chemical Formula: C12H30N2
+2025-06-09 16:49:25,485 - INFO - Isomorphic: True
+2025-06-09 16:49:25,485 - INFO - 
+Bond Length Analysis:
+2025-06-09 16:49:25,485 - INFO -   Mean Error: 0.0062 ± 0.0054 Å
+2025-06-09 16:49:25,485 - INFO -   Range: [0.0003, 0.0192] Å
+2025-06-09 16:49:25,485 - INFO -   Classification: Normal bond fluctuations
+2025-06-09 16:49:25,485 - INFO - 
+Bond Angle Analysis:
+2025-06-09 16:49:25,485 - INFO -   Mean Error: 0.7791 ± 0.4440°
+2025-06-09 16:49:25,485 - INFO -   Range: [0.0656, 1.7285]°
+2025-06-09 16:49:25,485 - INFO -   Classification: Normal angle flexibility
+2025-06-09 16:49:25,485 - INFO - 
+Dihedral Angle Analysis:
+2025-06-09 16:49:25,485 - INFO -   Mean Error: 80.1609 ± 94.4702°
+2025-06-09 16:49:25,485 - INFO -   Range: [1.9354, 253.8289]°
+2025-06-09 16:49:25,485 - INFO -   Classification: Moderate conformational change

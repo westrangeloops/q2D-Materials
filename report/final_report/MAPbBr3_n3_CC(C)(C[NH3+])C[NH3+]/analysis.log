@@ -1,0 +1,40 @@
+2025-06-09 16:40:43,164 - INFO - 
+Deformation Analysis Summary:
+2025-06-09 16:40:43,164 - INFO - ---------------------------
+2025-06-09 16:40:43,164 - INFO - Chemical Formula: C5H16N2
+2025-06-09 16:40:43,164 - INFO - Isomorphic: True
+2025-06-09 16:40:43,164 - INFO - 
+Bond Length Analysis:
+2025-06-09 16:40:43,164 - INFO -   Mean Error: 0.0139 ± 0.0153 Å
+2025-06-09 16:40:43,164 - INFO -   Range: [0.0020, 0.0367] Å
+2025-06-09 16:40:43,164 - INFO -   Classification: Normal bond fluctuations
+2025-06-09 16:40:43,164 - INFO - 
+Bond Angle Analysis:
+2025-06-09 16:40:43,165 - INFO -   Mean Error: 0.9900 ± 0.6192°
+2025-06-09 16:40:43,165 - INFO -   Range: [0.2516, 1.9169]°
+2025-06-09 16:40:43,165 - INFO -   Classification: Normal angle flexibility
+2025-06-09 16:40:43,165 - INFO - 
+Dihedral Angle Analysis:
+2025-06-09 16:40:43,165 - INFO -   Mean Error: 6.4228 ± 2.4916°
+2025-06-09 16:40:43,165 - INFO -   Range: [3.6431, 9.5501]°
+2025-06-09 16:40:43,165 - INFO -   Classification: Local torsional oscillation
+2025-06-09 16:49:18,195 - INFO - 
+Deformation Analysis Summary:
+2025-06-09 16:49:18,195 - INFO - ---------------------------
+2025-06-09 16:49:18,195 - INFO - Chemical Formula: C5H16N2
+2025-06-09 16:49:18,195 - INFO - Isomorphic: True
+2025-06-09 16:49:18,195 - INFO - 
+Bond Length Analysis:
+2025-06-09 16:49:18,195 - INFO -   Mean Error: 0.0139 ± 0.0153 Å
+2025-06-09 16:49:18,195 - INFO -   Range: [0.0020, 0.0367] Å
+2025-06-09 16:49:18,195 - INFO -   Classification: Normal bond fluctuations
+2025-06-09 16:49:18,195 - INFO - 
+Bond Angle Analysis:
+2025-06-09 16:49:18,195 - INFO -   Mean Error: 0.9900 ± 0.6192°
+2025-06-09 16:49:18,195 - INFO -   Range: [0.2516, 1.9169]°
+2025-06-09 16:49:18,195 - INFO -   Classification: Normal angle flexibility
+2025-06-09 16:49:18,195 - INFO - 
+Dihedral Angle Analysis:
+2025-06-09 16:49:18,195 - INFO -   Mean Error: 6.4228 ± 2.4916°
+2025-06-09 16:49:18,195 - INFO -   Range: [3.6431, 9.5501]°
+2025-06-09 16:49:18,195 - INFO -   Classification: Local torsional oscillation

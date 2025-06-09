@@ -1,0 +1,40 @@
+2025-06-09 16:40:06,029 - INFO - 
+Deformation Analysis Summary:
+2025-06-09 16:40:06,029 - INFO - ---------------------------
+2025-06-09 16:40:06,029 - INFO - Chemical Formula: C8H20N2
+2025-06-09 16:40:06,029 - INFO - Isomorphic: True
+2025-06-09 16:40:06,030 - INFO - 
+Bond Length Analysis:
+2025-06-09 16:40:06,030 - INFO -   Mean Error: 0.0124 ± 0.0096 Å
+2025-06-09 16:40:06,030 - INFO -   Range: [0.0008, 0.0288] Å
+2025-06-09 16:40:06,030 - INFO -   Classification: Normal bond fluctuations
+2025-06-09 16:40:06,030 - INFO - 
+Bond Angle Analysis:
+2025-06-09 16:40:06,030 - INFO -   Mean Error: 1.7863 ± 0.6703°
+2025-06-09 16:40:06,030 - INFO -   Range: [0.5393, 2.9333]°
+2025-06-09 16:40:06,030 - INFO -   Classification: Normal angle flexibility
+2025-06-09 16:40:06,030 - INFO - 
+Dihedral Angle Analysis:
+2025-06-09 16:40:06,030 - INFO -   Mean Error: 96.6545 ± 92.1782°
+2025-06-09 16:40:06,030 - INFO -   Range: [2.8029, 233.6163]°
+2025-06-09 16:40:06,030 - INFO -   Classification: Moderate conformational change
+2025-06-09 16:48:39,932 - INFO - 
+Deformation Analysis Summary:
+2025-06-09 16:48:39,932 - INFO - ---------------------------
+2025-06-09 16:48:39,933 - INFO - Chemical Formula: C8H20N2
+2025-06-09 16:48:39,933 - INFO - Isomorphic: True
+2025-06-09 16:48:39,933 - INFO - 
+Bond Length Analysis:
+2025-06-09 16:48:39,933 - INFO -   Mean Error: 0.0124 ± 0.0096 Å
+2025-06-09 16:48:39,933 - INFO -   Range: [0.0008, 0.0288] Å
+2025-06-09 16:48:39,933 - INFO -   Classification: Normal bond fluctuations
+2025-06-09 16:48:39,933 - INFO - 
+Bond Angle Analysis:
+2025-06-09 16:48:39,933 - INFO -   Mean Error: 1.7863 ± 0.6703°
+2025-06-09 16:48:39,933 - INFO -   Range: [0.5393, 2.9333]°
+2025-06-09 16:48:39,933 - INFO -   Classification: Normal angle flexibility
+2025-06-09 16:48:39,933 - INFO - 
+Dihedral Angle Analysis:
+2025-06-09 16:48:39,933 - INFO -   Mean Error: 96.6545 ± 92.1782°
+2025-06-09 16:48:39,933 - INFO -   Range: [2.8029, 233.6163]°
+2025-06-09 16:48:39,933 - INFO -   Classification: Moderate conformational change

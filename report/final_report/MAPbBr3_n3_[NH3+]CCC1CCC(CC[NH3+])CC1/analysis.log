@@ -1,0 +1,40 @@
+2025-06-09 16:40:48,750 - INFO - 
+Deformation Analysis Summary:
+2025-06-09 16:40:48,750 - INFO - ---------------------------
+2025-06-09 16:40:48,750 - INFO - Chemical Formula: C10H24N2
+2025-06-09 16:40:48,750 - INFO - Isomorphic: True
+2025-06-09 16:40:48,750 - INFO - 
+Bond Length Analysis:
+2025-06-09 16:40:48,750 - INFO -   Mean Error: 0.0070 ± 0.0062 Å
+2025-06-09 16:40:48,750 - INFO -   Range: [0.0014, 0.0210] Å
+2025-06-09 16:40:48,750 - INFO -   Classification: Normal bond fluctuations
+2025-06-09 16:40:48,750 - INFO - 
+Bond Angle Analysis:
+2025-06-09 16:40:48,750 - INFO -   Mean Error: 0.8024 ± 0.7802°
+2025-06-09 16:40:48,750 - INFO -   Range: [0.0209, 2.2843]°
+2025-06-09 16:40:48,750 - INFO -   Classification: Normal angle flexibility
+2025-06-09 16:40:48,750 - INFO - 
+Dihedral Angle Analysis:
+2025-06-09 16:40:48,750 - INFO -   Mean Error: 76.5634 ± 120.1949°
+2025-06-09 16:40:48,750 - INFO -   Range: [4.6317, 343.8387]°
+2025-06-09 16:40:48,750 - INFO -   Classification: Local torsional oscillation
+2025-06-09 16:49:21,732 - INFO - 
+Deformation Analysis Summary:
+2025-06-09 16:49:21,732 - INFO - ---------------------------
+2025-06-09 16:49:21,732 - INFO - Chemical Formula: C10H24N2
+2025-06-09 16:49:21,732 - INFO - Isomorphic: True
+2025-06-09 16:49:21,732 - INFO - 
+Bond Length Analysis:
+2025-06-09 16:49:21,732 - INFO -   Mean Error: 0.0070 ± 0.0062 Å
+2025-06-09 16:49:21,732 - INFO -   Range: [0.0014, 0.0210] Å
+2025-06-09 16:49:21,732 - INFO -   Classification: Normal bond fluctuations
+2025-06-09 16:49:21,732 - INFO - 
+Bond Angle Analysis:
+2025-06-09 16:49:21,732 - INFO -   Mean Error: 0.8024 ± 0.7802°
+2025-06-09 16:49:21,732 - INFO -   Range: [0.0209, 2.2843]°
+2025-06-09 16:49:21,732 - INFO -   Classification: Normal angle flexibility
+2025-06-09 16:49:21,732 - INFO - 
+Dihedral Angle Analysis:
+2025-06-09 16:49:21,732 - INFO -   Mean Error: 76.5634 ± 120.1949°
+2025-06-09 16:49:21,732 - INFO -   Range: [4.6317, 343.8387]°
+2025-06-09 16:49:21,732 - INFO -   Classification: Local torsional oscillation

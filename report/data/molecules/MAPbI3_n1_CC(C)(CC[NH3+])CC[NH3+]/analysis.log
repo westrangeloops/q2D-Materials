@@ -1,0 +1,20 @@
+2025-06-09 16:04:17,830 - INFO - 
+Deformation Analysis Summary:
+2025-06-09 16:04:17,830 - INFO - ---------------------------
+2025-06-09 16:04:17,830 - INFO - Chemical Formula: C7H20N2
+2025-06-09 16:04:17,830 - INFO - Isomorphic: True
+2025-06-09 16:04:17,830 - INFO - 
+Bond Length Analysis:
+2025-06-09 16:04:17,830 - INFO -   Mean Error: 0.0127 ± 0.0051 Å
+2025-06-09 16:04:17,830 - INFO -   Range: [0.0068, 0.0194] Å
+2025-06-09 16:04:17,830 - INFO -   Classification: Normal bond fluctuations
+2025-06-09 16:04:17,830 - INFO - 
+Bond Angle Analysis:
+2025-06-09 16:04:17,830 - INFO -   Mean Error: 1.7508 ± 1.4403°
+2025-06-09 16:04:17,830 - INFO -   Range: [0.0176, 4.3148]°
+2025-06-09 16:04:17,830 - INFO -   Classification: Normal angle flexibility
+2025-06-09 16:04:17,830 - INFO - 
+Dihedral Angle Analysis:
+2025-06-09 16:04:17,830 - INFO -   Mean Error: 122.8608 ± 115.1201°
+2025-06-09 16:04:17,830 - INFO -   Range: [0.2985, 242.0930]°
+2025-06-09 16:04:17,830 - INFO -   Classification: Moderate conformational change

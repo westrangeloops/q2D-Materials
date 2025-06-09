@@ -1,0 +1,40 @@
+2025-06-09 16:40:39,807 - INFO - 
+Deformation Analysis Summary:
+2025-06-09 16:40:39,807 - INFO - ---------------------------
+2025-06-09 16:40:39,807 - INFO - Chemical Formula: C10H26N2
+2025-06-09 16:40:39,807 - INFO - Isomorphic: True
+2025-06-09 16:40:39,807 - INFO - 
+Bond Length Analysis:
+2025-06-09 16:40:39,807 - INFO -   Mean Error: 0.0100 ± 0.0061 Å
+2025-06-09 16:40:39,807 - INFO -   Range: [0.0038, 0.0224] Å
+2025-06-09 16:40:39,807 - INFO -   Classification: Normal bond fluctuations
+2025-06-09 16:40:39,807 - INFO - 
+Bond Angle Analysis:
+2025-06-09 16:40:39,807 - INFO -   Mean Error: 1.1206 ± 0.7506°
+2025-06-09 16:40:39,807 - INFO -   Range: [0.2014, 2.5634]°
+2025-06-09 16:40:39,807 - INFO -   Classification: Normal angle flexibility
+2025-06-09 16:40:39,807 - INFO - 
+Dihedral Angle Analysis:
+2025-06-09 16:40:39,807 - INFO -   Mean Error: 22.4556 ± 23.9958°
+2025-06-09 16:40:39,807 - INFO -   Range: [10.3562, 90.0843]°
+2025-06-09 16:40:39,807 - INFO -   Classification: Local torsional oscillation
+2025-06-09 16:49:12,802 - INFO - 
+Deformation Analysis Summary:
+2025-06-09 16:49:12,802 - INFO - ---------------------------
+2025-06-09 16:49:12,802 - INFO - Chemical Formula: C10H26N2
+2025-06-09 16:49:12,802 - INFO - Isomorphic: True
+2025-06-09 16:49:12,802 - INFO - 
+Bond Length Analysis:
+2025-06-09 16:49:12,802 - INFO -   Mean Error: 0.0100 ± 0.0061 Å
+2025-06-09 16:49:12,802 - INFO -   Range: [0.0038, 0.0224] Å
+2025-06-09 16:49:12,802 - INFO -   Classification: Normal bond fluctuations
+2025-06-09 16:49:12,802 - INFO - 
+Bond Angle Analysis:
+2025-06-09 16:49:12,802 - INFO -   Mean Error: 1.1206 ± 0.7506°
+2025-06-09 16:49:12,802 - INFO -   Range: [0.2014, 2.5634]°
+2025-06-09 16:49:12,802 - INFO -   Classification: Normal angle flexibility
+2025-06-09 16:49:12,802 - INFO - 
+Dihedral Angle Analysis:
+2025-06-09 16:49:12,802 - INFO -   Mean Error: 22.4556 ± 23.9958°
+2025-06-09 16:49:12,802 - INFO -   Range: [10.3562, 90.0843]°
+2025-06-09 16:49:12,802 - INFO -   Classification: Local torsional oscillation

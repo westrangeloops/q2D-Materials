@@ -1,0 +1,40 @@
+2025-06-09 16:40:54,257 - INFO - 
+Deformation Analysis Summary:
+2025-06-09 16:40:54,257 - INFO - ---------------------------
+2025-06-09 16:40:54,257 - INFO - Chemical Formula: C7H20N2
+2025-06-09 16:40:54,257 - INFO - Isomorphic: True
+2025-06-09 16:40:54,257 - INFO - 
+Bond Length Analysis:
+2025-06-09 16:40:54,257 - INFO -   Mean Error: 0.0070 ± 0.0065 Å
+2025-06-09 16:40:54,257 - INFO -   Range: [0.0009, 0.0187] Å
+2025-06-09 16:40:54,257 - INFO -   Classification: Normal bond fluctuations
+2025-06-09 16:40:54,257 - INFO - 
+Bond Angle Analysis:
+2025-06-09 16:40:54,257 - INFO -   Mean Error: 1.0131 ± 0.7867°
+2025-06-09 16:40:54,257 - INFO -   Range: [0.0892, 2.2906]°
+2025-06-09 16:40:54,257 - INFO -   Classification: Normal angle flexibility
+2025-06-09 16:40:54,257 - INFO - 
+Dihedral Angle Analysis:
+2025-06-09 16:40:54,257 - INFO -   Mean Error: 28.6448 ± 31.5990°
+2025-06-09 16:40:54,257 - INFO -   Range: [5.0483, 97.9944]°
+2025-06-09 16:40:54,257 - INFO -   Classification: Local torsional oscillation
+2025-06-09 16:49:25,175 - INFO - 
+Deformation Analysis Summary:
+2025-06-09 16:49:25,175 - INFO - ---------------------------
+2025-06-09 16:49:25,175 - INFO - Chemical Formula: C7H20N2
+2025-06-09 16:49:25,175 - INFO - Isomorphic: True
+2025-06-09 16:49:25,175 - INFO - 
+Bond Length Analysis:
+2025-06-09 16:49:25,175 - INFO -   Mean Error: 0.0070 ± 0.0065 Å
+2025-06-09 16:49:25,175 - INFO -   Range: [0.0009, 0.0187] Å
+2025-06-09 16:49:25,175 - INFO -   Classification: Normal bond fluctuations
+2025-06-09 16:49:25,175 - INFO - 
+Bond Angle Analysis:
+2025-06-09 16:49:25,175 - INFO -   Mean Error: 1.0131 ± 0.7867°
+2025-06-09 16:49:25,175 - INFO -   Range: [0.0892, 2.2906]°
+2025-06-09 16:49:25,175 - INFO -   Classification: Normal angle flexibility
+2025-06-09 16:49:25,175 - INFO - 
+Dihedral Angle Analysis:
+2025-06-09 16:49:25,175 - INFO -   Mean Error: 28.6448 ± 31.5990°
+2025-06-09 16:49:25,175 - INFO -   Range: [5.0483, 97.9944]°
+2025-06-09 16:49:25,176 - INFO -   Classification: Local torsional oscillation
