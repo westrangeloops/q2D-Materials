@@ -23,12 +23,6 @@ SVC-Maestra is a Python package for creating and analyzing DJ perovskite structu
   - Bond angle comparison
   - Dihedral angle comparison
   - Connectivity validation
-- Detailed structural deformation analysis:
-  - Bond length comparison
-  - Bond angle comparison
-  - Dihedral angle comparison
-  - Connectivity validation
-  - Detailed CSV output for each structural feature
 
 ## Installation
 We recommend using a conda environment:
@@ -62,16 +56,6 @@ penetration_data = analyzer.calculate_n_penetration()
 analyzer.show_original()  # Show full structure
 analyzer.show_spacer()    # Show isolated spacer
 analyzer.show_salt()      # Show isolated salt
-
-# Analyze molecule deformation
-deformation_metrics = analyzer.analyze_molecule_deformation(
-    template_file='template.xyz',
-    extracted_file='extracted.xyz',
-    debug=True
-)
-print(f"Bond length MAE: {deformation_metrics['bond_length_mae']:.4f} Å")
-print(f"Bond angle MAE: {deformation_metrics['bond_angle_mae']:.4f} degrees")
-print(f"Dihedral angle MAE: {deformation_metrics['dihedral_angle_mae']:.4f} degrees")
 ```
 
 ### Molecule Isolation
@@ -164,19 +148,6 @@ print(f"Dihedral angle MAE: {metrics['dihedral_angle_mae']:.4f} degrees")
 print(f"Deformation classifications: {metrics['classifications']}")
 ```
 
-The analysis generates detailed CSV files for each type of measurement:
-- `bonds.csv`: Individual bond length comparisons
-- `angles.csv`: Individual bond angle comparisons
-- `dihedrals.csv`: Individual dihedral angle comparisons
-
-Each CSV file includes:
-- The specific bond/angle/dihedral being measured
-- The ideal value from the template
-- The actual value from the extracted molecule
-- The absolute error
-
-The analysis also includes connectivity validation to ensure the extracted molecule maintains the same bonding pattern as the template.
-
 ### Output Files
 
 For each analyzed molecule, the following files are generated:
@@ -235,50 +206,6 @@ For each analyzed molecule, the following files are generated:
    - bond_classification: Classification of bond deformations
    - angle_classification: Classification of angle deformations
    - dihedral_classification: Classification of dihedral deformations
-
-### Usage Example
-
-```python
-from SVC_materials.utils.isolate_molecule import analyze_molecule_deformation
-
-# Analyze molecule deformation
-metrics = analyze_molecule_deformation(
-    ideal_file="template.xyz",
-    extracted_file="extracted.xyz",
-    debug=False,
-    include_hydrogens=False
-)
-
-# Access overall metrics
-print(f"Bond Length MAE: {metrics['bond_length_mae']:.4f} Å")
-print(f"Bond Angle MAE: {metrics['bond_angle_mae']:.4f} degrees")
-print(f"Dihedral Angle MAE: {metrics['dihedral_angle_mae']:.4f} degrees")
-
-# Access detailed information
-for bond_name, ideal, extracted in metrics['bond_details']:
-    print(f"Bond {bond_name}: {ideal:.4f} Å → {extracted:.4f} Å")
-```
-
-### Classification Thresholds
-
-The deformation analysis uses the following thresholds for classification:
-
-1. **Bond Lengths**
-   - Normal: < 0.05 Å
-   - Significant: 0.05 - 0.2 Å
-   - Severe: > 0.2 Å
-
-2. **Bond Angles**
-   - Normal: < 5°
-   - Moderate: 5° - 15°
-   - Severe: > 15°
-
-3. **Dihedral Angles**
-   - Local: < 30°
-   - Moderate: 30° - 90°
-   - Major: > 90°
-
-These thresholds are based on typical values observed in well-refined structures and provide a framework for identifying potential structural issues or interesting conformational changes.
 
 ### Interpretation Guidelines
 
@@ -443,53 +370,3 @@ C1-C2,1.5234,1.5345,0.0111
 C2-C3,1.5234,1.5345,0.0111
 ...
 ```
-
-#### angles.csv
-```csv
-angle,ideal_angle,extracted_angle,error
-C1-C2-C3,109.4712,112.3456,2.8744
-C2-C3-C4,109.4712,110.1234,0.6522
-...
-```
-
-#### dihedrals.csv
-```csv
-dihedral,ideal_angle,extracted_angle,error
-C1-C2-C3-C4,60.0000,85.4321,25.4321
-C2-C3-C4-C5,60.0000,62.3456,2.3456
-...
-```
-
-#### deformation_summary.csv
-```csv
-molecule,bond_length_mae,bond_length_std,bond_angle_mae,bond_angle_std,dihedral_angle_mae,dihedral_angle_std,is_isomorphic,chemical_formula,bond_classification,angle_classification,dihedral_classification
-MAPbI3_n3_CC(C)(CC[NH3+])CC[NH3+],0.0234,0.0156,3.4567,2.1234,25.6789,15.4321,True,C10H24N2,Normal bond fluctuations,Normal angle flexibility,Local torsional oscillation
-...
-```
-
-## Atom Naming Convention
-
-The analysis uses a consistent atom naming convention for tracking atoms across measurements:
-- Each atom is labeled with its element symbol followed by a number (e.g., C1, N2)
-- Numbers are assigned based on the order of appearance in the molecule
-- Hydrogen atoms can be included or excluded in the analysis
-- Names are used consistently across bond, angle, and dihedral measurements
-
-## Hydrogen Handling
-
-The analysis can be configured to include or exclude hydrogen atoms:
-- `include_hydrogens=False` (default): Excludes hydrogen atoms from all measurements
-- `include_hydrogens=True`: Includes hydrogen atoms in the analysis
-
-## Error Handling
-
-The analysis includes comprehensive error handling:
-- Chemical formula mismatches
-- Non-isomorphic molecules
-- Invalid bond lengths
-- File reading errors
-- Detailed error messages in debug mode
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
