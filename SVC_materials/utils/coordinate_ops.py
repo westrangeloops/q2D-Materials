@@ -136,3 +136,37 @@ def direct_to_cartesian(df, lattice_vectors):
     df_cartesian = pd.concat([df, pd.DataFrame(cartesian_positions, columns=['x_cartesian', 'y_cartesian', 'z_cartesian'])], axis=1)
 
     return df_cartesian 
+
+def shift_structure(atoms, direction='a', shift=0.5):
+    """
+    Shift the structure in the specified direction.
+    
+    Args:
+        atoms: ASE Atoms object
+        direction (str): Direction to shift ('a', 'b', or 'c')
+        shift (float): Amount to shift in fractional coordinates
+        
+    Returns:
+        ASE Atoms object with shifted positions
+    """
+    # Get cell vectors
+    cell = atoms.get_cell()
+    
+    # Convert shift to real space based on direction
+    if direction == 'a':
+        shift_vector = cell[0] * shift
+    elif direction == 'b':
+        shift_vector = cell[1] * shift
+    elif direction == 'c':
+        shift_vector = cell[2] * shift
+    else:
+        raise ValueError("Direction must be 'a', 'b', or 'c'")
+    
+    # Create a copy of the atoms object
+    shifted_atoms = atoms.copy()
+    
+    # Shift all positions
+    positions = shifted_atoms.get_positions()
+    shifted_atoms.set_positions(positions + shift_vector)
+    
+    return shifted_atoms 

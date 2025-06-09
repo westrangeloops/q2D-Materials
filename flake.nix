@@ -31,6 +31,8 @@
             pythonPackages.pytest
             pythonPackages.pytest-cov
             pythonPackages.pytest-xdist
+            pythonPackages.scikit-learn
+            pythonPackages.networkx
             # Add more packages as needed
           ];
           # For ase-gui visualization
