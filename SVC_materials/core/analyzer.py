@@ -18,88 +18,116 @@ class q2D_analysis:
         self.perovskite_df, self.box = vasp_load(crystal)
     
     def _find_planes(self, element_type='B'):
-        """Helper function to find the planes of the perovskite
+        """Helper function to find the planes of the perovskite following structural hierarchy
         
         Args:
             element_type (str): 'B' for metal atoms or 'X' for halide atoms
         """
-        crystal_df = self.perovskite_df
-        element = self.B if element_type == 'B' else self.X
-        
-        # Find all atoms of the specified element
-        element_atoms = crystal_df.query("Element == @element").sort_values(by='Z')
-        
-        if len(element_atoms) == 0:
-            print(f'No {element} atoms found in the structure')
-            return None, None, None
+        try:
+            # Convert to ASE Atoms object for neighbor analysis
+            atoms = read(self.path + '/' + self.name)
             
-        # Group atoms into planes based on Z coordinate
-        planes = []
-        current_plane = []
-        current_z = None
-        
-        for _, atom in element_atoms.iterrows():
-            z = atom['Z']
+            # Set up neighbor list with 2 Å cutoff for N-C bonds
+            cutoffs = [2.0] * len(atoms)
+            nl = NeighborList(cutoffs, skin=0.3, self_interaction=False, bothways=True)
+            nl.update(atoms)
             
-            # If this is the first atom or it's close to the current plane
-            if current_z is None or abs(z - current_z) <= 0.5:
-                current_plane.append(atom)
-                current_z = z
-            else:
-                # Start a new plane
+            if element_type == 'B':
+                # Original B plane detection logic remains unchanged
+                crystal_df = self.perovskite_df
+                b_atoms = crystal_df.query("Element == @self.B").sort_values(by='Z')
+                
+                planes = []
+                current_plane = []
+                current_z = None
+                
+                for _, atom in b_atoms.iterrows():
+                    z = atom['Z']
+                    if current_z is None or abs(z - current_z) <= 0.5:
+                        current_plane.append(atom)
+                        current_z = z
+                    else:
+                        if current_plane:
+                            planes.append(current_plane)
+                        current_plane = [atom]
+                        current_z = z
+                
                 if current_plane:
                     planes.append(current_plane)
-                current_plane = [atom]
-                current_z = z
-        
-        # Add the last plane
-        if current_plane:
-            planes.append(current_plane)
-            
-        # Calculate average Z for each plane
-        plane_z_values = [np.mean([atom['Z'] for atom in plane]) for plane in planes]
-        
-        if len(plane_z_values) > 1:
-            # Sort planes by Z coordinate
-            sorted_planes = sorted(zip(plane_z_values, planes), key=lambda x: x[0])
-            plane_z_values = [z for z, _ in sorted_planes]
-            
-            # For B atoms, we expect exactly 2 planes
-            if element_type == 'B':
-                if len(plane_z_values) != 2:
-                    print(f"Warning: Found {len(plane_z_values)} B planes, expected 2")
-                    # If we have more than 2 planes, use the outermost ones
+                    
+                plane_z_values = [np.mean([atom['Z'] for atom in plane]) for plane in planes]
+                
+                if len(plane_z_values) > 1:
+                    sorted_planes = sorted(zip(plane_z_values, planes), key=lambda x: x[0])
+                    plane_z_values = [z for z, _ in sorted_planes]
                     lower_plane = plane_z_values[0]
                     upper_plane = plane_z_values[-1]
+                    return lower_plane, upper_plane, True
+                elif len(plane_z_values) == 1:
+                    return plane_z_values[0], plane_z_values[0], True
                 else:
-                    lower_plane = plane_z_values[0]
-                    upper_plane = plane_z_values[1]
-                
-                return lower_plane, upper_plane, True
-            else:
-                # For X atoms, find the two main planes
-                if len(plane_z_values) > 2:
-                    # Find the largest gap between planes
-                    gaps = [plane_z_values[i+1] - plane_z_values[i] for i in range(len(plane_z_values)-1)]
-                    max_gap_idx = np.argmax(gaps)
+                    print(f'Could not identify B planes')
+                    return None, None, None
                     
-                    # Use the planes on either side of the largest gap
-                    lower_plane = plane_z_values[max_gap_idx]
-                    upper_plane = plane_z_values[max_gap_idx + 1]
-                else:
-                    lower_plane = plane_z_values[0]
-                    upper_plane = plane_z_values[1]
+            else:  # X (halide) plane detection
+                # Find all X atoms
+                x_atoms = []
+                for i, atom in enumerate(atoms):
+                    if atom.symbol == self.X:
+                        x_pos = atoms.get_positions()[i]
+                        x_atoms.append({
+                            'index': i,
+                            'position': x_pos,
+                            'z': x_pos[2]
+                        })
                 
-                return lower_plane, upper_plane, True
-            
-        elif len(plane_z_values) == 1:
-            # For B atoms in single slab case, use the same plane for both
-            if element_type == 'B':
-                plane_z = plane_z_values[0]
-                return plane_z, plane_z, True
-            return plane_z_values[0], None, False
-        else:
-            print(f'Could not identify planes for {element} atoms')
+                # Sort X atoms by Z coordinate
+                x_atoms.sort(key=lambda x: x['z'])
+                
+                # Group X atoms into planes (within ±1.5 Å in Z)
+                planes = []
+                current_plane = []
+                current_z = None
+                
+                for x in x_atoms:
+                    if current_z is None or abs(x['z'] - current_z) <= 1.5:
+                        current_plane.append(x)
+                        current_z = x['z']
+                    else:
+                        if current_plane:
+                            planes.append(current_plane)
+                        current_plane = [x]
+                        current_z = x['z']
+                
+                if current_plane:
+                    planes.append(current_plane)
+                
+                # Calculate average Z for each plane
+                plane_z_values = [np.mean([x['z'] for x in plane]) for plane in planes]
+                plane_z_values.sort()
+                
+                if len(plane_z_values) >= 2:
+                    # For double layer case, use the two main planes
+                    if len(plane_z_values) > 2:
+                        # Find the largest gap between planes
+                        gaps = [plane_z_values[i+1] - plane_z_values[i] for i in range(len(plane_z_values)-1)]
+                        max_gap_idx = np.argmax(gaps)
+                        lower_plane = plane_z_values[max_gap_idx]
+                        upper_plane = plane_z_values[max_gap_idx + 1]
+                    else:
+                        lower_plane = plane_z_values[0]
+                        upper_plane = plane_z_values[1]
+                    
+                    return lower_plane, upper_plane, True
+                elif len(plane_z_values) == 1:
+                    # Single layer case
+                    return plane_z_values[0], None, False
+                else:
+                    print("Could not identify halide planes")
+                    return None, None, None
+                    
+        except Exception as e:
+            print(f"Error in plane detection: {e}")
             return None, None, None
 
     def _get_plane_equation(self, plane_z):
@@ -325,98 +353,135 @@ class q2D_analysis:
         }
 
     def calculate_n_penetration(self):
-        """Calculate the penetration depth of the 4 Nitrogen atoms from the organic molecule into both upper and lower perovskite layers"""
-        # Find the X (halide) planes instead of B planes
-        b_down_plane, b_up_plane, has_two_planes = self._find_planes(element_type='X')
+        """Calculate the penetration depth of the nitrogen atoms from the organic molecule into both upper and lower perovskite layers"""
+        # Find the axial halide planes
+        lower_plane, upper_plane, has_two_planes = self._find_planes(element_type='X')
         
-        if b_down_plane is None:
+        if lower_plane is None:
             print("Error: Could not find halide planes")
             return None
 
-        if not has_two_planes:
-            print("Error: Structure must have two halide planes for penetration analysis")
-            return None
-
-        # Get all Nitrogen atoms
-        n_atoms = self.perovskite_df[self.perovskite_df['Element'] == 'N']
-        if len(n_atoms) == 0:
-            print("Error: No Nitrogen atoms found in the structure")
-            return None
-
-        # Sort N atoms by Z coordinate
-        n_atoms = n_atoms.sort_values('Z')
-        
-        # Find the middle Z value to separate upper and lower N atoms
-        middle_z = (b_down_plane + b_up_plane) / 2
-        
-        # Split N atoms into upper and lower groups based on Z coordinate
-        lower_n_atoms = n_atoms[n_atoms['Z'] < middle_z]
-        upper_n_atoms = n_atoms[n_atoms['Z'] >= middle_z]
-        
-        # If we don't have exactly 2 atoms in each group, try to redistribute
-        if len(lower_n_atoms) != 2 or len(upper_n_atoms) != 2:
-            print(f"Warning: Uneven distribution of N atoms. Attempting to redistribute...")
-            # Sort all N atoms by Z coordinate
-            all_n_atoms = n_atoms.sort_values('Z')
+        try:
+            # Convert to ASE Atoms object for neighbor analysis
+            atoms = read(self.path + '/' + self.name)
             
-            # Take the 2 lowest Z atoms for lower plane and 2 highest Z atoms for upper plane
-            lower_n_atoms = all_n_atoms.head(2)
-            upper_n_atoms = all_n_atoms.tail(2)
+            # Set up neighbor list with 2 Å cutoff for N-C bonds
+            cutoffs = [2.0] * len(atoms)
+            nl = NeighborList(cutoffs, skin=0.3, self_interaction=False, bothways=True)
+            nl.update(atoms)
             
-            print(f"Redistributed: {len(lower_n_atoms)} lower N atoms and {len(upper_n_atoms)} upper N atoms")
-
-        # Calculate distances to both planes
-        lower_plane_eq = self._get_plane_equation(b_down_plane)
-        upper_plane_eq = self._get_plane_equation(b_up_plane)
-        
-        # Calculate distances for lower plane N atoms
-        lower_distances = []
-        lower_atoms = []
-        for _, atom in lower_n_atoms.iterrows():
-            point = np.array([atom['X'], atom['Y'], atom['Z']])
-            dist = self._point_to_plane_distance(point, lower_plane_eq)
-            lower_distances.append(dist)
-            lower_atoms.append(atom)
-        
-        # Calculate distances for upper plane N atoms
-        upper_distances = []
-        upper_atoms = []
-        for _, atom in upper_n_atoms.iterrows():
-            point = np.array([atom['X'], atom['Y'], atom['Z']])
-            dist = self._point_to_plane_distance(point, upper_plane_eq)
-            upper_distances.append(dist)
-            upper_atoms.append(atom)
-        
-        # Calculate averages
-        avg_lower = np.mean(lower_distances)
-        avg_upper = np.mean(upper_distances)
-        total_avg = (avg_lower + avg_upper) / 2
-        
-        # Print detailed information
-        print(f"\nNitrogen Penetration Analysis (Organic Molecule):")
-        print(f"\nLower Plane Penetration:")
-        print(f"Number of N atoms: {len(lower_atoms)}")
-        print(f"Average penetration: {avg_lower:.3f} Å")
-        print("Individual penetrations:")
-        for i, (dist, atom) in enumerate(zip(lower_distances, lower_atoms), 1):
-            print(f"N atom {i}: {dist:.3f} Å (Z = {atom['Z']:.3f})")
-        
-        print(f"\nUpper Plane Penetration:")
-        print(f"Number of N atoms: {len(upper_atoms)}")
-        print(f"Average penetration: {avg_upper:.3f} Å")
-        print("Individual penetrations:")
-        for i, (dist, atom) in enumerate(zip(upper_distances, upper_atoms), 1):
-            print(f"N atom {i}: {dist:.3f} Å (Z = {atom['Z']:.3f})")
-        
-        print(f"\nTotal average penetration: {total_avg:.3f} Å")
-        
-        return {
-            'lower_penetration': avg_lower,
-            'upper_penetration': avg_upper,
-            'total_penetration': total_avg,
-            'lower_atoms': lower_atoms,
-            'upper_atoms': upper_atoms
-        }
+            # Find all N atoms and their C neighbors
+            n_atoms = []
+            for i, atom in enumerate(atoms):
+                if atom.symbol == 'N':
+                    # Get neighbors of this N atom
+                    neighbor_indices, _ = nl.get_neighbors(i)
+                    n_pos = atoms.get_positions()[i]
+                    
+                    # Check for C neighbors
+                    c_neighbors = [j for j in neighbor_indices if atoms[j].symbol == 'C']
+                    
+                    if c_neighbors:
+                        # For each C neighbor, check for another C
+                        for c_idx in c_neighbors:
+                            c_neighbors_2, _ = nl.get_neighbors(c_idx)
+                            c_neighbors_2 = [j for j in c_neighbors_2 if atoms[j].symbol == 'C' and j != i]
+                            
+                            if c_neighbors_2:  # Found N-C-C pattern
+                                n_atoms.append({
+                                    'index': i,
+                                    'position': n_pos,
+                                    'z': n_pos[2],
+                                    'c_neighbor': c_idx,
+                                    'c_neighbor_2': c_neighbors_2[0]
+                                })
+                                break
+            
+            if not n_atoms:
+                print("Error: No nitrogen atoms with N-C-C pattern found")
+                return None
+            
+            # Sort N atoms by Z coordinate
+            n_atoms.sort(key=lambda x: x['z'])
+            
+            # For single layer case
+            if not has_two_planes:
+                # Use the first two N atoms for lower plane
+                lower_n_atoms = n_atoms[:2]
+                upper_n_atoms = n_atoms[2:4] if len(n_atoms) >= 4 else []
+            else:
+                # Use middle point between planes to separate N atoms
+                middle_z = (lower_plane + upper_plane) / 2
+                lower_n_atoms = [n for n in n_atoms if n['z'] < middle_z][:2]
+                upper_n_atoms = [n for n in n_atoms if n['z'] >= middle_z][:2]
+            
+            # Calculate distances to planes
+            lower_plane_eq = self._get_plane_equation(lower_plane)
+            upper_plane_eq = self._get_plane_equation(upper_plane) if has_two_planes else None
+            
+            # Calculate distances for lower plane N atoms
+            lower_distances = []
+            lower_atoms = []
+            for n in lower_n_atoms:
+                point = n['position']
+                dist = self._point_to_plane_distance(point, lower_plane_eq)
+                lower_distances.append(dist)
+                lower_atoms.append({
+                    'Z': n['z'],
+                    'X': point[0],
+                    'Y': point[1]
+                })
+            
+            # Calculate distances for upper plane N atoms
+            upper_distances = []
+            upper_atoms = []
+            for n in upper_n_atoms:
+                point = n['position']
+                if has_two_planes:
+                    dist = self._point_to_plane_distance(point, upper_plane_eq)
+                else:
+                    dist = self._point_to_plane_distance(point, lower_plane_eq)
+                upper_distances.append(dist)
+                upper_atoms.append({
+                    'Z': n['z'],
+                    'X': point[0],
+                    'Y': point[1]
+                })
+            
+            # Calculate averages
+            avg_lower = np.mean(lower_distances) if lower_distances else 0
+            avg_upper = np.mean(upper_distances) if upper_distances else 0
+            total_avg = (avg_lower + avg_upper) / 2 if lower_distances and upper_distances else avg_lower
+            
+            # Print detailed information
+            print(f"\nNitrogen Penetration Analysis (Organic Molecule):")
+            print(f"\nLower Plane Penetration:")
+            print(f"Number of N atoms: {len(lower_atoms)}")
+            print(f"Average penetration: {avg_lower:.3f} Å")
+            print("Individual penetrations:")
+            for i, (dist, atom) in enumerate(zip(lower_distances, lower_atoms), 1):
+                print(f"N atom {i}: {dist:.3f} Å (Z = {atom['Z']:.3f})")
+            
+            print(f"\nUpper Plane Penetration:")
+            print(f"Number of N atoms: {len(upper_atoms)}")
+            print(f"Average penetration: {avg_upper:.3f} Å")
+            print("Individual penetrations:")
+            for i, (dist, atom) in enumerate(zip(upper_distances, upper_atoms), 1):
+                print(f"N atom {i}: {dist:.3f} Å (Z = {atom['Z']:.3f})")
+            
+            print(f"\nTotal average penetration: {total_avg:.3f} Å")
+            
+            return {
+                'lower_penetration': avg_lower,
+                'upper_penetration': avg_upper,
+                'total_penetration': total_avg,
+                'lower_atoms': lower_atoms,
+                'upper_atoms': upper_atoms
+            }
+            
+        except Exception as e:
+            print(f"Error in penetration calculation: {e}")
+            return None
 
     def _isolate_spacer(self, order=None):
         """Private method to isolate the molecules between the perovskite planes, excluding B and X atoms"""
