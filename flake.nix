@@ -33,6 +33,8 @@
             pythonPackages.pytest-xdist
             pythonPackages.scikit-learn
             pythonPackages.networkx
+            pythonPackages.rdkit
+            pythonPackages.seaborn
             # Add more packages as needed
           ];
           # For ase-gui visualization

@@ -1,30 +1,120 @@
 ![Github_portada](https://github.com/westrangeloops/SVC-Materials/blob/main/Logos/Github_portada.png)
 
-# SVC-Materials
-SVC-Maestra is a Python package for creating and analyzing DJ perovskite structures, currently developed by the Theoretical Materials Science group of the University of Antioquia. SVC-Maestra simplifies the generation of initial input structures for quasi-2D perovskite systems and provides some analysis tools for structural characterization.
+# SVC-Materials: Computational Framework for Quasi-2D Perovskite Structure Generation and Analysis
 
-## Features
-- Generation of initial input structures for quasi-2D perovskite systems
-- Structural analysis of perovskite octahedra including:
-  - Bond angles (axial and equatorial)
-  - Bond lengths
-  - Octahedral distortions
-  - Out-of-plane distortions
-- Analysis of organic spacer penetration
-- Visualization tools for structural components
-- Molecule isolation from crystal structures with template-based validation:
-  - Exact size matching with template
-  - Chemical formula validation
-  - Connectivity analysis
-  - N-N path validation
-  - Bond length validation
-- Molecule deformation analysis:
-  - Bond length comparison
-  - Bond angle comparison
-  - Dihedral angle comparison
-  - Connectivity validation
+SVC-Materials is a comprehensive Python package for creating and analyzing quasi-2D perovskite structures, developed by the Theoretical Materials Science group at the University of Antioquia. The package provides tools for generating initial input structures for quasi-2D perovskite systems and offers extensive analysis capabilities for structural characterization.
+
+## Quick Start
+
+Get up and running with SVC-Materials in just a few steps:
+
+### Installation
+```bash
+conda create -n SVC_Materials pip
+conda activate SVC_Materials
+pip install ase pandas numpy matplotlib networkx
+```
+
+### Basic Usage Example
+
+```python
+from SVC_materials.core.creator import q2D_creator
+from SVC_materials.core.analyzer import q2D_analysis
+
+# 1. Create a quasi-2D perovskite structure
+creator = q2D_creator(
+    B='Pb',                              # Metal center
+    X='I',                               # Halogen
+    molecule_xyz='molecule.xyz',         # Organic spacer molecule
+    perov_vasp='perovskite.vasp',       # Base perovskite structure
+    P1="6.88 -0.00 10.44",              # Position coordinates
+    P2="5.49 -0.00  9.90", 
+    P3="6.88 -0.00  4.49",
+    Q1="0.94  5.94 10.44", 
+    Q2="-0.46 5.94  9.90", 
+    Q3="0.94  5.94  4.49",
+    name='MyPerovskite',
+    vac=10                               # Vacuum spacing
+)
+
+# Save the structure
+creator.write_svc()
+
+# 2. Analyze the structure
+analyzer = q2D_analysis(B='Pb', X='I', crystal='svc_MyPerovskite.vasp')
+
+# Get structural parameters
+structure_data = analyzer.analyze_perovskite_structure()
+print(f"Average bond length: {np.mean(structure_data['axial_lengths']):.3f} Å")
+
+# Calculate organic spacer penetration
+penetration = analyzer.calculate_n_penetration()
+
+# Isolate and save components
+analyzer.save_spacer()  # Save organic spacer only
+analyzer.save_salt()    # Save spacer + halides
+```
+
+That's it! You've created and analyzed your first quasi-2D perovskite structure.
+
+## Features Overview
+
+- **Structure Generation**: Create quasi-2D perovskite structures with custom organic spacers
+- **Structural Analysis**: Comprehensive analysis of perovskite octahedra including bond angles, lengths, and distortions
+- **Molecule Isolation**: Extract and validate individual molecules from crystal structures
+- **Deformation Analysis**: Quantitative comparison of molecular structures with ideal templates
+- **Visualization Tools**: Built-in visualization for structural components
+- **Multiple File Formats**: Support for VASP, XYZ, and other common formats
+
+## Core Functionality
+
+### Structure Generation
+```python
+from SVC_materials.core.creator import q2D_creator
+
+# Create structures with precise molecular positioning
+creator = q2D_creator(B='Pb', X='I', molecule_xyz='spacer.xyz', 
+                     perov_vasp='base.vasp', P1=..., name='structure')
+creator.write_svc()      # Save supercell with vacuum
+creator.write_bulk()     # Save bulk structure with multiple slabs
+```
+
+### Structure Analysis
+```python
+from SVC_materials.core.analyzer import q2D_analysis
+
+analyzer = q2D_analysis(B='Pb', X='I', crystal='structure.vasp')
+
+# Comprehensive structural analysis
+data = analyzer.analyze_perovskite_structure()
+penetration = analyzer.calculate_n_penetration()
+
+# Component isolation
+analyzer.show_spacer()   # Visualize organic spacer
+analyzer.save_salt()     # Save spacer + coordinating halides
+```
+
+### Molecule Isolation and Analysis
+```python
+from SVC_materials.utils.isolate_molecule import isolate_molecule, analyze_molecule_deformation
+
+# Extract molecules from crystal structures
+success = isolate_molecule(
+    crystal_file="crystal.vasp",
+    template_file="template.xyz", 
+    output_file="extracted.xyz"
+)
+
+# Analyze molecular deformations
+metrics = analyze_molecule_deformation(
+    ideal_file='template.xyz',
+    extracted_file='extracted.xyz',
+    output_dir='analysis_results'
+)
+```
 
 ## Installation
+
 We recommend using a conda environment:
 ```bash
 conda create -n SVC_Materials pip
@@ -32,187 +122,201 @@ conda activate SVC_Materials
 pip install ase pandas numpy matplotlib networkx
 ```
 
-## Usage
+## Examples
+Check the `examples` folder for detailed Jupyter notebooks demonstrating all features.
 
-### Structure Generation
-```python
-from svc_maestra_lib.svc_maestra import q2D_creator
-```
+---
 
-### Structure Analysis
-```python
-from SVC_materials.core.analyzer import q2D_analysis
+# Scientific Background and Detailed Documentation
 
-# Initialize analyzer with B-site metal and X-site halogen
-analyzer = q2D_analysis(B='Pb', X='I', crystal='path/to/structure.vasp')
+## Theoretical Foundation
 
-# Analyze perovskite structure
-structure_data = analyzer.analyze_perovskite_structure()
+### Perovskite Crystal Structure
 
-# Calculate nitrogen penetration
-penetration_data = analyzer.calculate_n_penetration()
+Quasi-two-dimensional (quasi-2D) perovskites represent a fascinating class of hybrid organic-inorganic materials with unique structural properties and applications in optoelectronics, photovoltaics, and quantum confinement systems. These materials are characterized by alternating layers of inorganic perovskite slabs and organic spacer molecules, creating quantum well structures with tunable electronic and optical properties.
 
-# Visualize components
-analyzer.show_original()  # Show full structure
-analyzer.show_spacer()    # Show isolated spacer
-analyzer.show_salt()      # Show isolated salt
-```
+The general formula for perovskites is ABX₃, where:
+- **A**: Organic cation (methylammonium, formamidinium, or larger organic spacers)
+- **B**: Metal cation (commonly Pb²⁺ or Sn²⁺)  
+- **X**: Halide anion (I⁻, Br⁻, or Cl⁻)
 
-### Molecule Isolation
-The package provides three ways to isolate molecules from crystal structures:
+In quasi-2D perovskites, the structure follows the Ruddlesden-Popper formula (L)₂(A)ₙ₋₁BₙX₃ₙ₊₁, where L represents the large organic spacer cation and n indicates the number of perovskite layers.
 
-1. **High-level batch processing**:
-```python
-from SVC_materials.utils.isolate_molecule import process_molecules
+**Structural Hierarchy:**
+- **Octahedral units**: BX₆ octahedra forming fundamental building blocks
+- **Perovskite slabs**: Connected octahedra creating 2D inorganic layers
+- **Organic spacers**: Large organic molecules separating inorganic layers
+- **Quantum confinement**: Electronic properties modulated by slab thickness
 
-# Process all molecules in a directory
-stats = process_molecules(
-    input_dir="data/original",
-    output_dir="data/molecules",
-    template_dir="~/templates",
-    debug=True
-)
+### Structural Distortions and Their Significance
 
-# Check results
-print(f"Processed {stats['successful']}/{stats['total_files']} files")
-```
+Perovskite structures exhibit various distortions that significantly influence their electronic and optical properties:
 
-2. **Single file processing**:
-```python
-from SVC_materials.utils.isolate_molecule import isolate_molecule
+1. **Octahedral tilting**: Rotation of BX₆ octahedra about crystallographic axes
+2. **Bond length variations**: Deviations from ideal B-X bond lengths due to steric effects
+3. **Bond angle distortions**: Departure from ideal 180° and 90° angles in octahedral geometry
+4. **Out-of-plane distortions**: Displacement of atoms from ideal planar arrangements
 
-# Isolate a single molecule
-success = isolate_molecule(
-    crystal_file="structure.vasp",
-    template_file="template/CONTCAR",
-    output_file="output.xyz",
-    debug=True
-)
-```
+These distortions are quantitatively characterized through statistical analysis of bond lengths, bond angles, and geometric parameters, providing insights into structural stability and electronic properties.
 
-3. **Direct Atoms object processing**:
-```python
-from SVC_materials.utils.isolate_molecule import isolate_molecule_from_atoms
-from ase.io import read
+## Computational Methodology
 
-# Work directly with ASE Atoms objects
-crystal_atoms = read("structure.vasp")
-template_atoms = read("template/CONTCAR")
-isolated_molecule = isolate_molecule_from_atoms(
-    crystal_atoms=crystal_atoms,
-    template_atoms=template_atoms,
-    debug=True
-)
-```
+### Structure Generation Algorithm
+
+The SVC-Materials package implements sophisticated algorithms for generating quasi-2D perovskite structures through precise computational steps:
+
+#### Molecular Alignment and Positioning
+
+The structure generation process begins with precise positioning of organic spacer molecules within the perovskite framework using coordinate transformation methodology:
+
+1. **Template molecule preparation**: Organic spacer molecules are loaded and aligned based on nitrogen atom positions, serving as anchoring points
+2. **Coordinate transformation**: A three-point transformation system (P1, P2, P3, Q1, Q2, Q3) defines desired positions for molecular placement
+3. **Geometric optimization**: Molecules are positioned to minimize steric clashes while maintaining appropriate intermolecular distances
+
+The mathematical framework utilizes homogeneous coordinates and rotation matrices:
+
+**r**_new = **R** · **r**_original + **t**
+
+where **R** represents the rotation matrix and **t** is the translation vector.
+
+#### Supercell Construction
+
+The package constructs supercells through a systematic approach:
+- **Perovskite slab generation**: Creation of inorganic layers with specified thickness
+- **Vacuum layer insertion**: Addition of controlled vacuum spacing for surface calculations
+- **Periodic boundary conditions**: Proper handling of crystallographic periodicity
+
+## Module Architecture and Scientific Implementation
+
+### Core Modules
+
+#### q2D_creator Module
+
+The `q2D_creator` class serves as the primary structure generation engine, implementing advanced scientific methodologies:
+
+**Molecular Transformation Engine:**
+- **Nitrogen alignment**: Automatic detection and alignment of nitrogen atoms as structural anchors
+- **Rotational degrees of freedom**: Implementation of Euler angle rotations for molecular orientation
+- **Inclination control**: Precise control of molecular tilt angles relative to perovskite planes
+
+**Structure Assembly Protocol:**
+1. Perovskite template loading and validation
+2. Organic molecule preprocessing and alignment
+3. Coordinate system transformation and molecular positioning
+4. Supercell construction with appropriate boundary conditions
+5. Structure optimization and validation
+
+#### q2D_analysis Module
+
+The analysis module provides comprehensive structural characterization through advanced computational algorithms:
+
+**Perovskite Structure Analysis:**
+
+The module implements sophisticated neighbor-finding algorithms using ASE neighbor list functionality:
+- **Octahedral identification**: Automatic detection of BX₆ coordination environments
+- **Bond length analysis**: Statistical characterization of B-X bond distances
+- **Bond angle calculations**: Comprehensive analysis of X-B-X angles in octahedral geometry
+- **Distortion quantification**: Mathematical characterization of structural deviations
+
+The algorithm employs a cutoff-distance approach (typically 3.5 Å) for neighbor identification. For each metal center B, the analysis identifies six halide neighbors X and categorizes them into axial and equatorial positions.
+
+**Octahedral Distortion Analysis:**
+
+The package quantifies octahedral distortions through several metrics:
+
+1. **Bond length variance**: σ²_BL = (1/N)Σ(dᵢ - ⟨d⟩)²
+2. **Bond angle variance**: σ²_BA = (1/N)Σ(θᵢ - ⟨θ⟩)²
+3. **Out-of-plane distortion**: Quantification of atomic displacement from ideal planar geometry
+
+where dᵢ represents individual bond lengths, θᵢ are bond angles, and ⟨·⟩ denotes ensemble averages.
+
+**Nitrogen Penetration Analysis:**
+
+A novel feature is the quantitative analysis of organic spacer penetration into inorganic layers:
+
+1. Identifies halide planes through Z-coordinate clustering
+2. Locates nitrogen atoms in organic spacers
+3. Calculates penetration depths using plane-to-point distance formulas
+4. Provides statistical analysis of penetration distributions
+
+The penetration depth d_pen is calculated as:
+d_pen = |ax₀ + by₀ + cz₀ + d|/√(a² + b² + c²)
+
+where (x₀, y₀, z₀) represents nitrogen atom coordinates and ax + by + cz + d = 0 defines the halide plane equation.
+
+### Utility Modules
+
+#### Molecular Isolation and Validation
+
+The `isolate_molecule` module implements advanced graph-theoretical approaches for molecular extraction and validation:
+
+**Connectivity Analysis:**
+The module employs NetworkX graph algorithms to:
+- Construct molecular connectivity graphs based on interatomic distances
+- Perform graph isomorphism checks for template matching
+- Validate chemical formulas and bonding patterns
+- Identify molecular fragments within crystal structures
+
+**Template-Based Validation:**
+1. **Size matching**: Comparison of molecular dimensions with template structures
+2. **Chemical formula verification**: Validation of elemental composition
+3. **Connectivity analysis**: Graph-based comparison of bonding patterns
+4. **Bond length validation**: Assessment of realistic interatomic distances
+
+#### Molecular Deformation Analysis
+
+The package provides quantitative analysis of molecular deformations through comprehensive geometric comparisons:
+
+**Structural Metrics:**
+- **Bond length MAE**: MAE_BL = (1/N)Σ|dᵢ^ideal - dᵢ^extracted|
+- **Bond angle MAE**: MAE_BA = (1/N)Σ|θᵢ^ideal - θᵢ^extracted|
+- **Dihedral angle MAE**: MAE_DA = (1/N)Σ|φᵢ^ideal - φᵢ^extracted|
+
+**Deformation Classification:**
+
+The package implements a classification system for structural deformations:
+
+**Bond length deformations:**
+- Normal fluctuations: MAE < 0.05 Å
+- Significant strain: 0.05 ≤ MAE < 0.2 Å
+- Severe strain: MAE ≥ 0.2 Å
+
+**Bond angle deformations:**
+- Normal flexibility: MAE < 5°
+- Moderate strain: 5° ≤ MAE < 15°
+- Severe strain: MAE ≥ 15°
+
+**Dihedral angle deformations:**
+- Local oscillation: MAE < 30°
+- Moderate conformational change: 30° ≤ MAE < 90°
+- Major conformational change: MAE ≥ 90°
 
 ### Molecule Deformation Analysis
-The package provides detailed analysis of molecular deformations by comparing isolated molecules with their ideal templates. This analysis includes:
 
-1. **Bond Length Analysis**:
-   - Calculates Mean Absolute Error (MAE) in bond lengths
-   - Classifies deformations as:
-     - "Normal bond fluctuations" (< 0.05 Å)
-     - "Significant bond strain" (0.05-0.2 Å)
-     - "Severe bond strain" (> 0.2 Å)
+The package provides detailed analysis of molecular deformations by comparing isolated molecules with their ideal templates:
 
-2. **Bond Angle Analysis**:
-   - Calculates MAE in bond angles
-   - Classifies deformations as:
-     - "Normal angle flexibility" (< 5°)
-     - "Moderate angle strain" (5-15°)
-     - "Severe angle strain" (> 15°)
+1. **Bond Length Analysis**: Calculates Mean Absolute Error (MAE) in bond lengths with classification as normal fluctuations (< 0.05 Å), significant strain (0.05-0.2 Å), or severe strain (> 0.2 Å)
 
-3. **Dihedral Angle Analysis**:
-   - Calculates MAE in dihedral angles
-   - Classifies deformations as:
-     - "Local torsional oscillation" (< 30°)
-     - "Moderate conformational change" (30-90°)
-     - "Major conformational change" (> 90°)
+2. **Bond Angle Analysis**: Calculates MAE in bond angles with classification as normal flexibility (< 5°), moderate strain (5-15°), or severe strain (> 15°)
 
-Example usage:
-```python
-from SVC_materials.utils.isolate_molecule import analyze_molecule_deformation
-
-# Analyze molecule deformation
-metrics = analyze_molecule_deformation(
-    ideal_file='template.xyz',
-    extracted_file='extracted.xyz',
-    output_dir='analysis_results',
-    debug=True
-)
-
-# Access results
-print(f"Bond length MAE: {metrics['bond_length_mae']:.4f} Å")
-print(f"Bond angle MAE: {metrics['bond_angle_mae']:.4f} degrees")
-print(f"Dihedral angle MAE: {metrics['dihedral_angle_mae']:.4f} degrees")
-print(f"Deformation classifications: {metrics['classifications']}")
-```
+3. **Dihedral Angle Analysis**: Calculates MAE in dihedral angles with classification as local oscillation (< 30°), moderate conformational change (30-90°), or major conformational change (> 90°)
 
 ### Output Files
 
 For each analyzed molecule, the following files are generated:
 
-1. **analysis.log**: Contains a detailed summary of the deformation analysis:
-   ```
-   Deformation Analysis Summary:
-   ---------------------------
-   Chemical Formula: C10H24N2
-   Isomorphic: True
-
-   Bond Length Analysis:
-     Mean Error: 0.0234 ± 0.0156 Å
-     Range: [0.0012, 0.0456] Å
-     Classification: Normal bond fluctuations
-
-   Bond Angle Analysis:
-     Mean Error: 3.4567 ± 2.1234°
-     Range: [0.1234, 8.9012]°
-     Classification: Normal angle flexibility
-
-   Dihedral Angle Analysis:
-     Mean Error: 25.6789 ± 15.4321°
-     Range: [1.2345, 45.6789]°
-     Classification: Local torsional oscillation
-   ```
-
+1. **analysis.log**: Detailed summary of deformation analysis
 2. **bonds.csv**: Detailed bond length analysis
-   - bond: Bond identifier (e.g., "C1-C2")
-   - ideal_length: Template bond length (Å)
-   - extracted_length: Extracted bond length (Å)
-   - error: Absolute deviation (Å)
-
 3. **angles.csv**: Detailed bond angle analysis
-   - angle: Angle identifier (e.g., "C1-C2-C3")
-   - ideal_angle: Template angle (degrees)
-   - extracted_angle: Extracted angle (degrees)
-   - error: Absolute deviation (degrees)
-
 4. **dihedrals.csv**: Detailed dihedral angle analysis
-   - dihedral: Dihedral identifier (e.g., "C1-C2-C3-C4")
-   - ideal_angle: Template dihedral angle (degrees)
-   - extracted_angle: Extracted dihedral angle (degrees)
-   - error: Absolute deviation (degrees)
-
 5. **deformation_summary.csv**: Overall analysis summary
-   - molecule: Molecule identifier
-   - bond_length_mae: Mean absolute error in bond lengths
-   - bond_length_std: Standard deviation of bond length errors
-   - bond_angle_mae: Mean absolute error in bond angles
-   - bond_angle_std: Standard deviation of bond angle errors
-   - dihedral_angle_mae: Mean absolute error in dihedral angles
-   - dihedral_angle_std: Standard deviation of dihedral angle errors
-   - is_isomorphic: Whether the molecule matches the template
-   - chemical_formula: Chemical formula of the molecule
-   - bond_classification: Classification of bond deformations
-   - angle_classification: Classification of angle deformations
-   - dihedral_classification: Classification of dihedral deformations
 
 ### Interpretation Guidelines
 
 1. **Bond Length Deviations**
-   - Normal fluctuations (< 0.05 Å) are typical and indicate a stable structure
-   - Significant strain (0.05 - 0.2 Å) may indicate local stress or potential errors
-   - Severe strain (> 0.2 Å) suggests structural issues that need investigation
+   - Normal fluctuations (< 0.05 Å) indicate stable structure
+   - Significant strain (0.05 - 0.2 Å) may indicate local stress
+   - Severe strain (> 0.2 Å) suggests structural issues
 
 2. **Bond Angle Deviations**
    - Normal flexibility (< 5°) is expected in most structures
@@ -224,14 +328,68 @@ For each analyzed molecule, the following files are generated:
    - Moderate changes (30° - 90°) may indicate transitions between states
    - Major changes (> 90°) suggest significant structural reorganization
 
-## Examples
-Check the `examples` folder for detailed Jupyter notebooks demonstrating:
-- Structure generation
-- Structural analysis
-- Visualization
-- Data processing
-- Molecule isolation with different interfaces
-- Molecule deformation analysis
+## Scientific Applications and Validation
+
+### Structure-Property Relationships
+
+The SVC-Materials package enables systematic investigation of structure-property relationships in quasi-2D perovskites:
+
+1. **Electronic band gap tuning**: Correlation between structural parameters and electronic properties
+2. **Optical absorption analysis**: Relationship between quantum confinement and optical properties
+3. **Stability assessment**: Evaluation of structural stability through distortion analysis
+4. **Phase transition studies**: Investigation of temperature-dependent structural changes
+
+### Computational Efficiency and Scalability
+
+The package is designed for computational efficiency through:
+- **Vectorized operations**: Extensive use of NumPy for mathematical operations
+- **Efficient neighbor finding**: Optimized algorithms for identifying atomic neighbors
+- **Parallel processing capabilities**: Support for concurrent analysis of multiple structures
+- **Memory optimization**: Efficient data structures for large-scale calculations
+
+## Quality Assurance and Validation Protocols
+
+### Structural Validation
+
+The package implements comprehensive validation protocols:
+1. **Geometric consistency checks**: Verification of reasonable bond lengths and angles
+2. **Chemical formula validation**: Confirmation of correct stoichiometry
+3. **Connectivity verification**: Validation of molecular bonding patterns
+4. **Crystallographic validation**: Assessment of unit cell parameters and symmetry
+
+### Error Handling and Diagnostics
+
+Robust error handling includes:
+- **Input validation**: Comprehensive checking of input parameters and file formats
+- **Numerical stability**: Protection against division by zero and numerical overflow
+- **Diagnostic output**: Detailed logging and debugging information
+- **Graceful failure modes**: Appropriate handling of exceptional conditions
+
+## File Handling and Data Management
+
+The `file_handlers` module provides robust I/O capabilities for various crystallographic file formats:
+- **VASP format support**: Complete reading and writing of POSCAR/CONTCAR files
+- **XYZ format handling**: Support for molecular coordinate files
+- **Data validation**: Automatic verification of file integrity and format compliance
+- **Coordinate system management**: Proper handling of Cartesian and fractional coordinates
+
+## Future Developments and Extensions
+
+### Planned Enhancements
+
+Future development directions include:
+1. **Machine learning integration**: Implementation of ML-based property prediction
+2. **High-throughput screening**: Automated generation and analysis of large structure databases
+3. **Dynamic simulations**: Integration with molecular dynamics simulation capabilities
+4. **Advanced visualization**: Enhanced 3D visualization and analysis tools
+
+### Community Contributions
+
+The package is designed to accommodate community contributions through:
+- **Modular architecture**: Easy integration of new analysis methods
+- **Standardized interfaces**: Consistent API design for extensibility
+- **Documentation standards**: Comprehensive documentation for developers
+- **Testing frameworks**: Robust unit testing and validation procedures
 
 ## Contributing
 We welcome contributions to SVC-Materials! If you would like to contribute:
@@ -240,4 +398,12 @@ We welcome contributions to SVC-Materials! If you would like to contribute:
 3. Submit a pull request
 
 ## License
-SVC-Maestra is licensed under the MIT license.
+SVC-Materials is licensed under the MIT license.
+
+## Conclusion
+
+The SVC-Materials package represents a comprehensive computational framework for the generation and analysis of quasi-2D perovskite structures. Through its sophisticated algorithms, robust validation protocols, and extensive analysis capabilities, it provides researchers with powerful tools for investigating the structural and electronic properties of these fascinating materials.
+
+The scientific rigor implemented throughout the package, from fundamental algorithms to advanced analysis methods, ensures reliable and reproducible results for materials science research. The modular architecture and extensible design facilitate future developments and community contributions, positioning SVC-Materials as a valuable resource for the growing field of hybrid perovskite research.
+
+The package's ability to bridge the gap between theoretical predictions and experimental observations through detailed structural analysis makes it an indispensable tool for understanding the complex relationships between structure, dynamics, and properties in quasi-2D perovskite materials.

@@ -1,729 +1,541 @@
-from ..utils.file_handlers import vasp_load, save_vasp
-from ..utils.isolate_molecule import analyze_molecule_deformation
-from ase.io import read, write
-from ase.visualize import view
-import os
-import numpy as np
-from ase.neighborlist import NeighborList
-from itertools import combinations
-from pathlib import Path
 import pandas as pd
+import numpy as np
+import os
+from ..utils.file_handlers import vasp_load, save_vasp
+from ..utils.plots import plot_gaussian_projection, plot_multi_element_comparison, save_beautiful_plot, create_summary_plot
 
-class q2D_analysis:
-    def __init__(self, B, X, crystal):
-        self.path = '/'.join(crystal.split('/')[0:-1])
-        self.name = crystal.split('/')[-1]
-        self.B = B
-        self.X = X
-        self.perovskite_df, self.box = vasp_load(crystal)
+# Ionic radii database (in Angstroms) - common ionic states
+IONIC_RADII = {
+    'H': 0.31,    # H-
+    'Li': 0.76,   # Li+
+    'Be': 0.45,   # Be2+
+    'B': 0.27,    # B3+
+    'C': 0.30,    # C4+ (estimated)
+    'N': 1.46,    # N3-
+    'O': 1.40,    # O2-
+    'F': 1.33,    # F-
+    'Na': 1.02,   # Na+
+    'Mg': 0.72,   # Mg2+
+    'Al': 0.54,   # Al3+
+    'Si': 0.40,   # Si4+
+    'P': 2.12,    # P3-
+    'S': 1.84,    # S2-
+    'Cl': 1.81,   # Cl-
+    'K': 1.38,    # K+
+    'Ca': 1.00,   # Ca2+
+    'Ti': 0.61,   # Ti4+
+    'V': 0.59,    # V5+
+    'Cr': 0.62,   # Cr3+
+    'Mn': 0.83,   # Mn2+
+    'Fe': 0.78,   # Fe2+
+    'Co': 0.75,   # Co2+
+    'Ni': 0.69,   # Ni2+
+    'Cu': 0.73,   # Cu2+
+    'Zn': 0.74,   # Zn2+
+    'Ga': 0.62,   # Ga3+
+    'Ge': 0.53,   # Ge4+
+    'As': 0.58,   # As3+
+    'Se': 1.98,   # Se2-
+    'Br': 1.96,   # Br-
+    'Rb': 1.52,   # Rb+
+    'Sr': 1.18,   # Sr2+
+    'Y': 0.90,    # Y3+
+    'Zr': 0.72,   # Zr4+
+    'Nb': 0.64,   # Nb5+
+    'Mo': 0.65,   # Mo6+
+    'Tc': 0.64,   # Tc7+
+    'Ru': 0.68,   # Ru4+
+    'Rh': 0.67,   # Rh3+
+    'Pd': 0.86,   # Pd2+
+    'Ag': 1.15,   # Ag+
+    'Cd': 0.95,   # Cd2+
+    'In': 0.80,   # In3+
+    'Sn': 0.69,   # Sn4+
+    'Sb': 0.76,   # Sb3+
+    'Te': 2.21,   # Te2-
+    'I': 2.20,    # I-
+    'Cs': 1.67,   # Cs+
+    'Ba': 1.35,   # Ba2+
+    'La': 1.03,   # La3+
+    'Ce': 1.01,   # Ce3+
+    'Pr': 0.99,   # Pr3+
+    'Nd': 0.98,   # Nd3+
+    'Pm': 0.97,   # Pm3+
+    'Sm': 0.96,   # Sm3+
+    'Eu': 0.95,   # Eu3+
+    'Gd': 0.94,   # Gd3+
+    'Tb': 0.92,   # Tb3+
+    'Dy': 0.91,   # Dy3+
+    'Ho': 0.90,   # Ho3+
+    'Er': 0.89,   # Er3+
+    'Tm': 0.88,   # Tm3+
+    'Yb': 0.87,   # Yb3+
+    'Lu': 0.86,   # Lu3+
+    'Hf': 0.71,   # Hf4+
+    'Ta': 0.64,   # Ta5+
+    'W': 0.62,    # W6+
+    'Re': 0.63,   # Re7+
+    'Os': 0.63,   # Os6+
+    'Ir': 0.68,   # Ir4+
+    'Pt': 0.80,   # Pt2+
+    'Au': 1.37,   # Au+
+    'Hg': 1.02,   # Hg2+
+    'Tl': 1.50,   # Tl+
+    'Pb': 1.19,   # Pb2+
+    'Bi': 1.03,   # Bi3+
+    'Po': 1.94,   # Po4-
+    'At': 2.27,   # At- (estimated)
+    'Rn': 1.20,   # Rn (estimated)
+    'Fr': 1.80,   # Fr+ (estimated)
+    'Ra': 1.48,   # Ra2+
+    'Ac': 1.12,   # Ac3+
+    'Th': 0.94,   # Th4+
+    'Pa': 1.04,   # Pa4+
+    'U': 1.03,    # U4+
+}
+
+def get_ionic_radius(element):
+    """
+    Get the ionic radius for an element in Angstroms.
     
-    def _find_planes(self, element_type='B'):
-        """Helper function to find the planes of the perovskite following structural hierarchy
+    Parameters:
+    element (str): Element symbol
+    
+    Returns:
+    float: Ionic radius in Angstroms
+    """
+    return IONIC_RADII.get(element, 1.0)  # Default to 1.0 Å if not found
+
+def ionic_radius_to_sigma(ionic_radius):
+    """
+    Convert ionic radius to gaussian sigma where the gaussian base width equals 2 × ionic_radius.
+    
+    The gaussian effectively reaches zero at ±3σ from the center.
+    To make the base width (6σ total) equal to 2 × ionic_radius:
+    - Base width = 6σ = 2 × ionic_radius
+    - Therefore: σ = ionic_radius / 3
+    
+    This ensures the gaussian "footprint" spans exactly the ionic diameter.
+    
+    Parameters:
+    ionic_radius (float): Ionic radius in Angstroms
+    
+    Returns:
+    float: Gaussian sigma value (ionic_radius / 3)
+    """
+    sigma = ionic_radius / 3  # Base width = 2 × ionic_radius
+    return sigma
+
+class q2D_analyzer:
+    """
+    A class for analyzing 2D quantum materials using VASP results.
+    """
+    
+    def __init__(self, file_path=None):
+        """
+        Initialize the q2D_analyzer.
         
-        Args:
-            element_type (str): 'B' for metal atoms or 'X' for halide atoms
+        Parameters:
+        file_path (str, optional): Path to the VASP file to load initially
+        """
+        self.data = None
+        self.box = None
+        self.file_path = None
+        
+        if file_path:
+            self.load_vasp(file_path)
+    
+    def load_vasp(self, file_path):
+        """
+        Load a VASP file using the utilities from file_handlers.py
+        
+        Parameters:
+        file_path (str): Path to the VASP file
+        
+        Returns:
+        bool: True if successful, False otherwise
         """
         try:
-            # Convert to ASE Atoms object for neighbor analysis
-            atoms = read(self.path + '/' + self.name)
-            
-            # Set up neighbor list with 2 Å cutoff for N-C bonds
-            cutoffs = [2.0] * len(atoms)
-            nl = NeighborList(cutoffs, skin=0.3, self_interaction=False, bothways=True)
-            nl.update(atoms)
-            
-            if element_type == 'B':
-                # Original B plane detection logic remains unchanged
-                crystal_df = self.perovskite_df
-                b_atoms = crystal_df.query("Element == @self.B").sort_values(by='Z')
-                
-                planes = []
-                current_plane = []
-                current_z = None
-                
-                for _, atom in b_atoms.iterrows():
-                    z = atom['Z']
-                    if current_z is None or abs(z - current_z) <= 0.5:
-                        current_plane.append(atom)
-                        current_z = z
-                    else:
-                        if current_plane:
-                            planes.append(current_plane)
-                        current_plane = [atom]
-                        current_z = z
-                
-                if current_plane:
-                    planes.append(current_plane)
-                    
-                plane_z_values = [np.mean([atom['Z'] for atom in plane]) for plane in planes]
-                
-                if len(plane_z_values) > 1:
-                    sorted_planes = sorted(zip(plane_z_values, planes), key=lambda x: x[0])
-                    plane_z_values = [z for z, _ in sorted_planes]
-                    lower_plane = plane_z_values[0]
-                    upper_plane = plane_z_values[-1]
-                    return lower_plane, upper_plane, True
-                elif len(plane_z_values) == 1:
-                    return plane_z_values[0], plane_z_values[0], True
-                else:
-                    print(f'Could not identify B planes')
-                    return None, None, None
-                    
-            else:  # X (halide) plane detection
-                # Find all X atoms
-                x_atoms = []
-                for i, atom in enumerate(atoms):
-                    if atom.symbol == self.X:
-                        x_pos = atoms.get_positions()[i]
-                        x_atoms.append({
-                            'index': i,
-                            'position': x_pos,
-                            'z': x_pos[2]
-                        })
-                
-                # Sort X atoms by Z coordinate
-                x_atoms.sort(key=lambda x: x['z'])
-                
-                # Group X atoms into planes (within ±1.5 Å in Z)
-                planes = []
-                current_plane = []
-                current_z = None
-                
-                for x in x_atoms:
-                    if current_z is None or abs(x['z'] - current_z) <= 1.5:
-                        current_plane.append(x)
-                        current_z = x['z']
-                    else:
-                        if current_plane:
-                            planes.append(current_plane)
-                        current_plane = [x]
-                        current_z = x['z']
-                
-                if current_plane:
-                    planes.append(current_plane)
-                
-                # Calculate average Z for each plane
-                plane_z_values = [np.mean([x['z'] for x in plane]) for plane in planes]
-                plane_z_values.sort()
-                
-                if len(plane_z_values) >= 2:
-                    # For double layer case, use the two main planes
-                    if len(plane_z_values) > 2:
-                        # Find the largest gap between planes
-                        gaps = [plane_z_values[i+1] - plane_z_values[i] for i in range(len(plane_z_values)-1)]
-                        max_gap_idx = np.argmax(gaps)
-                        lower_plane = plane_z_values[max_gap_idx]
-                        upper_plane = plane_z_values[max_gap_idx + 1]
-                    else:
-                        lower_plane = plane_z_values[0]
-                        upper_plane = plane_z_values[1]
-                    
-                    return lower_plane, upper_plane, True
-                elif len(plane_z_values) == 1:
-                    # Single layer case
-                    return plane_z_values[0], None, False
-                else:
-                    print("Could not identify halide planes")
-                    return None, None, None
-                    
-        except Exception as e:
-            print(f"Error in plane detection: {e}")
-            return None, None, None
-
-    def _get_plane_equation(self, plane_z):
-        """Calculate the equation of a plane at a given Z coordinate"""
-        return np.array([0, 0, 1, -plane_z])
-
-    def _point_to_plane_distance(self, point, plane_eq):
-        """Calculate the absolute distance from a point to a plane"""
-        a, b, c, d = plane_eq
-        x, y, z = point
-        numerator = abs(a*x + b*y + c*z + d)
-        denominator = np.sqrt(a*a + b*b + c*c)
-        return abs(numerator / denominator)
-
-    def _classify_octahedral_distortion(self, eq_angles, axial_angles, eq_variance, axial_variance):
-        """Classify the type of octahedral distortion based on angles and variances
-        
-        Args:
-            eq_angles (list): List of equatorial angles
-            axial_angles (list): List of axial angles
-            eq_variance (float): Variance of equatorial angles
-            axial_variance (float): Variance of axial angles
-            
-        Returns:
-            tuple: (distortion_class, distortion_type)
-        """
-        if not eq_angles or not axial_angles:
-            return "Unknown", "Unknown"
-            
-        ideal_equatorial = 90.0
-        ideal_axial = 180.0
-        
-        # Calculate average deviations
-        avg_eq_dev = np.mean([angle - ideal_equatorial for angle in eq_angles])
-        avg_axial_dev = np.mean([angle - ideal_axial for angle in axial_angles])
-        
-        # Classify based on variance
-        if eq_variance < 1.0 and axial_variance < 1.0:
-            distortion_class = "Regular"
-        elif eq_variance < 1.0 and axial_variance >= 1.0:
-            distortion_class = "Axially Distorted"
-        elif eq_variance >= 1.0 and axial_variance < 1.0:
-            distortion_class = "Equatorially Distorted"
-        else:
-            distortion_class = "Highly Distorted"
-        
-        # Determine distortion type
-        if distortion_class != "Regular":
-            if avg_axial_dev < -5:  # Axial angles are compressed
-                distortion_type = "Compressed"
-            elif avg_axial_dev > 5:  # Axial angles are elongated
-                distortion_type = "Elongated"
-            elif abs(avg_eq_dev) > 5:  # Equatorial angles are distorted
-                distortion_type = "Rhombic"
+            result = vasp_load(file_path)
+            if result is not None:
+                self.data, self.box = result
+                self.file_path = file_path
+                print(f"Successfully loaded VASP file: {file_path}")
+                return True
             else:
-                distortion_type = "Mixed"
-        else:
-            distortion_type = "Regular"
-            
-        return distortion_class, distortion_type
-
-    def analyze_perovskite_structure(self, cutoff_distance=3.5):
-        """Analyze the perovskite structure including bond angles, lengths, and distortions
-        
-        Args:
-            cutoff_distance (float): Maximum distance to consider atoms as neighbors (in Å)
-            
-        Returns:
-            dict: Dictionary containing all structural parameters
-        """
-        try:
-            # Convert the structure to ASE Atoms object
-            atoms = read(self.path + '/' + self.name)
-            
-            # Find the indices of B atoms
-            b_atom_indices = [atom.index for atom in atoms if atom.symbol == self.B]
-            if not b_atom_indices:
-                print(f"ERROR: No '{self.B}' atoms found in the structure.")
-                return None
-                
-            # Set up neighbor list
-            cutoffs = [cutoff_distance / 2.0] * len(atoms)
-            nl = NeighborList(cutoffs, skin=0.3, self_interaction=False, bothways=True)
-            nl.update(atoms)
-            
-            # Initialize storage for all measurements
-            structure_data = {
-                'inter_octahedral_angles': [],
-                'in_plane_angles': [],
-                'axial_angles': [],
-                'equatorial_angles': [],
-                'axial_lengths': [],
-                'equatorial_lengths': [],
-                'out_of_plane_distortions': [],
-                'per_octahedron': {},
-                'octahedral_variances': []
-            }
-            
-            # Loop through each B atom
-            for b_index in b_atom_indices:
-                # Get neighbors of the current B atom
-                neighbor_indices, offsets = nl.get_neighbors(b_index)
-                
-                # Filter for X neighbors and calculate bond vectors
-                x_neighbors_info = []
-                for i, offset in zip(neighbor_indices, offsets):
-                    if atoms[i].symbol == self.X:
-                        x_pos = atoms.get_positions()[i] + np.dot(offset, atoms.get_cell())
-                        b_pos = atoms.get_positions()[b_index]
-                        bond_vector = x_pos - b_pos
-                        bond_length = np.linalg.norm(bond_vector)
-                        x_neighbors_info.append({
-                            'index': i,
-                            'vector': bond_vector,
-                            'length': bond_length,
-                            'position': x_pos
-                        })
-                
-                if len(x_neighbors_info) != 6:
-                    print(f"  > WARNING: B atom at index {b_index} has {len(x_neighbors_info)} {self.X} neighbors, expected 6.")
-                    continue
-                
-                # Identify axial and equatorial bonds
-                max_parallel = -1
-                axial_pair = None
-                for i, j in combinations(range(len(x_neighbors_info)), 2):
-                    v1 = x_neighbors_info[i]['vector']
-                    v2 = x_neighbors_info[j]['vector']
-                    cos_theta = np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2))
-                    if abs(cos_theta) > max_parallel:
-                        max_parallel = abs(cos_theta)
-                        axial_pair = (i, j)
-                
-                # Separate axial and equatorial bonds
-                axial_bonds = [x_neighbors_info[i] for i in axial_pair]
-                equatorial_bonds = [x for i, x in enumerate(x_neighbors_info) if i not in axial_pair]
-                
-                # Calculate angles and store data
-                octahedron_data = self._analyze_octahedron(axial_bonds, equatorial_bonds)
-                structure_data['per_octahedron'][b_index] = octahedron_data
-                
-                # Update overall statistics
-                for key in ['axial_angles', 'equatorial_angles', 'axial_lengths', 'equatorial_lengths', 'out_of_plane_distortions']:
-                    structure_data[key].extend(octahedron_data[key])
-                
-                structure_data['octahedral_variances'].append(octahedron_data['equatorial_variance'])
-            
-            return structure_data
-                
+                print(f"Failed to load VASP file: {file_path}")
+                return False
         except Exception as e:
-            print(f"Error analyzing structure: {e}")
-            return None
-
-    def _analyze_octahedron(self, axial_bonds, equatorial_bonds):
-        """Analyze a single octahedron and return its structural parameters
-        
-        Args:
-            axial_bonds (list): List of axial bond information
-            equatorial_bonds (list): List of equatorial bond information
-            
-        Returns:
-            dict: Dictionary containing octahedron parameters
+            print(f"Error loading VASP file {file_path}: {e}")
+            return False
+    
+    def get_data(self):
         """
-        # Calculate axial angle
-        v1 = axial_bonds[0]['vector']
-        v2 = axial_bonds[1]['vector']
-        cos_theta = np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2))
-        axial_angle = np.arccos(np.clip(cos_theta, -1.0, 1.0)) * 180 / np.pi
+        Get the loaded atomic data as a pandas DataFrame.
         
-        # Calculate all angles between equatorial bonds
-        octahedron_eq_angles = []
-        octahedron_axial_angles = []
+        Returns:
+        pd.DataFrame: DataFrame containing atomic coordinates and elements
+        """
+        return self.data
+    
+    def get_box(self):
+        """
+        Get the box information from the VASP file.
         
-        for v1, v2 in combinations(equatorial_bonds, 2):
-            vec1 = v1['vector']
-            vec2 = v2['vector']
-            cos_theta = np.dot(vec1, vec2) / (np.linalg.norm(vec1) * np.linalg.norm(vec2))
-            angle = np.arccos(np.clip(cos_theta, -1.0, 1.0)) * 180 / np.pi
+        Returns:
+        list: Box information containing lattice vectors and elements
+        """
+        return self.box
+    
+    def get_elements(self):
+        """
+        Get unique elements in the loaded structure.
+        
+        Returns:
+        list: List of unique element symbols
+        """
+        if self.data is not None:
+            return self.data['Element'].unique().tolist()
+        return []
+    
+    def get_atom_count(self):
+        """
+        Get the total number of atoms in the structure.
+        
+        Returns:
+        int: Total number of atoms
+        """
+        if self.data is not None:
+            return len(self.data)
+        return 0
+    
+    def get_element_counts(self):
+        """
+        Get the count of each element in the structure.
+        
+        Returns:
+        dict: Dictionary with element symbols as keys and counts as values
+        """
+        if self.data is not None:
+            return self.data['Element'].value_counts().to_dict()
+        return {}
+    
+    def summary(self):
+        """
+        Print a summary of the loaded structure.
+        """
+        if self.data is None:
+            print("No data loaded. Please load a VASP file first.")
+            return
+        
+        print(f"File: {self.file_path}")
+        print(f"Total atoms: {self.get_atom_count()}")
+        print(f"Elements: {', '.join(self.get_elements())}")
+        print("Element counts:")
+        for element, count in self.get_element_counts().items():
+            print(f"  {element}: {count}")
+        
+        if self.box:
+            print(f"Lattice vectors: {self.box[0]}")
+    
+    def _process_gaussian_data(self):
+        """
+        Process gaussian projection data for all elements.
+        
+        Returns:
+        dict: Dictionary containing processed data for plotting
+        """
+        if self.data is None:
+            return None
+        
+        # Get lattice vectors from box information for reference
+        if self.box is None:
+            c_vector_length = 0.0
+        else:
+            # Extract c-axis lattice vector (third vector) - for display purposes
+            c_vector = np.array(self.box[0][2], dtype=float)
+            c_vector_length = np.linalg.norm(c_vector)
+        
+        # Get unique elements
+        elements = self.get_elements()
+        
+        # Define gaussian kernel function (MBTR-style with ionic radius-based sigma)
+        def gaussian_kernel(x, center, sigma):
+            """Gaussian kernel centered at 'center' with standard deviation 'sigma'"""
+            return np.exp(-0.5 * ((x - center) / sigma) ** 2) / (sigma * np.sqrt(2 * np.pi))
+        
+        # Get overall z-range for consistent plotting
+        all_z_coords = self.data['Z'].values
+        z_min_global = all_z_coords.min()
+        z_max_global = all_z_coords.max()
+        z_range = np.linspace(z_min_global - 1, z_max_global + 1, 1000)
+        
+        # Process data for each element
+        processed_data = {}
+        element_sigmas = {}
+        
+        for element in elements:
+            # Extract z-coordinates for this element (already in Cartesian coordinates/Angstroms)
+            element_data = self.data[self.data['Element'] == element]
+            z_coords = element_data['Z'].values
             
-            if angle > 150:  # If angle is close to 180°
-                octahedron_axial_angles.append(angle)
-            else:  # Otherwise it's an equatorial angle
-                octahedron_eq_angles.append(angle)
-        
-        # Calculate variances
-        ideal_equatorial = 90.0
-        ideal_axial = 180.0
-        
-        eq_deviations = [(angle - ideal_equatorial)**2 for angle in octahedron_eq_angles]
-        axial_deviations = [(angle - ideal_axial)**2 for angle in octahedron_axial_angles]
-        
-        eq_variance = np.mean(eq_deviations) if eq_deviations else 0
-        axial_variance = np.mean(axial_deviations) if axial_deviations else 0
-        
-        # Classify the distortion
-        distortion_class, distortion_type = self._classify_octahedral_distortion(
-            octahedron_eq_angles, octahedron_axial_angles, eq_variance, axial_variance
-        )
-        
-        # Calculate out-of-plane distortions
-        axial_direction = np.mean([b['vector'] for b in axial_bonds], axis=0)
-        axial_direction = axial_direction / np.linalg.norm(axial_direction)
-        
-        out_of_plane_distortions = []
-        for bond in equatorial_bonds:
-            bond_vector = bond['vector'] / np.linalg.norm(bond['vector'])
-            projection = bond_vector - np.dot(bond_vector, axial_direction) * axial_direction
-            projection = projection / np.linalg.norm(projection)
-            distortion = np.arccos(np.clip(np.dot(projection, bond_vector), -1.0, 1.0)) * 180 / np.pi
-            out_of_plane_distortions.append(distortion)
+            if len(z_coords) == 0:
+                continue
+            
+            # Calculate element-specific sigma based on ionic radius
+            ionic_radius = get_ionic_radius(element)
+            sigma = ionic_radius_to_sigma(ionic_radius)
+            element_sigmas[element] = sigma
+            
+            # Create gaussian kernel density by summing gaussians at each atom position
+            # MBTR-style: each atom contributes equally, height proportional to atom count
+            kernel_density = np.zeros_like(z_range)
+            
+            for z_pos in z_coords:
+                kernel_density += gaussian_kernel(z_range, z_pos, sigma)
+            
+            # Try to fit a single gaussian to the overall distribution
+            fitted_gaussian = None
+            fit_params = None
+            
+            try:
+                from scipy.optimize import curve_fit
+                
+                def gaussian_fit(x, amp, mean, std):
+                    return amp * np.exp(-((x - mean) ** 2) / (2 * std ** 2))
+                
+                # Initial guess
+                amp_guess = kernel_density.max()
+                mean_guess = z_coords.mean()
+                std_guess = z_coords.std()
+                
+                # Fit gaussian to the kernel density
+                popt, _ = curve_fit(gaussian_fit, z_range, kernel_density, 
+                                  p0=[amp_guess, mean_guess, std_guess],
+                                  maxfev=10000)
+                
+                fitted_gaussian = gaussian_fit(z_range, *popt)
+                fit_params = popt
+                
+            except Exception as e:
+                print(f"Could not fit gaussian for {element}: {e}")
+            
+            # Store processed data
+            processed_data[element] = {
+                'z_coords': z_coords,
+                'kernel_density': kernel_density,
+                'fitted_gaussian': fitted_gaussian,
+                'fit_params': fit_params,
+                'ionic_radius': ionic_radius,
+                'sigma': sigma
+            }
         
         return {
-            'axial_angle': axial_angle,
-            'axial_angles': octahedron_axial_angles,
-            'equatorial_angles': octahedron_eq_angles,
-            'axial_lengths': [b['length'] for b in axial_bonds],
-            'equatorial_lengths': [b['length'] for b in equatorial_bonds],
-            'out_of_plane_distortions': out_of_plane_distortions,
-            'equatorial_variance': eq_variance,
-            'axial_variance': axial_variance,
-            'distortion_class': distortion_class,
-            'distortion_type': distortion_type
+            'elements_data': processed_data,
+            'z_range': z_range,
+            'element_sigmas': element_sigmas,
+            'c_vector_length': c_vector_length,
+            'z_min_global': z_min_global,
+            'z_max_global': z_max_global
         }
-
-    def calculate_n_penetration(self):
-        """Calculate the penetration depth of the nitrogen atoms from the organic molecule into both upper and lower perovskite layers"""
-        # Find the axial halide planes
-        lower_plane, upper_plane, has_two_planes = self._find_planes(element_type='X')
-        
-        if lower_plane is None:
-            print("Error: Could not find halide planes")
-            return None
-
-        try:
-            # Convert to ASE Atoms object for neighbor analysis
-            atoms = read(self.path + '/' + self.name)
-            
-            # Set up neighbor list with 2 Å cutoff for N-C bonds
-            cutoffs = [2.0] * len(atoms)
-            nl = NeighborList(cutoffs, skin=0.3, self_interaction=False, bothways=True)
-            nl.update(atoms)
-            
-            # Find all N atoms and their C neighbors
-            n_atoms = []
-            for i, atom in enumerate(atoms):
-                if atom.symbol == 'N':
-                    # Get neighbors of this N atom
-                    neighbor_indices, _ = nl.get_neighbors(i)
-                    n_pos = atoms.get_positions()[i]
-                    
-                    # Check for C neighbors
-                    c_neighbors = [j for j in neighbor_indices if atoms[j].symbol == 'C']
-                    
-                    if c_neighbors:
-                        # For each C neighbor, check for another C
-                        for c_idx in c_neighbors:
-                            c_neighbors_2, _ = nl.get_neighbors(c_idx)
-                            c_neighbors_2 = [j for j in c_neighbors_2 if atoms[j].symbol == 'C' and j != i]
-                            
-                            if c_neighbors_2:  # Found N-C-C pattern
-                                n_atoms.append({
-                                    'index': i,
-                                    'position': n_pos,
-                                    'z': n_pos[2],
-                                    'c_neighbor': c_idx,
-                                    'c_neighbor_2': c_neighbors_2[0]
-                                })
-                                break
-            
-            if not n_atoms:
-                print("Error: No nitrogen atoms with N-C-C pattern found")
-                return None
-            
-            # Sort N atoms by Z coordinate
-            n_atoms.sort(key=lambda x: x['z'])
-            
-            # For single layer case
-            if not has_two_planes:
-                # Use the first two N atoms for lower plane
-                lower_n_atoms = n_atoms[:2]
-                upper_n_atoms = n_atoms[2:4] if len(n_atoms) >= 4 else []
-            else:
-                # Use middle point between planes to separate N atoms
-                middle_z = (lower_plane + upper_plane) / 2
-                lower_n_atoms = [n for n in n_atoms if n['z'] < middle_z][:2]
-                upper_n_atoms = [n for n in n_atoms if n['z'] >= middle_z][:2]
-            
-            # Calculate distances to planes
-            lower_plane_eq = self._get_plane_equation(lower_plane)
-            upper_plane_eq = self._get_plane_equation(upper_plane) if has_two_planes else None
-            
-            # Calculate distances for lower plane N atoms
-            lower_distances = []
-            lower_atoms = []
-            for n in lower_n_atoms:
-                point = n['position']
-                dist = self._point_to_plane_distance(point, lower_plane_eq)
-                lower_distances.append(dist)
-                lower_atoms.append({
-                    'Z': n['z'],
-                    'X': point[0],
-                    'Y': point[1]
-                })
-            
-            # Calculate distances for upper plane N atoms
-            upper_distances = []
-            upper_atoms = []
-            for n in upper_n_atoms:
-                point = n['position']
-                if has_two_planes:
-                    dist = self._point_to_plane_distance(point, upper_plane_eq)
-                else:
-                    dist = self._point_to_plane_distance(point, lower_plane_eq)
-                upper_distances.append(dist)
-                upper_atoms.append({
-                    'Z': n['z'],
-                    'X': point[0],
-                    'Y': point[1]
-                })
-            
-            # Calculate averages
-            avg_lower = np.mean(lower_distances) if lower_distances else 0
-            avg_upper = np.mean(upper_distances) if upper_distances else 0
-            total_avg = (avg_lower + avg_upper) / 2 if lower_distances and upper_distances else avg_lower
-            
-            # Print detailed information
-            print(f"\nNitrogen Penetration Analysis (Organic Molecule):")
-            print(f"\nLower Plane Penetration:")
-            print(f"Number of N atoms: {len(lower_atoms)}")
-            print(f"Average penetration: {avg_lower:.3f} Å")
-            print("Individual penetrations:")
-            for i, (dist, atom) in enumerate(zip(lower_distances, lower_atoms), 1):
-                print(f"N atom {i}: {dist:.3f} Å (Z = {atom['Z']:.3f})")
-            
-            print(f"\nUpper Plane Penetration:")
-            print(f"Number of N atoms: {len(upper_atoms)}")
-            print(f"Average penetration: {avg_upper:.3f} Å")
-            print("Individual penetrations:")
-            for i, (dist, atom) in enumerate(zip(upper_distances, upper_atoms), 1):
-                print(f"N atom {i}: {dist:.3f} Å (Z = {atom['Z']:.3f})")
-            
-            print(f"\nTotal average penetration: {total_avg:.3f} Å")
-            
-            return {
-                'lower_penetration': avg_lower,
-                'upper_penetration': avg_upper,
-                'total_penetration': total_avg,
-                'lower_atoms': lower_atoms,
-                'upper_atoms': upper_atoms
-            }
-            
-        except Exception as e:
-            print(f"Error in penetration calculation: {e}")
-            return None
-
-    def _isolate_spacer(self, order=None):
-        """Private method to isolate the molecules between the perovskite planes, excluding B and X atoms"""
-        # First get the salt structure using _isolate_salt
-        salt_df, salt_box = self._isolate_salt(order=order)
-        
-        if salt_df is None:
-            return None
-            
-        # Remove B and X atoms from the salt structure
-        spacer_df = salt_df[~salt_df['Element'].isin([self.B, self.X])]
-        
-        print(f"\nSpacer isolation:")
-        print(f"Removed {len(salt_df) - len(spacer_df)} B and X atoms")
-        print(f"Remaining atoms: {len(spacer_df)}")
-        
-        return spacer_df, salt_box
-
-    def _isolate_salt(self, order=None):
-        """Private method to isolate the molecules plus the 4 halogens between the perovskite planes"""
-        # Get all B atoms and sort by Z coordinate
-        b_atoms = self.perovskite_df[self.perovskite_df['Element'] == self.B].sort_values('Z')
-        
-        if len(b_atoms) == 0:
-            print(f"No {self.B} atoms found in structure")
-            return None
-            
-        # Group B atoms into planes (atoms within 0.5 Å of each other)
-        planes = []
-        current_plane = []
-        current_z = None
-        
-        for _, atom in b_atoms.iterrows():
-            z = atom['Z']
-            if current_z is None or abs(z - current_z) <= 0.5:
-                current_plane.append(atom)
-                current_z = z
-            else:
-                if current_plane:
-                    planes.append(current_plane)
-                current_plane = [atom]
-                current_z = z
-        
-        if current_plane:
-            planes.append(current_plane)
-            
-        # Calculate average Z for each plane
-        plane_z_values = [np.mean([atom['Z'] for atom in plane]) for plane in planes]
-        plane_z_values.sort()  # Sort by Z coordinate
-        
-        if len(plane_z_values) >= 2:
-            # Case 1: Two or more planes exist
-            # Use the two lowest planes
-            lower_plane = plane_z_values[0] + 1.0  # Add 1 Å to lower plane
-            upper_plane = plane_z_values[1] - 1.0  # Subtract 1 Å from upper plane
-            
-            print(f"\nSalt isolation (two planes):")
-            print(f"Lower plane (adjusted): {lower_plane:.3f} Å")
-            print(f"Upper plane (adjusted): {upper_plane:.3f} Å")
-            
-            # Keep only atoms between adjusted planes
-            iso_df = self.perovskite_df.query('Z <= @upper_plane and Z >= @lower_plane')
-            
-        else:
-            # Case 2: Single plane
-            lower_plane = plane_z_values[0] + 1.0  # Add 1 Å to the plane
-            
-            print(f"\nSalt isolation (single plane):")
-            print(f"Plane (adjusted): {lower_plane:.3f} Å")
-            
-            # Keep only atoms above adjusted plane
-            iso_df = self.perovskite_df.query('Z >= @lower_plane')
-        
-        # Update the box to be 10 angstrom in Z
-        try:
-            iso_df.loc[:, 'Z'] = iso_df['Z'] - iso_df['Z'].min()
-            box = self.box.copy()
-            box[0][2][2] = iso_df['Z'].sort_values(ascending=False).iloc[0] + 10
-            return iso_df, box
-
-        except Exception as e:
-            print(f"Error creating the salt: {e}")
-            return None
-
-    def save_spacer(self, order=None, name=None):
-        """Save the isolated spacer structure as a VASP file"""
-        spacer_df, spacer_box = self._isolate_spacer(order=order)
-        if spacer_df is not None:
-            if name is None:
-                name = self.path + '/' + 'spacer_' + self.name
-            else:
-                # Ensure the file has .vasp extension
-                if not name.endswith('.vasp'):
-                    name += '.vasp'
-                # If no path is provided, save in the same directory as the original
-                if '/' not in name:
-                    name = self.path + '/' + name
-            
-            try:
-                save_vasp(spacer_df, spacer_box, name, order=order)
-                print(f'Spacer structure saved as: {name}')
-                return True
-            except Exception as e:
-                print(f"Error saving spacer structure: {e}")
-                return False
-        return False
-
-    def save_salt(self, order=None, name=None):
-        """Save the isolated salt structure as a VASP file"""
-        salt_df, salt_box = self._isolate_salt(order=order)
-        if salt_df is not None:
-            if name is None:
-                name = self.path + '/' + 'salt_' + self.name
-            else:
-                # Ensure the file has .vasp extension
-                if not name.endswith('.vasp'):
-                    name += '.vasp'
-                # If no path is provided, save in the same directory as the original
-                if '/' not in name:
-                    name = self.path + '/' + name
-            
-            try:
-                save_vasp(salt_df, salt_box, name, order=order)
-                print(f'Salt structure saved as: {name}')
-                return True
-            except Exception as e:
-                print(f"Error saving salt structure: {e}")
-                return False
-        return False
-
-    def show_spacer(self, order=None):
-        """Visualize the isolated spacer structure"""
-        spacer_df, spacer_box = self._isolate_spacer(order=order)
-        if spacer_df is not None:
-            # Save temporarily for visualization
-            temp_name = self.path + '/temp_spacer.vasp'
-            try:
-                save_vasp(spacer_df, spacer_box, temp_name, order=order)
-                atoms = read(temp_name)
-                view(atoms)
-                # Clean up temporary file
-                if os.path.exists(temp_name):
-                    os.remove(temp_name)
-            except Exception as e:
-                print(f"Error visualizing spacer: {e}")
-                if os.path.exists(temp_name):
-                    os.remove(temp_name)
-
-    def show_salt(self, order=None):
-        """Visualize the isolated salt structure"""
-        salt_df, salt_box = self._isolate_salt(order=order)
-        if salt_df is not None:
-            # Save temporarily for visualization
-            temp_name = self.path + '/temp_salt.vasp'
-            try:
-                save_vasp(salt_df, salt_box, temp_name, order=order)
-                atoms = read(temp_name)
-                view(atoms)
-                # Clean up temporary file
-                if os.path.exists(temp_name):
-                    os.remove(temp_name)
-            except Exception as e:
-                print(f"Error visualizing salt: {e}")
-                if os.path.exists(temp_name):
-                    os.remove(temp_name)
-
-    def show_original(self):
-        """Visualize the original structure"""
-        try:
-            atoms = read(self.path + '/' + self.name)
-            view(atoms)
-        except Exception as e:
-            print(f"Error visualizing original structure: {e}")
-
-    def analyze_molecule_deformation(self, template_file: str, extracted_file: str, debug: bool = False, include_hydrogens: bool = False) -> dict:
+    
+    def _gaussian_proyection(self, output_dir=None):
         """
-        Analyzes the structural deformation of an extracted molecule compared to its ideal template.
+        Generate gaussian projection plots for all elements.
         
-        Args:
-            template_file: Path to the ideal template molecule (XYZ or VASP format)
-            extracted_file: Path to the extracted molecule (XYZ or VASP format)
-            debug: Whether to print detailed debug information
-            include_hydrogens: Whether to include hydrogen atoms in the analysis
+        Parameters:
+        output_dir (str, optional): Custom output directory for plots
+        """
+        if self.data is None:
+            print("No data loaded. Please load a VASP file first.")
+            return
+        
+        # Create output directory
+        if output_dir is None:
+            output_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'tests')
+        os.makedirs(output_dir, exist_ok=True)
+        
+        # Process gaussian data
+        processed_data = self._process_gaussian_data()
+        if processed_data is None:
+            return
+        
+        # Extract data
+        elements_data = processed_data['elements_data']
+        z_range = processed_data['z_range']
+        element_sigmas = processed_data['element_sigmas']
+        c_vector_length = processed_data['c_vector_length']
+        
+        # Structure name for plots
+        structure_name = os.path.basename(self.file_path) if self.file_path else "Unknown"
+        
+        # Create individual plots for each element
+        for element, data in elements_data.items():
+            z_coords = data['z_coords']
+            kernel_density = data['kernel_density']
+            fitted_gaussian = data['fitted_gaussian']
+            fit_params = data['fit_params']
+            ionic_radius = data['ionic_radius']
+            sigma = data['sigma']
             
-        Returns:
-            dict: Dictionary containing deformation metrics:
-                - bond_length_mae: Mean absolute error in bond lengths (Å)
-                - bond_angle_mae: Mean absolute error in bond angles (degrees)
-                - dihedral_angle_mae: Mean absolute error in dihedral angles (degrees)
-                - is_isomorphic: Whether the molecules have the same connectivity
-                - chemical_formula: Chemical formula of the molecules
-                - bond_details: List of tuples (bond_name, ideal_length, extracted_length)
-                - angle_details: List of tuples (angle_name, ideal_angle, extracted_angle)
-                - dihedral_details: List of tuples (dihedral_name, ideal_angle, extracted_angle)
-                - error: Error message if comparison failed
+            # Create beautiful plot
+            fig = plot_gaussian_projection(
+                z_range=z_range,
+                kernel_density=kernel_density,
+                z_coords=z_coords,
+                element=element,
+                structure_name=structure_name,
+                c_vector_length=c_vector_length,
+                sigma=sigma,
+                fitted_gaussian=fitted_gaussian,
+                fit_params=fit_params,
+                ionic_radius=ionic_radius
+            )
+            
+            # Save plot
+            filename = f'{element}_gaussian_projection.png'
+            filepath = os.path.join(output_dir, filename)
+            save_beautiful_plot(fig, filepath)
+            
+            print(f"Saved beautiful plot for {element}: {filepath}")
+            print(f"  - Number of atoms: {len(z_coords)}")
+            print(f"  - Ionic radius: {ionic_radius:.3f} Å")
+            print(f"  - Kernel sigma: {sigma:.3f} Å (= ionic_radius / 3)")
+            print(f"  - Base width: {6 * sigma:.3f} Å (= 2 × ionic_radius)")
+            print(f"  - Z-range: {z_coords.min():.3f} to {z_coords.max():.3f} Å")
+            print(f"  - Peak density: {kernel_density.max():.3f}")
+            if fit_params is not None:
+                print(f"  - Fitted gaussian: μ={fit_params[1]:.3f} Å, σ={fit_params[2]:.3f} Å")
+        
+        # Create multi-element comparison plot
+        if len(elements_data) > 1:
+            fig = plot_multi_element_comparison(
+                element_data_dict=elements_data,
+                structure_name=structure_name,
+                c_vector_length=c_vector_length,
+                z_range=z_range,
+                sigma=None  # Will use individual sigmas from element data
+            )
+            
+            # Save multi-element plot
+            filename = 'multi_element_comparison.png'
+            filepath = os.path.join(output_dir, filename)
+            save_beautiful_plot(fig, filepath)
+            print(f"Saved multi-element comparison plot: {filepath}")
+        
+        print(f"Gaussian projection analysis completed with beautiful plots!")
+        print(f"All plots saved to: {output_dir}")
+        print(f"Cell c-axis length: {c_vector_length:.3f} Å")
+        print(f"Global Z-range: {processed_data['z_min_global']:.3f} to {processed_data['z_max_global']:.3f} Å")
+        
+        # Print summary of ionic radii used
+        print("\nIonic radii and sigma values used:")
+        for element, sigma in element_sigmas.items():
+            ionic_radius = get_ionic_radius(element)
+            base_width = 6 * sigma
+            print(f"  {element}: r_ionic = {ionic_radius:.3f} Å, σ = {sigma:.3f} Å, base_width = {base_width:.3f} Å")
+    
+    def gaussian_projection(self, output_dir=None):
+        """
+        Public method to perform gaussian projection analysis on loaded atomic data.
+        
+        This method creates gaussian kernel approximations of atom frequencies along the z-axis,
+        grouped by element, and saves beautiful plots to the specified output directory.
+        
+        Parameters:
+        output_dir (str, optional): Custom output directory for plots. If None, uses tests/ directory.
+        
+        The plots show:
+        - Gaussian kernel density with elegant styling
+        - Individual atom positions
+        - Fitted gaussian function (when possible)
+        - Multi-element comparison plot
+        
+        All plots follow beautiful scientific design principles inspired by Federica Fragapane.
+        """
+        self._gaussian_proyection(output_dir)
+    
+    def batch_gaussian_projection(self, structures_dir=None):
+        """
+        Batch process multiple VASP files and create beautiful gaussian projections for each.
+        
+        Parameters:
+        structures_dir (str, optional): Directory containing VASP files. 
+                                      If None, uses tests/structures/ directory.
+        
+        Creates a subfolder for each structure file and saves beautiful plots there.
+        Also creates a summary comparison plot.
+        """
+        if structures_dir is None:
+            structures_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'tests', 'structures')
+        
+        if not os.path.exists(structures_dir):
+            print(f"Structures directory not found: {structures_dir}")
+            return
+        
+        # Get all VASP files
+        vasp_files = [f for f in os.listdir(structures_dir) if f.endswith('.vasp')]
+        
+        if not vasp_files:
+            print(f"No VASP files found in {structures_dir}")
+            return
+        
+        print(f"Found {len(vasp_files)} VASP files to process:")
+        for vf in vasp_files:
+            print(f"  - {vf}")
+        
+        # Base output directory
+        base_output_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'tests')
+        
+        # Summary data for comparison plot
+        structures_summary = {}
+        
+        # Process each file
+        for vasp_file in vasp_files:
+            file_path = os.path.join(structures_dir, vasp_file)
+            
+            # Create output directory for this structure
+            structure_name = os.path.splitext(vasp_file)[0]  # Remove .vasp extension
+            output_dir = os.path.join(base_output_dir, structure_name)
+            
+            print(f"\n{'='*60}")
+            print(f"Processing: {vasp_file}")
+            print(f"Output directory: {output_dir}")
+            print(f"{'='*60}")
+            
+            # Load the structure
+            success = self.load_vasp(file_path)
+            
+            if success:
+                # Show summary
+                print("\nStructure Summary:")
+                self.summary()
                 
-        Example:
-            >>> analyzer = q2D_analysis(B='Pb', X='I', crystal='structure.vasp')
-            >>> metrics = analyzer.analyze_molecule_deformation(
-            ...     template_file='template.xyz',
-            ...     extracted_file='extracted.xyz',
-            ...     debug=True,
-            ...     include_hydrogens=False
-            ... )
-            >>> print(f"Bond length MAE: {metrics['bond_length_mae']:.4f} Å")
-        """
-        # Get the base metrics
-        metrics = analyze_molecule_deformation(
-            ideal_file=template_file,
-            extracted_file=extracted_file,
-            debug=debug,
-            include_hydrogens=include_hydrogens
-        )
+                # Perform gaussian projection analysis
+                print("\nPerforming Beautiful Gaussian Projection Analysis...")
+                self.gaussian_projection(output_dir)
+                
+                # Collect summary data
+                processed_data = self._process_gaussian_data()
+                if processed_data:
+                    structures_summary[structure_name] = {
+                        'total_atoms': self.get_atom_count(),
+                        'elements': self.get_element_counts(),
+                        'c_axis_length': processed_data['c_vector_length'],
+                        'z_range': processed_data['z_max_global'] - processed_data['z_min_global']
+                    }
+                
+                print(f"\nCompleted processing: {vasp_file}")
+            else:
+                print(f"Failed to load: {vasp_file}")
         
-        if 'error' in metrics:
-            return metrics
-            
-        # Create output directory if it doesn't exist
-        output_dir = Path(extracted_file).parent
-        molecule_name = Path(extracted_file).stem.replace('_extracted', '')
-        molecule_dir = output_dir / molecule_name
-        molecule_dir.mkdir(parents=True, exist_ok=True)
+        # Create summary comparison plot
+        if structures_summary:
+            summary_path = os.path.join(base_output_dir, 'structures_summary.png')
+            create_summary_plot(structures_summary, summary_path)
+            print(f"\nCreated beautiful summary plot: {summary_path}")
         
-        # Save bond details
-        if metrics['bond_details']:
-            bond_df = pd.DataFrame(metrics['bond_details'], 
-                                 columns=['bond', 'ideal_length', 'extracted_length'])
-            bond_df['error'] = abs(bond_df['ideal_length'] - bond_df['extracted_length'])
-            bond_df.to_csv(molecule_dir / "bonds.csv", index=False)
-            
-        # Save angle details
-        if metrics['angle_details']:
-            angle_df = pd.DataFrame(metrics['angle_details'], 
-                                  columns=['angle', 'ideal_angle', 'extracted_angle'])
-            angle_df['error'] = abs(angle_df['ideal_angle'] - angle_df['extracted_angle'])
-            angle_df.to_csv(molecule_dir / "angles.csv", index=False)
-            
-        # Save dihedral details
-        if metrics['dihedral_details']:
-            dihedral_df = pd.DataFrame(metrics['dihedral_details'], 
-                                     columns=['dihedral', 'ideal_angle', 'extracted_angle'])
-            dihedral_df['error'] = abs(dihedral_df['ideal_angle'] - dihedral_df['extracted_angle'])
-            dihedral_df.to_csv(molecule_dir / "dihedrals.csv", index=False)
-            
-        return metrics 
+        print(f"\n{'='*60}")
+        print("Batch processing completed with beautiful visualizations!")
+        print(f"All plots saved in organized subfolders within: {base_output_dir}")
+        print(f"{'='*60}")
