@@ -5,6 +5,8 @@ from os import remove
 from ..utils.molecular_ops import rot_mol, transform_mol, align_nitrogens, inclinate_molecule
 from ..utils.file_handlers import mol_load, vasp_load, save_vasp
 from ..utils.coordinate_ops import make_svc, bulk_creator, iso
+from ..utils.smiles_handler import smiles_to_xyz, RDKIT_AVAILABLE
+import tempfile
 
 def pi(argu):
     return np.array(list(map(float,argu.strip().split()))[:3])
@@ -83,4 +85,24 @@ class q2D_creator:
         save_vasp(db, box, name='temporal.vasp')
         # Read in the POSCAR file
         atoms = read('temporal.vasp')
-        view(atoms) 
+        view(atoms)
+
+    @classmethod
+    def from_smiles(cls, B, X, smiles, perov_vasp, P1, P2, P3, Q1, Q2, Q3, name, vac=0, n=1):
+        """
+        Creates a q2D structure from a SMILES string for the molecule.
+        """
+        if not RDKIT_AVAILABLE:
+            raise ImportError("RDKit is not installed. Cannot create from SMILES.")
+        
+        # Create a temporary XYZ file from the SMILES string
+        with tempfile.NamedTemporaryFile(mode='w+', delete=False, suffix='.xyz') as tmp_file:
+            smiles_to_xyz(smiles, tmp_file.name)
+            molecule_xyz = tmp_file.name
+
+        instance = cls(B, X, molecule_xyz, perov_vasp, P1, P2, P3, Q1, Q2, Q3, name, vac, n)
+        
+        # Clean up the temporary file
+        remove(molecule_xyz)
+        
+        return instance 
