@@ -15,3 +15,28 @@
 # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 __src__ = "source code"
+
+# Import the main modules we need
+from . import io
+from . import calc
+from . import elements
+from . import draw
+from . import structure
+from . import tools
+from . import util
+from . import linear
+from . import plane
+from . import plot
+from . import popup
+from . import projection
+# from . import scripting  # Commented out - has dependency issues
+
+# Expose key functions for easy import
+from .io import extract_octa
+from .calc import CalcDistortion
+
+__all__ = [
+    'io', 'calc', 'elements', 'draw', 'structure', 'tools', 'util',
+    'linear', 'plane', 'plot', 'popup', 'projection',  # 'scripting',
+    'extract_octa', 'CalcDistortion'
+]

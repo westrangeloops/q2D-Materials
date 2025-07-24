@@ -63,7 +63,7 @@ class q2D_analyzer:
         self.geometry_calc = GeometryCalculator(atoms=self.atoms)
         self.angular_analyzer = AngularAnalyzer(self.geometry_calc)
         self.connectivity_analyzer = ConnectivityAnalyzer(self.geometry_calc)
-        self.layers_analyzer = LayersAnalyzer()
+        self.layers_analyzer = LayersAnalyzer(z_window=2.0)
         
         # Initialize analysis
         self.all_octahedra = self.find_all_octahedra()
@@ -567,69 +567,6 @@ class q2D_analyzer:
         Get the layers analysis results.
         
         Returns:
-            dict: Layers analysis data
+            dict: Layers analysis data with distortion statistics
         """
         return self.ontology.get('layers_analysis', {})
-    
-    def get_layer_summary(self):
-        """
-        Get a formatted summary of the layer analysis.
-        
-        Returns:
-            str: Formatted layer summary
-        """
-        return self.layers_analyzer.get_layer_summary()
-    
-    def get_octahedra_in_layer(self, layer_key):
-        """
-        Get all octahedra in a specific layer.
-        
-        Parameters:
-            layer_key (str): Key of the layer (e.g., 'layer_1')
-            
-        Returns:
-            list: List of octahedron keys in the layer
-        """
-        return self.layers_analyzer.get_octahedra_in_layer(layer_key)
-    
-    def get_layer_by_octahedron(self, octahedron_key):
-        """
-        Find which layer contains a specific octahedron.
-        
-        Parameters:
-            octahedron_key (str): Key of the octahedron (e.g., 'octahedron_1')
-            
-        Returns:
-            str or None: Layer key containing the octahedron
-        """
-        return self.layers_analyzer.get_layer_by_octahedron(octahedron_key)
-    
-    def export_layer_analysis(self, filename=None):
-        """
-        Export layer analysis to JSON format.
-        
-        Parameters:
-            filename (str, optional): Output filename
-            
-        Returns:
-            dict: Layer analysis data
-        """
-        return self.layers_analyzer.export_layer_analysis(filename)
-    
-    def set_layer_window(self):
-        """
-        Update layer analysis Z-window parameter and re-run the analysis.
-        
-        Parameters:
-            z_window (float): Z-coordinate window in Angstroms for same layer
-        """
-        self.layers_analyzer = LayersAnalyzer()
-        
-        # Re-run layer analysis with new parameters
-        octahedra_data = self.ontology.get('octahedra', {})
-        if octahedra_data:
-            layers_analysis = self.layers_analyzer.identify_layers(octahedra_data)
-            self.ontology['layers_analysis'] = layers_analysis
-            
-        print(f"Layer analysis updated with z_window={z_window} Å")
-        return self.layers_analyzer.get_layer_summary()

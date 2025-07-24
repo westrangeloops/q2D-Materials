@@ -85,7 +85,7 @@ class q2D_creator:
         save_vasp(db, box, name='temporal.vasp')
         # Read in the POSCAR file
         atoms = read('temporal.vasp')
-        view(atoms)
+        view(atoms) 
 
     @classmethod
     def from_smiles(cls, B, X, smiles, perov_vasp, P1, P2, P3, Q1, Q2, Q3, name, vac=0, n=1):

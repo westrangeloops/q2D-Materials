@@ -23,7 +23,7 @@ import rmsd
 from matplotlib import pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
-from octadist.src import linear, elements, plane, util
+from . import linear, elements, plane, util
 
 
 class CalcJahnTeller:

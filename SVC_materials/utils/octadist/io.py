@@ -17,10 +17,10 @@
 from operator import itemgetter
 
 import numpy as np
-import pymatgen
 from scipy.spatial import distance
+from ase.io import read
 
-from octadist.src import elements, popup
+from . import elements, popup
 
 
 def is_cif(f):
@@ -127,10 +127,10 @@ def get_coord_cif(f):
 
     warnings.filterwarnings("ignore")
 
-    # works only with pymatgen <= v2021.3.3
-    structure = pymatgen.Structure.from_file(f)
-    atom = list(map(lambda x: elements.number_to_symbol(x), structure.atomic_numbers))
-    coord = structure.cart_coords
+    # Use ASE to read CIF files
+    atoms = read(f)
+    atom = atoms.get_chemical_symbols()
+    coord = atoms.get_positions()
 
     return atom, coord
 
@@ -901,9 +901,10 @@ def find_metal(atom=None, coord=None):
     return atom_metal, coord_metal, index_metal
 
 
-def extract_octa(atom, coord, ref_index=0, cutoff_ref_ligand=2.8):
+def extract_octa(atom, coord, ref_index=0, cutoff_ref_ligand=2.8, cell=None, pbc=None):
     """
     Search the octahedral structure in complex and return atoms and coordinates.
+    Now supports periodic boundary conditions (PBC) for crystal structures.
 
     Parameters
     ----------
@@ -918,6 +919,12 @@ def extract_octa(atom, coord, ref_index=0, cutoff_ref_ligand=2.8):
     cutoff_ref_ligand : float, optional
         Cutoff distance for screening bond distance between reference and ligand atoms.
         Default is 2.8.
+    cell : array_like, optional
+        Unit cell vectors as 3x3 matrix. Required for PBC calculations.
+        Default is None (no PBC).
+    pbc : array_like, optional
+        Periodic boundary conditions as [x, y, z] boolean array.
+        Default is None (no PBC).
 
     Returns
     -------
@@ -967,11 +974,45 @@ def extract_octa(atom, coord, ref_index=0, cutoff_ref_ligand=2.8):
             "index of the reference center atom is greater than the total number of atoms in the complex."
         )
 
+    def calculate_distance_pbc(x1, y1, z1, x2, y2, z2, vector_a, vector_b, vector_c):
+        """Calculate minimum image distance with periodic boundary conditions."""
+        # Calculate differences in coordinates without adjustment
+        dx = x2 - x1
+        dy = y2 - y1
+        dz = z2 - z1
+        
+        # Apply periodic boundary conditions if cell is provided
+        if cell is not None and pbc is not None:
+            # Apply periodic conditions using minimum image convention
+            inv_cell = np.linalg.inv([vector_a, vector_b, vector_c])
+            positions_cell_1 = np.dot([dx, dy, dz], inv_cell)
+            positions_cell_2 = positions_cell_1 - np.round(positions_cell_1)
+            dx, dy, dz = np.dot(positions_cell_2, [vector_a, vector_b, vector_c])
+        
+        return [dx, dy, dz]
+
+    ref_coord = coord[ref_index]
     dist_list = []
+    
     for i in range(len(list(atom))):
-        dist = distance.euclidean(coord[ref_index], coord[i])
+        if cell is not None and pbc is not None:
+            # Use PBC-aware distance calculation
+            vector_a, vector_b, vector_c = cell[0], cell[1], cell[2]
+            dx, dy, dz = calculate_distance_pbc(
+                ref_coord[0], ref_coord[1], ref_coord[2],
+                coord[i][0], coord[i][1], coord[i][2],
+                vector_a, vector_b, vector_c
+            )
+            # Calculate the corrected position considering PBC
+            corrected_pos = ref_coord + np.array([dx, dy, dz])
+            dist = np.linalg.norm([dx, dy, dz])
+        else:
+            # Use standard Euclidean distance for non-periodic systems
+            corrected_pos = coord[i]
+            dist = distance.euclidean(ref_coord, coord[i])
+        
         if dist <= cutoff_ref_ligand:
-            dist_list.append([atom[i], coord[i], dist])
+            dist_list.append([atom[i], corrected_pos, dist])
 
     # sort list of tuples by distance in ascending order
     dist_list.sort(key=itemgetter(2))

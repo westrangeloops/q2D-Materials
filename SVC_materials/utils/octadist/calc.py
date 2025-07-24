@@ -18,7 +18,7 @@ import numpy as np
 from scipy.spatial import distance
 from scipy.spatial import ConvexHull
 
-from octadist.src import linear, plane, projection
+from . import linear, plane, projection
 
 
 class CalcDistortion:

@@ -35,6 +35,8 @@
             pythonPackages.networkx
             pythonPackages.rdkit
             pythonPackages.seaborn
+            pythonPackages.pymatgen
+            pythonPackages.rmsd
             # Add more packages as needed
           ];
           # For ase-gui visualization

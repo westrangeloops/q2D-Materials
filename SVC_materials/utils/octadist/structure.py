@@ -19,7 +19,7 @@ from tkinter import scrolledtext as tkscrolled
 
 from scipy.spatial import distance
 
-from octadist.src import linear, util
+from . import linear, util
 
 
 class DataComplex:
