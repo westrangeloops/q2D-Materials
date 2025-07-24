@@ -20,6 +20,7 @@ from .geometry import GeometryCalculator
 from .angular_analysis import AngularAnalyzer
 from .connectivity import ConnectivityAnalyzer
 from .layers_analysis import LayersAnalyzer
+from .A_analysis import ASiteIdentifier
 
 # Use matplotlib without x server
 import matplotlib
@@ -64,6 +65,7 @@ class q2D_analyzer:
         self.angular_analyzer = AngularAnalyzer(self.geometry_calc)
         self.connectivity_analyzer = ConnectivityAnalyzer(self.geometry_calc)
         self.layers_analyzer = LayersAnalyzer()
+        self.a_site_identifier = ASiteIdentifier(atoms=self.atoms, geometry_calculator=self.geometry_calc)
         
         # Initialize analysis
         self.all_octahedra = self.find_all_octahedra()
@@ -435,6 +437,11 @@ class q2D_analyzer:
         # Analyze layers using layers analyzer with connectivity information
         layers_analysis = self.layers_analyzer.identify_layers(octahedra_data, connectivity_analysis)
         
+        # Analyze A-site using ASiteIdentifier
+        a_site_analysis = self.a_site_identifier.identify_a_site_atoms(
+            octahedra_data, layers_analysis, self.coord, self.chemical_symbols
+        )
+        
         # Create unified structure
         unified_ontology = {
             "experiment": {
@@ -445,7 +452,10 @@ class q2D_analyzer:
             "cell_properties": cell_properties,
             "octahedra": octahedra_data,
             "connectivity_analysis": connectivity_analysis,
-            "layers_analysis": layers_analysis
+            "layers_analysis": layers_analysis,
+            "molecular_analysis": {
+                "a_site": a_site_analysis
+            }
         }
         
         return unified_ontology
@@ -459,6 +469,36 @@ class q2D_analyzer:
         """
         return self.ontology
 
+    def _make_json_serializable(self, obj):
+        """
+        Recursively convert any sets to lists and NumPy types to native Python types
+        to make the ontology JSON serializable.
+        
+        Parameters:
+            obj: Object to convert
+            
+        Returns:
+            JSON-serializable object
+        """
+        if isinstance(obj, set):
+            return list(obj)
+        elif isinstance(obj, dict):
+            return {key: self._make_json_serializable(value) for key, value in obj.items()}
+        elif isinstance(obj, list):
+            return [self._make_json_serializable(item) for item in obj]
+        elif isinstance(obj, tuple):
+            return tuple(self._make_json_serializable(item) for item in obj)
+        elif hasattr(obj, 'dtype'):  # NumPy arrays and scalars
+            if obj.ndim == 0:  # NumPy scalar
+                return obj.item()  # Convert to native Python type
+            else:  # NumPy array
+                return obj.tolist()  # Convert to Python list
+        elif isinstance(obj, (np.integer, np.floating, np.complexfloating)):
+            return obj.item()  # Convert NumPy scalars to native Python types
+        elif isinstance(obj, np.ndarray):
+            return obj.tolist()  # Convert NumPy arrays to Python lists
+        else:
+            return obj
 
     def export_ontology_json(self, filename=None):
         """
@@ -471,11 +511,15 @@ class q2D_analyzer:
             filename = f"{self.experiment_name}_unified_ontology.json"
         
         import json
+        
+        # Ensure all data is JSON serializable
+        serializable_ontology = self._make_json_serializable(self.ontology)
+        
         with open(filename, 'w') as f:
-            json.dump(self.ontology, f, indent=2)
+            json.dump(serializable_ontology, f, indent=2)
         
         print(f"Unified ontology exported to {filename}")
-        return self.ontology
+        return serializable_ontology
 
     def print_ontology_summary(self):
         """
@@ -562,6 +606,28 @@ class q2D_analyzer:
         if layers_analysis:
             print(self.layers_analyzer.get_layer_summary())
             
+        # Show molecular analysis summary
+        molecular_analysis = self.ontology.get('molecular_analysis', {})
+        if molecular_analysis:
+            a_site = molecular_analysis.get('a_site', {})
+            if a_site:
+                summary_data = a_site.get('summary', {})
+                print(f"\nMolecular Analysis (A-site):")
+                print(f"  Total molecules found: {summary_data.get('total_molecules', 0)}")
+                print(f"  Interlayer regions: {summary_data.get('total_interlayer_regions', 0)}")
+                
+                # Show dominant species
+                dominant = summary_data.get('dominant_species', {})
+                if dominant.get('formula'):
+                    print(f"  Dominant A-site species: {dominant['formula']} ({dominant['count']} molecules)")
+                
+                # Show formula distribution
+                formulas = summary_data.get('formula_distribution', {})
+                if formulas:
+                    print(f"  Molecular formulas: {', '.join(formulas.keys())}")
+            else:
+                print(f"\nMolecular Analysis (A-site): No A-site molecules identified")
+            
     def get_layers_analysis(self):
         """
         Get the layers analysis results.
@@ -633,3 +699,27 @@ class q2D_analyzer:
             
         print(f"Layer analysis updated with z_window={z_window} Å")
         return self.layers_analyzer.get_layer_summary()
+
+    def get_a_site_analysis(self):
+        """
+        Get A-site molecular analysis results.
+        
+        Returns:
+            dict: A-site analysis data
+        """
+        return self.ontology.get('molecular_analysis', {}).get('a_site', {})
+    
+    def get_a_site_summary(self):
+        """
+        Get formatted A-site analysis summary.
+        
+        Returns:
+            str: Formatted A-site summary
+        """
+        if hasattr(self.a_site_identifier, 'get_a_site_summary'):
+            return self.a_site_identifier.get_a_site_summary()
+        else:
+            a_site_data = self.get_a_site_analysis()
+            if a_site_data:
+                return f"A-site analysis available with {a_site_data.get('summary', {}).get('total_molecules', 0)} molecules"
+            return "No A-site analysis available"
