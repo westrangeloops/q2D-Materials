@@ -2,7 +2,7 @@
   "experiment": {
     "name": "structure_n2_test",
     "file_path": "tests/structures/structure_n2_test.vasp",
-    "timestamp": "2025-07-24 17:51:46.684480"
+    "timestamp": "2025-07-30 13:56:09.375012"
   },
   "cell_properties": {
     "lattice_parameters": {
@@ -1811,6 +1811,7 @@
             "y": 0.7177197673582872,
             "z": 14.351489694596237
           },
+          "z_position": 14.351489694596237,
           "is_organic": true,
           "is_common_a_site": false
         },
@@ -1822,6 +1823,7 @@
             "y": 3.1824557960947932,
             "z": 6.773339051407401
           },
+          "z_position": 6.773339051407401,
           "is_organic": true,
           "is_common_a_site": false
         },
@@ -1833,6 +1835,7 @@
             "y": 3.9355619581770247,
             "z": 3.7966407081804627
           },
+          "z_position": 3.7966407081804627,
           "is_organic": true,
           "is_common_a_site": false
         },
@@ -1844,6 +1847,7 @@
             "y": 3.4919363745412855,
             "z": 3.997793879044485
           },
+          "z_position": 3.997793879044485,
           "is_organic": true,
           "is_common_a_site": false
         },
@@ -1855,6 +1859,7 @@
             "y": 2.9834403518415433,
             "z": 14.787892088282014
           },
+          "z_position": 14.787892088282014,
           "is_organic": true,
           "is_common_a_site": false
         },
@@ -1866,6 +1871,7 @@
             "y": 3.760991531920686,
             "z": 0.6143919937949366
           },
+          "z_position": 0.6143919937949366,
           "is_organic": true,
           "is_common_a_site": false
         },
@@ -1877,6 +1883,7 @@
             "y": 4.417680124542461,
             "z": 13.020559613791969
           },
+          "z_position": 13.020559613791969,
           "is_organic": true,
           "is_common_a_site": false
         },
@@ -1888,6 +1895,7 @@
             "y": 5.7376061332921395,
             "z": 14.169659150163719
           },
+          "z_position": 14.169659150163719,
           "is_organic": true,
           "is_common_a_site": false
         },
@@ -1899,6 +1907,7 @@
             "y": 4.396894011680511,
             "z": 14.459685323892607
           },
+          "z_position": 14.459685323892607,
           "is_organic": true,
           "is_common_a_site": false
         },
@@ -1910,6 +1919,7 @@
             "y": 7.618613811531678,
             "z": 0.7136166232847665
           },
+          "z_position": 0.7136166232847665,
           "is_organic": true,
           "is_common_a_site": false
         },
@@ -1921,6 +1931,7 @@
             "y": 2.133272943638735,
             "z": 14.75947589382423
           },
+          "z_position": 14.75947589382423,
           "is_organic": true,
           "is_common_a_site": false
         },
@@ -1932,6 +1943,7 @@
             "y": 7.084508916407782,
             "z": 14.061448312589837
           },
+          "z_position": 14.061448312589837,
           "is_organic": true,
           "is_common_a_site": false
         },
@@ -1943,6 +1955,7 @@
             "y": 0.9093257452323715,
             "z": 12.988148701733438
           },
+          "z_position": 12.988148701733438,
           "is_organic": true,
           "is_common_a_site": false
         },
@@ -1954,6 +1967,7 @@
             "y": 6.079731580427654,
             "z": 7.719022943246852
           },
+          "z_position": 7.719022943246852,
           "is_organic": true,
           "is_common_a_site": false
         },
@@ -1965,6 +1979,7 @@
             "y": 0.7231779459985607,
             "z": 14.29972468987859
           },
+          "z_position": 14.29972468987859,
           "is_organic": true,
           "is_common_a_site": false
         },
@@ -1976,6 +1991,7 @@
             "y": 2.5658880761276066,
             "z": 4.730065700336473
           },
+          "z_position": 4.730065700336473,
           "is_organic": true,
           "is_common_a_site": false
         },
@@ -1987,6 +2003,7 @@
             "y": 1.3404379459510842,
             "z": 9.891074346425246
           },
+          "z_position": 9.891074346425246,
           "is_organic": true,
           "is_common_a_site": false
         },
@@ -1998,6 +2015,7 @@
             "y": 1.1416261041149733,
             "z": 9.187039130101422
           },
+          "z_position": 9.187039130101422,
           "is_organic": true,
           "is_common_a_site": false
         },
@@ -2009,6 +2027,7 @@
             "y": 2.3719645707304964,
             "z": 8.682325757423818
           },
+          "z_position": 8.682325757423818,
           "is_organic": true,
           "is_common_a_site": false
         },
@@ -2020,6 +2039,7 @@
             "y": 7.095556194285194,
             "z": 8.662865535002457
           },
+          "z_position": 8.662865535002457,
           "is_organic": true,
           "is_common_a_site": false
         },
@@ -2031,6 +2051,7 @@
             "y": 3.505892286983512,
             "z": 9.059623473294147
           },
+          "z_position": 9.059623473294147,
           "is_organic": true,
           "is_common_a_site": false
         },
@@ -2042,6 +2063,7 @@
             "y": 0.9554341744628654,
             "z": 4.205719634424164
           },
+          "z_position": 4.205719634424164,
           "is_organic": true,
           "is_common_a_site": false
         },
@@ -2053,6 +2075,7 @@
             "y": 4.682627818137011,
             "z": 8.72756147586622
           },
+          "z_position": 8.72756147586622,
           "is_organic": true,
           "is_common_a_site": false
         },
@@ -2064,6 +2087,7 @@
             "y": 4.991199030330053,
             "z": 9.810308401760306
           },
+          "z_position": 9.810308401760306,
           "is_organic": true,
           "is_common_a_site": false
         },
@@ -2075,6 +2099,7 @@
             "y": 4.856017700378275,
             "z": 8.270324523095466
           },
+          "z_position": 8.270324523095466,
           "is_organic": true,
           "is_common_a_site": false
         },
@@ -2086,6 +2111,7 @@
             "y": 4.426828803765972,
             "z": 14.4049495241511
           },
+          "z_position": 14.4049495241511,
           "is_organic": true,
           "is_common_a_site": false
         },
@@ -2097,6 +2123,7 @@
             "y": 7.009036194548044,
             "z": 3.811345955997203
           },
+          "z_position": 3.811345955997203,
           "is_organic": true,
           "is_common_a_site": false
         },
@@ -2108,6 +2135,7 @@
             "y": 4.6254005983008515,
             "z": 6.026626081206856
           },
+          "z_position": 6.026626081206856,
           "is_organic": true,
           "is_common_a_site": false
         },
@@ -2119,6 +2147,7 @@
             "y": 7.452336626177421,
             "z": 7.366236872894219
           },
+          "z_position": 7.366236872894219,
           "is_organic": true,
           "is_common_a_site": false
         },
@@ -2130,6 +2159,7 @@
             "y": 7.528780184704092,
             "z": 5.651917543721986
           },
+          "z_position": 5.651917543721986,
           "is_organic": true,
           "is_common_a_site": false
         },
@@ -2141,6 +2171,7 @@
             "y": 6.123517685927205,
             "z": 5.976549009603862
           },
+          "z_position": 5.976549009603862,
           "is_organic": true,
           "is_common_a_site": false
         },
@@ -2152,6 +2183,7 @@
             "y": 1.3616314235708662,
             "z": 6.498930489367372
           },
+          "z_position": 6.498930489367372,
           "is_organic": true,
           "is_common_a_site": false
         },
@@ -2163,6 +2195,7 @@
             "y": 5.3948783637996,
             "z": 5.415189318189843
           },
+          "z_position": 5.415189318189843,
           "is_organic": true,
           "is_common_a_site": false
         },
@@ -2174,6 +2207,7 @@
             "y": 0.8937769197084069,
             "z": 7.660373285682548
           },
+          "z_position": 7.660373285682548,
           "is_organic": true,
           "is_common_a_site": false
         },
@@ -2185,6 +2219,7 @@
             "y": 7.35558270880817,
             "z": 4.723554744942532
           },
+          "z_position": 4.723554744942532,
           "is_organic": true,
           "is_common_a_site": false
         },
@@ -2196,6 +2231,7 @@
             "y": 3.9963688280176317,
             "z": 6.253852649926035
           },
+          "z_position": 6.253852649926035,
           "is_organic": true,
           "is_common_a_site": false
         },
@@ -2207,6 +2243,7 @@
             "y": 7.209525754555015,
             "z": 5.8458150341236195
           },
+          "z_position": 5.8458150341236195,
           "is_organic": true,
           "is_common_a_site": false
         },
@@ -2218,6 +2255,7 @@
             "y": 4.366646636624325,
             "z": 5.739733729499712
           },
+          "z_position": 5.739733729499712,
           "is_organic": true,
           "is_common_a_site": false
         },
@@ -2229,6 +2267,7 @@
             "y": 1.046734317857923,
             "z": 14.750861810544057
           },
+          "z_position": 14.750861810544057,
           "is_organic": true,
           "is_common_a_site": false
         },
@@ -2240,6 +2279,7 @@
             "y": 4.06692923482956,
             "z": 14.845754411684764
           },
+          "z_position": 14.845754411684764,
           "is_organic": true,
           "is_common_a_site": false
         },
@@ -2251,6 +2291,7 @@
             "y": 4.999807094851251,
             "z": 7.830296735628178
           },
+          "z_position": 7.830296735628178,
           "is_organic": true,
           "is_common_a_site": false
         },
@@ -2262,6 +2303,7 @@
             "y": 0.46576718971187087,
             "z": 7.975017451070288
           },
+          "z_position": 7.975017451070288,
           "is_organic": true,
           "is_common_a_site": false
         },
@@ -2273,6 +2315,7 @@
             "y": 0.35090845620428107,
             "z": 6.820129929341572
           },
+          "z_position": 6.820129929341572,
           "is_organic": true,
           "is_common_a_site": false
         },
@@ -2284,6 +2327,7 @@
             "y": 4.238876397889413,
             "z": 6.540091942170786
           },
+          "z_position": 6.540091942170786,
           "is_organic": true,
           "is_common_a_site": false
         },
@@ -2295,6 +2339,7 @@
             "y": 4.7021951592868145,
             "z": 14.10262149523993
           },
+          "z_position": 14.10262149523993,
           "is_organic": true,
           "is_common_a_site": false
         },
@@ -2306,6 +2351,7 @@
             "y": 4.52756559700705,
             "z": 8.923345335428222
           },
+          "z_position": 8.923345335428222,
           "is_organic": true,
           "is_common_a_site": false
         },
@@ -2317,6 +2363,7 @@
             "y": 3.544965395312812,
             "z": 4.514671709760711
           },
+          "z_position": 4.514671709760711,
           "is_organic": true,
           "is_common_a_site": false
         },
@@ -2328,6 +2375,7 @@
             "y": 8.113142870498919,
             "z": 14.148802002261299
           },
+          "z_position": 14.148802002261299,
           "is_organic": true,
           "is_common_a_site": false
         },
@@ -2339,6 +2387,7 @@
             "y": 7.538123245776866,
             "z": 4.620604701136872
           },
+          "z_position": 4.620604701136872,
           "is_organic": true,
           "is_common_a_site": false
         },
@@ -2350,3364 +2399,353 @@
             "y": 1.3796129830641548,
             "z": 8.997998612542075
           },
+          "z_position": 8.997998612542075,
           "is_organic": true,
           "is_common_a_site": false
         }
       },
-      "molecules": {
-        "molecule_1": {
-          "molecule_id": 1,
+      "a_site_groups": {
+        "A1": {
+          "group_id": 1,
+          "group_name": "A1",
+          "region": "below_layer_2",
           "atom_indices": [
-            0
-          ],
-          "atom_count": 1,
-          "atom_symbols": [
-            "H"
-          ],
-          "molecular_formula": "H",
-          "is_organic": true,
-          "is_inorganic_cation": false,
-          "centroid": {
-            "x": 3.103043682723948,
-            "y": 0.7177197673582872,
-            "z": 14.351489694596237
-          }
-        },
-        "molecule_2": {
-          "molecule_id": 2,
-          "atom_indices": [
-            1,
-            13,
-            20,
-            22,
-            23,
-            27,
-            44,
-            47,
-            49
-          ],
-          "atom_count": 9,
-          "atom_symbols": [
-            "H",
-            "C",
-            "H",
-            "C",
-            "H",
-            "N",
-            "H",
-            "H",
-            "H"
-          ],
-          "molecular_formula": "C2H6N",
-          "is_organic": true,
-          "is_inorganic_cation": false,
-          "centroid": {
-            "x": 1.0239404325631811,
-            "y": 4.537061800002399,
-            "z": 7.93446838222322
-          }
-        },
-        "molecule_3": {
-          "molecule_id": 3,
-          "atom_indices": [
-            2
-          ],
-          "atom_count": 1,
-          "atom_symbols": [
-            "H"
-          ],
-          "molecular_formula": "H",
-          "is_organic": true,
-          "is_inorganic_cation": false,
-          "centroid": {
-            "x": 0.26048409175151815,
-            "y": 3.9355619581770247,
-            "z": 3.7966407081804627
-          }
-        },
-        "molecule_4": {
-          "molecule_id": 4,
-          "atom_indices": [
-            3,
-            15,
-            32,
-            35,
-            41,
-            50
-          ],
-          "atom_count": 6,
-          "atom_symbols": [
-            "H",
-            "N",
-            "H",
-            "C",
-            "H",
-            "H"
-          ],
-          "molecular_formula": "CH4N",
-          "is_organic": true,
-          "is_inorganic_cation": false,
-          "centroid": {
-            "x": 7.055923328268094,
-            "y": 3.8934472790705428,
-            "z": 5.108551164459543
-          }
-        },
-        "molecule_5": {
-          "molecule_id": 5,
-          "atom_indices": [
-            4,
-            8,
-            43
-          ],
-          "atom_count": 3,
-          "atom_symbols": [
-            "H",
-            "C",
-            "H"
-          ],
-          "molecular_formula": "CH2",
-          "is_organic": true,
-          "is_inorganic_cation": false,
-          "centroid": {
-            "x": 1.6722915325801946,
-            "y": 3.8157545327838718,
-            "z": 14.697777274619796
-          }
-        },
-        "molecule_6": {
-          "molecule_id": 6,
-          "atom_indices": [
-            5
-          ],
-          "atom_count": 1,
-          "atom_symbols": [
-            "H"
-          ],
-          "molecular_formula": "H",
-          "is_organic": true,
-          "is_inorganic_cation": false,
-          "centroid": {
-            "x": 0.8152695337501765,
-            "y": 3.760991531920686,
-            "z": 0.6143919937949366
-          }
-        },
-        "molecule_7": {
-          "molecule_id": 7,
-          "atom_indices": [
-            6
-          ],
-          "atom_count": 1,
-          "atom_symbols": [
-            "H"
-          ],
-          "molecular_formula": "H",
-          "is_organic": true,
-          "is_inorganic_cation": false,
-          "centroid": {
-            "x": 0.4262297260467722,
-            "y": 4.417680124542461,
-            "z": 13.020559613791969
-          }
-        },
-        "molecule_8": {
-          "molecule_id": 8,
-          "atom_indices": [
-            7,
-            25,
-            48
-          ],
-          "atom_count": 3,
-          "atom_symbols": [
-            "H",
-            "N",
-            "H"
-          ],
-          "molecular_formula": "H2N",
-          "is_organic": true,
-          "is_inorganic_cation": false,
-          "centroid": {
-            "x": 7.883890659999224,
-            "y": 4.955543365448309,
-            "z": 14.225743389851582
-          }
-        },
-        "molecule_9": {
-          "molecule_id": 9,
-          "atom_indices": [
+            5,
             9
-          ],
-          "atom_count": 1,
-          "atom_symbols": [
-            "H"
-          ],
-          "molecular_formula": "H",
-          "is_organic": true,
-          "is_inorganic_cation": false,
-          "centroid": {
-            "x": 4.682746864486189,
-            "y": 7.618613811531678,
-            "z": 0.7136166232847665
-          }
-        },
-        "molecule_10": {
-          "molecule_id": 10,
-          "atom_indices": [
-            10,
-            14,
-            42
-          ],
-          "atom_count": 3,
-          "atom_symbols": [
-            "H",
-            "C",
-            "H"
-          ],
-          "molecular_formula": "CH2",
-          "is_organic": true,
-          "is_inorganic_cation": false,
-          "centroid": {
-            "x": 5.44319610231308,
-            "y": 1.3010617358317396,
-            "z": 14.603354131415626
-          }
-        },
-        "molecule_11": {
-          "molecule_id": 11,
-          "atom_indices": [
-            11,
-            51
           ],
           "atom_count": 2,
           "atom_symbols": [
             "H",
-            "N"
-          ],
-          "molecular_formula": "HN",
-          "is_organic": true,
-          "is_inorganic_cation": false,
-          "centroid": {
-            "x": 4.107066816820398,
-            "y": 7.59882589345335,
-            "z": 14.105125157425569
-          }
-        },
-        "molecule_12": {
-          "molecule_id": 12,
-          "atom_indices": [
-            12
-          ],
-          "atom_count": 1,
-          "atom_symbols": [
             "H"
           ],
-          "molecular_formula": "H",
-          "is_organic": true,
-          "is_inorganic_cation": false,
-          "centroid": {
-            "x": 4.050123565623011,
-            "y": 0.9093257452323715,
-            "z": 12.988148701733438
-          }
-        },
-        "molecule_13": {
-          "molecule_id": 13,
-          "atom_indices": [
-            16,
-            17,
-            18,
-            31,
-            33,
-            45,
-            46,
-            53
-          ],
-          "atom_count": 8,
-          "atom_symbols": [
-            "H",
-            "N",
-            "C",
-            "C",
-            "H",
-            "H",
-            "H",
-            "H"
-          ],
-          "molecular_formula": "C2H5N",
-          "is_organic": true,
-          "is_inorganic_cation": false,
-          "centroid": {
-            "x": 4.15278532231586,
-            "y": 1.1632156991320166,
-            "z": 8.214111125244292
-          }
-        },
-        "molecule_14": {
-          "molecule_id": 14,
-          "atom_indices": [
-            19
-          ],
-          "atom_count": 1,
-          "atom_symbols": [
-            "H"
-          ],
-          "molecular_formula": "H",
-          "is_organic": true,
-          "is_inorganic_cation": false,
-          "centroid": {
-            "x": 4.881928096669262,
-            "y": 7.095556194285194,
-            "z": 8.662865535002457
-          }
-        },
-        "molecule_15": {
-          "molecule_id": 15,
-          "atom_indices": [
-            21
-          ],
-          "atom_count": 1,
-          "atom_symbols": [
-            "H"
-          ],
-          "molecular_formula": "H",
-          "is_organic": true,
-          "is_inorganic_cation": false,
-          "centroid": {
-            "x": 3.599594903840918,
-            "y": 0.9554341744628654,
-            "z": 4.205719634424164
-          }
-        },
-        "molecule_16": {
-          "molecule_id": 16,
-          "atom_indices": [
-            24
-          ],
-          "atom_count": 1,
-          "atom_symbols": [
-            "H"
-          ],
-          "molecular_formula": "H",
-          "is_organic": true,
-          "is_inorganic_cation": false,
-          "centroid": {
-            "x": 7.180959266724609,
-            "y": 4.856017700378275,
-            "z": 8.270324523095466
-          }
-        },
-        "molecule_17": {
-          "molecule_id": 17,
-          "atom_indices": [
-            26,
-            29,
-            30,
-            34,
-            40,
-            52
-          ],
-          "atom_count": 6,
-          "atom_symbols": [
-            "H",
-            "N",
-            "C",
-            "H",
-            "H",
-            "H"
-          ],
-          "molecular_formula": "CH4N",
-          "is_organic": true,
-          "is_inorganic_cation": false,
-          "centroid": {
-            "x": 3.992041696224472,
-            "y": 7.127427629053233,
-            "z": 5.104964498254346
-          }
-        },
-        "molecule_18": {
-          "molecule_id": 18,
-          "atom_indices": [
-            28
-          ],
-          "atom_count": 1,
-          "atom_symbols": [
-            "H"
-          ],
-          "molecular_formula": "H",
-          "is_organic": true,
-          "is_inorganic_cation": false,
-          "centroid": {
-            "x": 2.7987953880115453,
-            "y": 7.452336626177421,
-            "z": 7.366236872894219
-          }
-        }
-      },
-      "interlayer_molecules": {
-        "above_layer_1": [
-          {
-            "molecule_id": 1,
-            "atom_indices": [
-              0
-            ],
-            "atom_count": 1,
-            "atom_symbols": [
-              "H"
-            ],
-            "molecular_formula": "H",
-            "is_organic": true,
-            "is_inorganic_cation": false,
-            "centroid": {
-              "x": 3.103043682723948,
-              "y": 0.7177197673582872,
-              "z": 14.351489694596237
-            },
-            "interlayer_region": "above_layer_1"
-          },
-          {
-            "molecule_id": 5,
-            "atom_indices": [
-              4,
-              8,
-              43
-            ],
-            "atom_count": 3,
-            "atom_symbols": [
-              "H",
-              "C",
-              "H"
-            ],
-            "molecular_formula": "CH2",
-            "is_organic": true,
-            "is_inorganic_cation": false,
-            "centroid": {
-              "x": 1.6722915325801946,
-              "y": 3.8157545327838718,
-              "z": 14.697777274619796
-            },
-            "interlayer_region": "above_layer_1"
-          },
-          {
-            "molecule_id": 7,
-            "atom_indices": [
-              6
-            ],
-            "atom_count": 1,
-            "atom_symbols": [
-              "H"
-            ],
-            "molecular_formula": "H",
-            "is_organic": true,
-            "is_inorganic_cation": false,
-            "centroid": {
-              "x": 0.4262297260467722,
-              "y": 4.417680124542461,
-              "z": 13.020559613791969
-            },
-            "interlayer_region": "above_layer_1"
-          },
-          {
-            "molecule_id": 8,
-            "atom_indices": [
-              7,
-              25,
-              48
-            ],
-            "atom_count": 3,
-            "atom_symbols": [
-              "H",
-              "N",
-              "H"
-            ],
-            "molecular_formula": "H2N",
-            "is_organic": true,
-            "is_inorganic_cation": false,
-            "centroid": {
-              "x": 7.883890659999224,
-              "y": 4.955543365448309,
-              "z": 14.225743389851582
-            },
-            "interlayer_region": "above_layer_1"
-          },
-          {
-            "molecule_id": 10,
-            "atom_indices": [
-              10,
-              14,
-              42
-            ],
-            "atom_count": 3,
-            "atom_symbols": [
-              "H",
-              "C",
-              "H"
-            ],
-            "molecular_formula": "CH2",
-            "is_organic": true,
-            "is_inorganic_cation": false,
-            "centroid": {
-              "x": 5.44319610231308,
-              "y": 1.3010617358317396,
-              "z": 14.603354131415626
-            },
-            "interlayer_region": "above_layer_1"
-          },
-          {
-            "molecule_id": 11,
-            "atom_indices": [
-              11,
-              51
-            ],
-            "atom_count": 2,
-            "atom_symbols": [
-              "H",
-              "N"
-            ],
-            "molecular_formula": "HN",
-            "is_organic": true,
-            "is_inorganic_cation": false,
-            "centroid": {
-              "x": 4.107066816820398,
-              "y": 7.59882589345335,
-              "z": 14.105125157425569
-            },
-            "interlayer_region": "above_layer_1"
-          },
-          {
-            "molecule_id": 12,
-            "atom_indices": [
-              12
-            ],
-            "atom_count": 1,
-            "atom_symbols": [
-              "H"
-            ],
-            "molecular_formula": "H",
-            "is_organic": true,
-            "is_inorganic_cation": false,
-            "centroid": {
-              "x": 4.050123565623011,
-              "y": 0.9093257452323715,
-              "z": 12.988148701733438
-            },
-            "interlayer_region": "above_layer_1"
-          }
-        ],
-        "interlayer_layer_2_to_layer_1": [
-          {
-            "molecule_id": 2,
-            "atom_indices": [
-              1,
-              13,
-              20,
-              22,
-              23,
-              27,
-              44,
-              47,
-              49
-            ],
-            "atom_count": 9,
-            "atom_symbols": [
-              "H",
-              "C",
-              "H",
-              "C",
-              "H",
-              "N",
-              "H",
-              "H",
-              "H"
-            ],
-            "molecular_formula": "C2H6N",
-            "is_organic": true,
-            "is_inorganic_cation": false,
-            "centroid": {
-              "x": 1.0239404325631811,
-              "y": 4.537061800002399,
-              "z": 7.93446838222322
-            },
-            "interlayer_region": "interlayer_layer_2_to_layer_1"
-          },
-          {
-            "molecule_id": 3,
-            "atom_indices": [
-              2
-            ],
-            "atom_count": 1,
-            "atom_symbols": [
-              "H"
-            ],
-            "molecular_formula": "H",
-            "is_organic": true,
-            "is_inorganic_cation": false,
-            "centroid": {
-              "x": 0.26048409175151815,
-              "y": 3.9355619581770247,
-              "z": 3.7966407081804627
-            },
-            "interlayer_region": "interlayer_layer_2_to_layer_1"
-          },
-          {
-            "molecule_id": 4,
-            "atom_indices": [
-              3,
-              15,
-              32,
-              35,
-              41,
-              50
-            ],
-            "atom_count": 6,
-            "atom_symbols": [
-              "H",
-              "N",
-              "H",
-              "C",
-              "H",
-              "H"
-            ],
-            "molecular_formula": "CH4N",
-            "is_organic": true,
-            "is_inorganic_cation": false,
-            "centroid": {
-              "x": 7.055923328268094,
-              "y": 3.8934472790705428,
-              "z": 5.108551164459543
-            },
-            "interlayer_region": "interlayer_layer_2_to_layer_1"
-          },
-          {
-            "molecule_id": 13,
-            "atom_indices": [
-              16,
-              17,
-              18,
-              31,
-              33,
-              45,
-              46,
-              53
-            ],
-            "atom_count": 8,
-            "atom_symbols": [
-              "H",
-              "N",
-              "C",
-              "C",
-              "H",
-              "H",
-              "H",
-              "H"
-            ],
-            "molecular_formula": "C2H5N",
-            "is_organic": true,
-            "is_inorganic_cation": false,
-            "centroid": {
-              "x": 4.15278532231586,
-              "y": 1.1632156991320166,
-              "z": 8.214111125244292
-            },
-            "interlayer_region": "interlayer_layer_2_to_layer_1"
-          },
-          {
-            "molecule_id": 14,
-            "atom_indices": [
-              19
-            ],
-            "atom_count": 1,
-            "atom_symbols": [
-              "H"
-            ],
-            "molecular_formula": "H",
-            "is_organic": true,
-            "is_inorganic_cation": false,
-            "centroid": {
-              "x": 4.881928096669262,
-              "y": 7.095556194285194,
-              "z": 8.662865535002457
-            },
-            "interlayer_region": "interlayer_layer_2_to_layer_1"
-          },
-          {
-            "molecule_id": 15,
-            "atom_indices": [
-              21
-            ],
-            "atom_count": 1,
-            "atom_symbols": [
-              "H"
-            ],
-            "molecular_formula": "H",
-            "is_organic": true,
-            "is_inorganic_cation": false,
-            "centroid": {
-              "x": 3.599594903840918,
-              "y": 0.9554341744628654,
-              "z": 4.205719634424164
-            },
-            "interlayer_region": "interlayer_layer_2_to_layer_1"
-          },
-          {
-            "molecule_id": 16,
-            "atom_indices": [
-              24
-            ],
-            "atom_count": 1,
-            "atom_symbols": [
-              "H"
-            ],
-            "molecular_formula": "H",
-            "is_organic": true,
-            "is_inorganic_cation": false,
-            "centroid": {
-              "x": 7.180959266724609,
-              "y": 4.856017700378275,
-              "z": 8.270324523095466
-            },
-            "interlayer_region": "interlayer_layer_2_to_layer_1"
-          },
-          {
-            "molecule_id": 17,
-            "atom_indices": [
-              26,
-              29,
-              30,
-              34,
-              40,
-              52
-            ],
-            "atom_count": 6,
-            "atom_symbols": [
-              "H",
-              "N",
-              "C",
-              "H",
-              "H",
-              "H"
-            ],
-            "molecular_formula": "CH4N",
-            "is_organic": true,
-            "is_inorganic_cation": false,
-            "centroid": {
-              "x": 3.992041696224472,
-              "y": 7.127427629053233,
-              "z": 5.104964498254346
-            },
-            "interlayer_region": "interlayer_layer_2_to_layer_1"
-          },
-          {
-            "molecule_id": 18,
-            "atom_indices": [
-              28
-            ],
-            "atom_count": 1,
-            "atom_symbols": [
-              "H"
-            ],
-            "molecular_formula": "H",
-            "is_organic": true,
-            "is_inorganic_cation": false,
-            "centroid": {
-              "x": 2.7987953880115453,
-              "y": 7.452336626177421,
-              "z": 7.366236872894219
-            },
-            "interlayer_region": "interlayer_layer_2_to_layer_1"
-          }
-        ],
-        "below_layer_2": [
-          {
-            "molecule_id": 6,
-            "atom_indices": [
-              5
-            ],
-            "atom_count": 1,
-            "atom_symbols": [
-              "H"
-            ],
-            "molecular_formula": "H",
-            "is_organic": true,
-            "is_inorganic_cation": false,
-            "centroid": {
+          "atom_coordinates": [
+            {
               "x": 0.8152695337501765,
               "y": 3.760991531920686,
               "z": 0.6143919937949366
             },
-            "interlayer_region": "below_layer_2"
-          },
-          {
-            "molecule_id": 9,
-            "atom_indices": [
-              9
-            ],
-            "atom_count": 1,
-            "atom_symbols": [
-              "H"
-            ],
-            "molecular_formula": "H",
-            "is_organic": true,
-            "is_inorganic_cation": false,
-            "centroid": {
+            {
               "x": 4.682746864486189,
               "y": 7.618613811531678,
               "z": 0.7136166232847665
+            }
+          ]
+        },
+        "A2": {
+          "group_id": 2,
+          "group_name": "A2",
+          "region": "between_layer_2_layer_1",
+          "atom_indices": [
+            1,
+            2,
+            3,
+            13,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23,
+            24,
+            26,
+            27,
+            28,
+            29,
+            30,
+            31,
+            32,
+            33,
+            34,
+            35,
+            40,
+            41,
+            44,
+            45,
+            46,
+            47,
+            49,
+            50,
+            52,
+            53
+          ],
+          "atom_count": 34,
+          "atom_symbols": [
+            "H",
+            "H",
+            "H",
+            "H",
+            "H",
+            "H",
+            "H",
+            "H",
+            "H",
+            "H",
+            "H",
+            "H",
+            "H",
+            "H",
+            "H",
+            "H",
+            "H",
+            "H",
+            "H",
+            "H",
+            "H",
+            "H",
+            "H",
+            "H",
+            "C",
+            "C",
+            "C",
+            "C",
+            "C",
+            "C",
+            "N",
+            "N",
+            "N",
+            "N"
+          ],
+          "atom_coordinates": [
+            {
+              "x": 0.788510356512969,
+              "y": 3.1824557960947932,
+              "z": 6.773339051407401
             },
-            "interlayer_region": "below_layer_2"
-          }
-        ]
+            {
+              "x": 0.26048409175151815,
+              "y": 3.9355619581770247,
+              "z": 3.7966407081804627
+            },
+            {
+              "x": 6.534214530964628,
+              "y": 3.4919363745412855,
+              "z": 3.997793879044485
+            },
+            {
+              "x": 0.4684619561892966,
+              "y": 6.079731580427654,
+              "z": 7.719022943246852
+            },
+            {
+              "x": 7.6993401012500415,
+              "y": 2.5658880761276066,
+              "z": 4.730065700336473
+            },
+            {
+              "x": 4.595787561019692,
+              "y": 1.3404379459510842,
+              "z": 9.891074346425246
+            },
+            {
+              "x": 3.090758729320197,
+              "y": 1.1416261041149733,
+              "z": 9.187039130101422
+            },
+            {
+              "x": 4.112899336098489,
+              "y": 2.3719645707304964,
+              "z": 8.682325757423818
+            },
+            {
+              "x": 4.881928096669262,
+              "y": 7.095556194285194,
+              "z": 8.662865535002457
+            },
+            {
+              "x": 1.1006132919423104,
+              "y": 3.505892286983512,
+              "z": 9.059623473294147
+            },
+            {
+              "x": 3.599594903840918,
+              "y": 0.9554341744628654,
+              "z": 4.205719634424164
+            },
+            {
+              "x": 2.233550330658569,
+              "y": 4.682627818137011,
+              "z": 8.72756147586622
+            },
+            {
+              "x": 0.9748191444934798,
+              "y": 4.991199030330053,
+              "z": 9.810308401760306
+            },
+            {
+              "x": 7.180959266724609,
+              "y": 4.856017700378275,
+              "z": 8.270324523095466
+            },
+            {
+              "x": 3.9039151013808997,
+              "y": 7.009036194548044,
+              "z": 3.811345955997203
+            },
+            {
+              "x": 1.4915524691016313,
+              "y": 4.6254005983008515,
+              "z": 6.026626081206856
+            },
+            {
+              "x": 2.7987953880115453,
+              "y": 7.452336626177421,
+              "z": 7.366236872894219
+            },
+            {
+              "x": 5.348490494038638,
+              "y": 7.528780184704092,
+              "z": 5.651917543721986
+            },
+            {
+              "x": 4.310097008017288,
+              "y": 6.123517685927205,
+              "z": 5.976549009603862
+            },
+            {
+              "x": 3.397623936358491,
+              "y": 1.3616314235708662,
+              "z": 6.498930489367372
+            },
+            {
+              "x": 7.066312389782729,
+              "y": 5.3948783637996,
+              "z": 5.415189318189843
+            },
+            {
+              "x": 5.613436992897576,
+              "y": 0.8937769197084069,
+              "z": 7.660373285682548
+            },
+            {
+              "x": 2.529759883602037,
+              "y": 7.35558270880817,
+              "z": 4.723554744942532
+            },
+            {
+              "x": 6.361107636803774,
+              "y": 3.9963688280176317,
+              "z": 6.253852649926035
+            },
+            {
+              "x": 4.319072743192445,
+              "y": 7.209525754555015,
+              "z": 5.8458150341236195
+            },
+            {
+              "x": 7.252675557427614,
+              "y": 4.366646636624325,
+              "z": 5.739733729499712
+            },
+            {
+              "x": 0.33080791898738954,
+              "y": 4.999807094851251,
+              "z": 7.830296735628178
+            },
+            {
+              "x": 4.656088324912054,
+              "y": 0.46576718971187087,
+              "z": 7.975017451070288
+            },
+            {
+              "x": 3.679291081111544,
+              "y": 0.35090845620428107,
+              "z": 6.820129929341572
+            },
+            {
+              "x": 0.602352159366717,
+              "y": 4.238876397889413,
+              "z": 6.540091942170786
+            },
+            {
+              "x": 1.22479626581627,
+              "y": 4.52756559700705,
+              "z": 8.923345335428222
+            },
+            {
+              "x": 7.421889753379781,
+              "y": 3.544965395312812,
+              "z": 4.514671709760711
+            },
+            {
+              "x": 3.540914947115522,
+              "y": 7.538123245776866,
+              "z": 4.620604701136872
+            },
+            {
+              "x": 4.076396616808834,
+              "y": 1.3796129830641548,
+              "z": 8.997998612542075
+            }
+          ]
+        }
       },
-      "molecular_analysis": {
-        "above_layer_1": {
-          "region": "above_layer_1",
-          "molecule_count": 7,
-          "molecules": {
-            "molecule_1": {
-              "molecular_formula": "H",
-              "atom_count": 1,
-              "atom_symbols": [
-                "H"
-              ],
-              "global_atom_indices": [
-                0
-              ],
-              "centroid": {
-                "x": 3.103043682723948,
-                "y": 0.7177197673582872,
-                "z": 14.351489694596237
-              },
-              "is_organic": true,
-              "is_inorganic_cation": false,
-              "connectivity": {
-                "bonds": {
-                  "bond_count": 0,
-                  "bonds": []
-                },
-                "angles": {
-                  "angle_count": 0,
-                  "angles": []
-                },
-                "dihedrals": {
-                  "dihedral_count": 0,
-                  "dihedrals": []
-                }
-              },
-              "structural_classification": {
-                "primary_type": "single_atom",
-                "secondary_type": "isolated",
-                "description": "Isolated H atom",
-                "connectivity": {
-                  "bond_count": 0,
-                  "is_connected": false,
-                  "connectivity_type": "isolated"
-                }
-              }
+      "statistics": {
+        "total_a_site_groups": 2,
+        "total_a_site_atoms": 36,
+        "group_statistics": {
+          "A1": {
+            "atom_count": 2,
+            "unique_elements": [
+              "H"
+            ],
+            "element_counts": {
+              "H": 2
             },
-            "molecule_5": {
-              "molecular_formula": "CH2",
-              "atom_count": 3,
-              "atom_symbols": [
-                "H",
-                "C",
-                "H"
-              ],
-              "global_atom_indices": [
-                4,
-                8,
-                43
-              ],
-              "centroid": {
-                "x": 1.6722915325801946,
-                "y": 3.8157545327838718,
-                "z": 14.697777274619796
-              },
-              "is_organic": true,
-              "is_inorganic_cation": false,
-              "connectivity": {
-                "bonds": {
-                  "bond_count": 2,
-                  "bonds": [
-                    {
-                      "atom_1": {
-                        "index": 0,
-                        "symbol": "H"
-                      },
-                      "atom_2": {
-                        "index": 2,
-                        "symbol": "C"
-                      },
-                      "distance": 1.0876746907957762,
-                      "bond_type": "H-C"
-                    },
-                    {
-                      "atom_1": {
-                        "index": 1,
-                        "symbol": "H"
-                      },
-                      "atom_2": {
-                        "index": 2,
-                        "symbol": "C"
-                      },
-                      "distance": 1.0896946216524381,
-                      "bond_type": "H-C"
-                    }
-                  ],
-                  "statistics": {
-                    "mean_distance": 1.0886846562241073,
-                    "std_distance": 0.0010099654283309834,
-                    "min_distance": 1.0876746907957762,
-                    "max_distance": 1.0896946216524381
-                  }
-                },
-                "angles": {
-                  "angle_count": 1,
-                  "angles": [
-                    {
-                      "atom_1": {
-                        "index": 0,
-                        "symbol": "H"
-                      },
-                      "center_atom": {
-                        "index": 2,
-                        "symbol": "C"
-                      },
-                      "atom_3": {
-                        "index": 1,
-                        "symbol": "H"
-                      },
-                      "angle_degrees": 110.14639962508289,
-                      "angle_type": "H-C-H"
-                    }
-                  ],
-                  "statistics": {
-                    "mean_angle": 110.14639962508289,
-                    "std_angle": 0.0,
-                    "min_angle": 110.14639962508289,
-                    "max_angle": 110.14639962508289
-                  }
-                },
-                "dihedrals": {
-                  "dihedral_count": 0,
-                  "dihedrals": []
-                }
-              },
-              "structural_classification": {
-                "primary_type": "organic_molecule",
-                "secondary_type": "hydrocarbon",
-                "description": "Organic hydrocarbon molecule",
-                "connectivity": {
-                  "bond_count": 2,
-                  "is_connected": true,
-                  "connectivity_type": "linear"
-                }
-              }
+            "centroid": {
+              "x": 2.7490081991181827,
+              "y": 5.6898026717261825,
+              "z": 0.6640043085398515
             },
-            "molecule_7": {
-              "molecular_formula": "H",
-              "atom_count": 1,
-              "atom_symbols": [
-                "H"
-              ],
-              "global_atom_indices": [
-                6
-              ],
-              "centroid": {
-                "x": 0.4262297260467722,
-                "y": 4.417680124542461,
-                "z": 13.020559613791969
-              },
-              "is_organic": true,
-              "is_inorganic_cation": false,
-              "connectivity": {
-                "bonds": {
-                  "bond_count": 0,
-                  "bonds": []
-                },
-                "angles": {
-                  "angle_count": 0,
-                  "angles": []
-                },
-                "dihedrals": {
-                  "dihedral_count": 0,
-                  "dihedrals": []
-                }
-              },
-              "structural_classification": {
-                "primary_type": "single_atom",
-                "secondary_type": "isolated",
-                "description": "Isolated H atom",
-                "connectivity": {
-                  "bond_count": 0,
-                  "is_connected": false,
-                  "connectivity_type": "isolated"
-                }
-              }
+            "z_range": {
+              "min": 0.6143919937949366,
+              "max": 0.7136166232847665
+            }
+          },
+          "A2": {
+            "atom_count": 34,
+            "unique_elements": [
+              "N",
+              "C",
+              "H"
+            ],
+            "element_counts": {
+              "N": 4,
+              "C": 6,
+              "H": 24
             },
-            "molecule_8": {
-              "molecular_formula": "H2N",
-              "atom_count": 3,
-              "atom_symbols": [
-                "H",
-                "N",
-                "H"
-              ],
-              "global_atom_indices": [
-                7,
-                25,
-                48
-              ],
-              "centroid": {
-                "x": 7.883890659999224,
-                "y": 4.955543365448309,
-                "z": 14.225743389851582
-              },
-              "is_organic": true,
-              "is_inorganic_cation": false,
-              "connectivity": {
-                "bonds": {
-                  "bond_count": 2,
-                  "bonds": [
-                    {
-                      "atom_1": {
-                        "index": 0,
-                        "symbol": "H"
-                      },
-                      "atom_2": {
-                        "index": 2,
-                        "symbol": "N"
-                      },
-                      "distance": 1.0386563587509083,
-                      "bond_type": "H-N"
-                    },
-                    {
-                      "atom_1": {
-                        "index": 1,
-                        "symbol": "H"
-                      },
-                      "atom_2": {
-                        "index": 2,
-                        "symbol": "N"
-                      },
-                      "distance": 1.0300619251676868,
-                      "bond_type": "H-N"
-                    }
-                  ],
-                  "statistics": {
-                    "mean_distance": 1.0343591419592975,
-                    "std_distance": 0.0042972167916107695,
-                    "min_distance": 1.0300619251676868,
-                    "max_distance": 1.0386563587509083
-                  }
-                },
-                "angles": {
-                  "angle_count": 1,
-                  "angles": [
-                    {
-                      "atom_1": {
-                        "index": 0,
-                        "symbol": "H"
-                      },
-                      "center_atom": {
-                        "index": 2,
-                        "symbol": "N"
-                      },
-                      "atom_3": {
-                        "index": 1,
-                        "symbol": "H"
-                      },
-                      "angle_degrees": 106.81882464167879,
-                      "angle_type": "H-N-H"
-                    }
-                  ],
-                  "statistics": {
-                    "mean_angle": 106.81882464167879,
-                    "std_angle": 0.0,
-                    "min_angle": 106.81882464167879,
-                    "max_angle": 106.81882464167879
-                  }
-                },
-                "dihedrals": {
-                  "dihedral_count": 0,
-                  "dihedrals": []
-                }
-              },
-              "structural_classification": {
-                "primary_type": "organic_molecule",
-                "secondary_type": "other",
-                "description": "Other organic molecule",
-                "connectivity": {
-                  "bond_count": 2,
-                  "is_connected": true,
-                  "connectivity_type": "linear"
-                }
-              }
+            "centroid": {
+              "x": 3.748449951927905,
+              "y": 4.134101114567681,
+              "z": 6.785470167407159
             },
-            "molecule_10": {
-              "molecular_formula": "CH2",
-              "atom_count": 3,
-              "atom_symbols": [
-                "H",
-                "C",
-                "H"
-              ],
-              "global_atom_indices": [
-                10,
-                14,
-                42
-              ],
-              "centroid": {
-                "x": 5.44319610231308,
-                "y": 1.3010617358317396,
-                "z": 14.603354131415626
-              },
-              "is_organic": true,
-              "is_inorganic_cation": false,
-              "connectivity": {
-                "bonds": {
-                  "bond_count": 2,
-                  "bonds": [
-                    {
-                      "atom_1": {
-                        "index": 0,
-                        "symbol": "H"
-                      },
-                      "atom_2": {
-                        "index": 2,
-                        "symbol": "C"
-                      },
-                      "distance": 1.0879019979430102,
-                      "bond_type": "H-C"
-                    },
-                    {
-                      "atom_1": {
-                        "index": 1,
-                        "symbol": "H"
-                      },
-                      "atom_2": {
-                        "index": 2,
-                        "symbol": "C"
-                      },
-                      "distance": 1.0883507906977545,
-                      "bond_type": "H-C"
-                    }
-                  ],
-                  "statistics": {
-                    "mean_distance": 1.0881263943203825,
-                    "std_distance": 0.00022439637737214913,
-                    "min_distance": 1.0879019979430102,
-                    "max_distance": 1.0883507906977545
-                  }
-                },
-                "angles": {
-                  "angle_count": 1,
-                  "angles": [
-                    {
-                      "atom_1": {
-                        "index": 0,
-                        "symbol": "H"
-                      },
-                      "center_atom": {
-                        "index": 2,
-                        "symbol": "C"
-                      },
-                      "atom_3": {
-                        "index": 1,
-                        "symbol": "H"
-                      },
-                      "angle_degrees": 110.04178700137994,
-                      "angle_type": "H-C-H"
-                    }
-                  ],
-                  "statistics": {
-                    "mean_angle": 110.04178700137994,
-                    "std_angle": 0.0,
-                    "min_angle": 110.04178700137994,
-                    "max_angle": 110.04178700137994
-                  }
-                },
-                "dihedrals": {
-                  "dihedral_count": 0,
-                  "dihedrals": []
-                }
-              },
-              "structural_classification": {
-                "primary_type": "organic_molecule",
-                "secondary_type": "hydrocarbon",
-                "description": "Organic hydrocarbon molecule",
-                "connectivity": {
-                  "bond_count": 2,
-                  "is_connected": true,
-                  "connectivity_type": "linear"
-                }
-              }
-            },
-            "molecule_11": {
-              "molecular_formula": "HN",
-              "atom_count": 2,
-              "atom_symbols": [
-                "H",
-                "N"
-              ],
-              "global_atom_indices": [
-                11,
-                51
-              ],
-              "centroid": {
-                "x": 4.107066816820398,
-                "y": 7.59882589345335,
-                "z": 14.105125157425569
-              },
-              "is_organic": true,
-              "is_inorganic_cation": false,
-              "connectivity": {
-                "bonds": {
-                  "bond_count": 1,
-                  "bonds": [
-                    {
-                      "atom_1": {
-                        "index": 0,
-                        "symbol": "H"
-                      },
-                      "atom_2": {
-                        "index": 1,
-                        "symbol": "N"
-                      },
-                      "distance": 1.0356353870656863,
-                      "bond_type": "H-N"
-                    }
-                  ],
-                  "statistics": {
-                    "mean_distance": 1.0356353870656863,
-                    "std_distance": 0.0,
-                    "min_distance": 1.0356353870656863,
-                    "max_distance": 1.0356353870656863
-                  }
-                },
-                "angles": {
-                  "angle_count": 0,
-                  "angles": []
-                },
-                "dihedrals": {
-                  "dihedral_count": 0,
-                  "dihedrals": []
-                }
-              },
-              "structural_classification": {
-                "primary_type": "organic_molecule",
-                "secondary_type": "other",
-                "description": "Other organic molecule",
-                "connectivity": {
-                  "bond_count": 1,
-                  "is_connected": true,
-                  "connectivity_type": "linear"
-                }
-              }
-            },
-            "molecule_12": {
-              "molecular_formula": "H",
-              "atom_count": 1,
-              "atom_symbols": [
-                "H"
-              ],
-              "global_atom_indices": [
-                12
-              ],
-              "centroid": {
-                "x": 4.050123565623011,
-                "y": 0.9093257452323715,
-                "z": 12.988148701733438
-              },
-              "is_organic": true,
-              "is_inorganic_cation": false,
-              "connectivity": {
-                "bonds": {
-                  "bond_count": 0,
-                  "bonds": []
-                },
-                "angles": {
-                  "angle_count": 0,
-                  "angles": []
-                },
-                "dihedrals": {
-                  "dihedral_count": 0,
-                  "dihedrals": []
-                }
-              },
-              "structural_classification": {
-                "primary_type": "single_atom",
-                "secondary_type": "isolated",
-                "description": "Isolated H atom",
-                "connectivity": {
-                  "bond_count": 0,
-                  "is_connected": false,
-                  "connectivity_type": "isolated"
-                }
-              }
+            "z_range": {
+              "min": 3.7966407081804627,
+              "max": 9.891074346425246
             }
           }
         },
-        "interlayer_layer_2_to_layer_1": {
-          "region": "interlayer_layer_2_to_layer_1",
-          "molecule_count": 9,
-          "molecules": {
-            "molecule_2": {
-              "molecular_formula": "C2H6N",
-              "atom_count": 9,
-              "atom_symbols": [
-                "H",
-                "C",
-                "H",
-                "C",
-                "H",
-                "N",
-                "H",
-                "H",
-                "H"
-              ],
-              "global_atom_indices": [
-                1,
-                13,
-                20,
-                22,
-                23,
-                27,
-                44,
-                47,
-                49
-              ],
-              "centroid": {
-                "x": 1.0239404325631811,
-                "y": 4.537061800002399,
-                "z": 7.93446838222322
-              },
-              "is_organic": true,
-              "is_inorganic_cation": false,
-              "connectivity": {
-                "bonds": {
-                  "bond_count": 8,
-                  "bonds": [
-                    {
-                      "atom_1": {
-                        "index": 0,
-                        "symbol": "H"
-                      },
-                      "atom_2": {
-                        "index": 7,
-                        "symbol": "C"
-                      },
-                      "distance": 1.0977629872737045,
-                      "bond_type": "H-C"
-                    },
-                    {
-                      "atom_1": {
-                        "index": 1,
-                        "symbol": "H"
-                      },
-                      "atom_2": {
-                        "index": 6,
-                        "symbol": "C"
-                      },
-                      "distance": 1.0943342201431725,
-                      "bond_type": "H-C"
-                    },
-                    {
-                      "atom_1": {
-                        "index": 2,
-                        "symbol": "H"
-                      },
-                      "atom_2": {
-                        "index": 8,
-                        "symbol": "N"
-                      },
-                      "distance": 1.0381760420443333,
-                      "bond_type": "H-N"
-                    },
-                    {
-                      "atom_1": {
-                        "index": 3,
-                        "symbol": "H"
-                      },
-                      "atom_2": {
-                        "index": 8,
-                        "symbol": "N"
-                      },
-                      "distance": 1.0392114199827729,
-                      "bond_type": "H-N"
-                    },
-                    {
-                      "atom_1": {
-                        "index": 4,
-                        "symbol": "H"
-                      },
-                      "atom_2": {
-                        "index": 8,
-                        "symbol": "N"
-                      },
-                      "distance": 1.0315754954034717,
-                      "bond_type": "H-N"
-                    },
-                    {
-                      "atom_1": {
-                        "index": 5,
-                        "symbol": "H"
-                      },
-                      "atom_2": {
-                        "index": 7,
-                        "symbol": "C"
-                      },
-                      "distance": 1.0971441740773176,
-                      "bond_type": "H-C"
-                    },
-                    {
-                      "atom_1": {
-                        "index": 6,
-                        "symbol": "C"
-                      },
-                      "atom_2": {
-                        "index": 8,
-                        "symbol": "N"
-                      },
-                      "distance": 1.488953470756157,
-                      "bond_type": "C-N"
-                    },
-                    {
-                      "atom_1": {
-                        "index": 6,
-                        "symbol": "C"
-                      },
-                      "atom_2": {
-                        "index": 7,
-                        "symbol": "C"
-                      },
-                      "distance": 1.5222943897690895,
-                      "bond_type": "C-C"
-                    }
-                  ],
-                  "statistics": {
-                    "mean_distance": 1.1761815249312524,
-                    "std_distance": 0.19216951605711935,
-                    "min_distance": 1.0315754954034717,
-                    "max_distance": 1.5222943897690895
-                  }
-                },
-                "angles": {
-                  "angle_count": 12,
-                  "angles": [
-                    {
-                      "atom_1": {
-                        "index": 0,
-                        "symbol": "H"
-                      },
-                      "center_atom": {
-                        "index": 7,
-                        "symbol": "C"
-                      },
-                      "atom_3": {
-                        "index": 5,
-                        "symbol": "H"
-                      },
-                      "angle_degrees": 107.51961815786399,
-                      "angle_type": "H-C-H"
-                    },
-                    {
-                      "atom_1": {
-                        "index": 0,
-                        "symbol": "H"
-                      },
-                      "center_atom": {
-                        "index": 7,
-                        "symbol": "C"
-                      },
-                      "atom_3": {
-                        "index": 6,
-                        "symbol": "C"
-                      },
-                      "angle_degrees": 109.34170260314703,
-                      "angle_type": "H-C-C"
-                    },
-                    {
-                      "atom_1": {
-                        "index": 5,
-                        "symbol": "H"
-                      },
-                      "center_atom": {
-                        "index": 7,
-                        "symbol": "C"
-                      },
-                      "atom_3": {
-                        "index": 6,
-                        "symbol": "C"
-                      },
-                      "angle_degrees": 111.41498240163665,
-                      "angle_type": "H-C-C"
-                    },
-                    {
-                      "atom_1": {
-                        "index": 1,
-                        "symbol": "H"
-                      },
-                      "center_atom": {
-                        "index": 6,
-                        "symbol": "C"
-                      },
-                      "atom_3": {
-                        "index": 8,
-                        "symbol": "N"
-                      },
-                      "angle_degrees": 108.18627604569834,
-                      "angle_type": "H-C-N"
-                    },
-                    {
-                      "atom_1": {
-                        "index": 1,
-                        "symbol": "H"
-                      },
-                      "center_atom": {
-                        "index": 6,
-                        "symbol": "C"
-                      },
-                      "atom_3": {
-                        "index": 7,
-                        "symbol": "C"
-                      },
-                      "angle_degrees": 112.62255605966604,
-                      "angle_type": "H-C-C"
-                    },
-                    {
-                      "atom_1": {
-                        "index": 8,
-                        "symbol": "N"
-                      },
-                      "center_atom": {
-                        "index": 6,
-                        "symbol": "C"
-                      },
-                      "atom_3": {
-                        "index": 7,
-                        "symbol": "C"
-                      },
-                      "angle_degrees": 110.88822069668024,
-                      "angle_type": "N-C-C"
-                    },
-                    {
-                      "atom_1": {
-                        "index": 2,
-                        "symbol": "H"
-                      },
-                      "center_atom": {
-                        "index": 8,
-                        "symbol": "N"
-                      },
-                      "atom_3": {
-                        "index": 3,
-                        "symbol": "H"
-                      },
-                      "angle_degrees": 106.71914560480339,
-                      "angle_type": "H-N-H"
-                    },
-                    {
-                      "atom_1": {
-                        "index": 2,
-                        "symbol": "H"
-                      },
-                      "center_atom": {
-                        "index": 8,
-                        "symbol": "N"
-                      },
-                      "atom_3": {
-                        "index": 4,
-                        "symbol": "H"
-                      },
-                      "angle_degrees": 107.48442601881426,
-                      "angle_type": "H-N-H"
-                    },
-                    {
-                      "atom_1": {
-                        "index": 2,
-                        "symbol": "H"
-                      },
-                      "center_atom": {
-                        "index": 8,
-                        "symbol": "N"
-                      },
-                      "atom_3": {
-                        "index": 6,
-                        "symbol": "C"
-                      },
-                      "angle_degrees": 109.6738837274479,
-                      "angle_type": "H-N-C"
-                    },
-                    {
-                      "atom_1": {
-                        "index": 3,
-                        "symbol": "H"
-                      },
-                      "center_atom": {
-                        "index": 8,
-                        "symbol": "N"
-                      },
-                      "atom_3": {
-                        "index": 4,
-                        "symbol": "H"
-                      },
-                      "angle_degrees": 109.27773259120394,
-                      "angle_type": "H-N-H"
-                    },
-                    {
-                      "atom_1": {
-                        "index": 3,
-                        "symbol": "H"
-                      },
-                      "center_atom": {
-                        "index": 8,
-                        "symbol": "N"
-                      },
-                      "atom_3": {
-                        "index": 6,
-                        "symbol": "C"
-                      },
-                      "angle_degrees": 113.40260180219109,
-                      "angle_type": "H-N-C"
-                    },
-                    {
-                      "atom_1": {
-                        "index": 4,
-                        "symbol": "H"
-                      },
-                      "center_atom": {
-                        "index": 8,
-                        "symbol": "N"
-                      },
-                      "atom_3": {
-                        "index": 6,
-                        "symbol": "C"
-                      },
-                      "angle_degrees": 110.06901563955522,
-                      "angle_type": "H-N-C"
-                    }
-                  ],
-                  "statistics": {
-                    "mean_angle": 109.71668011239234,
-                    "std_angle": 1.9975717747950381,
-                    "min_angle": 106.71914560480339,
-                    "max_angle": 113.40260180219109
-                  }
-                },
-                "dihedrals": {
-                  "dihedral_count": 10,
-                  "dihedrals": [
-                    {
-                      "atom_1": {
-                        "index": 1,
-                        "symbol": "H"
-                      },
-                      "atom_2": {
-                        "index": 6,
-                        "symbol": "C"
-                      },
-                      "atom_3": {
-                        "index": 8,
-                        "symbol": "N"
-                      },
-                      "atom_4": {
-                        "index": 2,
-                        "symbol": "H"
-                      },
-                      "dihedral_degrees": 179.04844249033934,
-                      "dihedral_type": "H-C-N-H"
-                    },
-                    {
-                      "atom_1": {
-                        "index": 1,
-                        "symbol": "H"
-                      },
-                      "atom_2": {
-                        "index": 6,
-                        "symbol": "C"
-                      },
-                      "atom_3": {
-                        "index": 8,
-                        "symbol": "N"
-                      },
-                      "atom_4": {
-                        "index": 3,
-                        "symbol": "H"
-                      },
-                      "dihedral_degrees": -61.765941662165766,
-                      "dihedral_type": "H-C-N-H"
-                    },
-                    {
-                      "atom_1": {
-                        "index": 1,
-                        "symbol": "H"
-                      },
-                      "atom_2": {
-                        "index": 6,
-                        "symbol": "C"
-                      },
-                      "atom_3": {
-                        "index": 8,
-                        "symbol": "N"
-                      },
-                      "atom_4": {
-                        "index": 4,
-                        "symbol": "H"
-                      },
-                      "dihedral_degrees": 60.993354519683834,
-                      "dihedral_type": "H-C-N-H"
-                    },
-                    {
-                      "atom_1": {
-                        "index": 7,
-                        "symbol": "C"
-                      },
-                      "atom_2": {
-                        "index": 6,
-                        "symbol": "C"
-                      },
-                      "atom_3": {
-                        "index": 8,
-                        "symbol": "N"
-                      },
-                      "atom_4": {
-                        "index": 2,
-                        "symbol": "H"
-                      },
-                      "dihedral_degrees": -56.98305137744317,
-                      "dihedral_type": "C-C-N-H"
-                    },
-                    {
-                      "atom_1": {
-                        "index": 7,
-                        "symbol": "C"
-                      },
-                      "atom_2": {
-                        "index": 6,
-                        "symbol": "C"
-                      },
-                      "atom_3": {
-                        "index": 8,
-                        "symbol": "N"
-                      },
-                      "atom_4": {
-                        "index": 3,
-                        "symbol": "H"
-                      },
-                      "dihedral_degrees": 62.20256447005209,
-                      "dihedral_type": "C-C-N-H"
-                    },
-                    {
-                      "atom_1": {
-                        "index": 7,
-                        "symbol": "C"
-                      },
-                      "atom_2": {
-                        "index": 6,
-                        "symbol": "C"
-                      },
-                      "atom_3": {
-                        "index": 8,
-                        "symbol": "N"
-                      },
-                      "atom_4": {
-                        "index": 4,
-                        "symbol": "H"
-                      },
-                      "dihedral_degrees": -175.03813934809833,
-                      "dihedral_type": "C-C-N-H"
-                    },
-                    {
-                      "atom_1": {
-                        "index": 1,
-                        "symbol": "H"
-                      },
-                      "atom_2": {
-                        "index": 6,
-                        "symbol": "C"
-                      },
-                      "atom_3": {
-                        "index": 7,
-                        "symbol": "C"
-                      },
-                      "atom_4": {
-                        "index": 0,
-                        "symbol": "H"
-                      },
-                      "dihedral_degrees": 160.80530945427031,
-                      "dihedral_type": "H-C-C-H"
-                    },
-                    {
-                      "atom_1": {
-                        "index": 1,
-                        "symbol": "H"
-                      },
-                      "atom_2": {
-                        "index": 6,
-                        "symbol": "C"
-                      },
-                      "atom_3": {
-                        "index": 7,
-                        "symbol": "C"
-                      },
-                      "atom_4": {
-                        "index": 5,
-                        "symbol": "H"
-                      },
-                      "dihedral_degrees": 42.09608195920284,
-                      "dihedral_type": "H-C-C-H"
-                    },
-                    {
-                      "atom_1": {
-                        "index": 8,
-                        "symbol": "N"
-                      },
-                      "atom_2": {
-                        "index": 6,
-                        "symbol": "C"
-                      },
-                      "atom_3": {
-                        "index": 7,
-                        "symbol": "C"
-                      },
-                      "atom_4": {
-                        "index": 0,
-                        "symbol": "H"
-                      },
-                      "dihedral_degrees": 39.40993223931622,
-                      "dihedral_type": "N-C-C-H"
-                    },
-                    {
-                      "atom_1": {
-                        "index": 8,
-                        "symbol": "N"
-                      },
-                      "atom_2": {
-                        "index": 6,
-                        "symbol": "C"
-                      },
-                      "atom_3": {
-                        "index": 7,
-                        "symbol": "C"
-                      },
-                      "atom_4": {
-                        "index": 5,
-                        "symbol": "H"
-                      },
-                      "dihedral_degrees": -79.29929525575133,
-                      "dihedral_type": "N-C-C-H"
-                    }
-                  ],
-                  "statistics": {
-                    "mean_dihedral": 91.76421127763233,
-                    "std_dihedral": 53.49148244223589,
-                    "min_dihedral": 39.40993223931622,
-                    "max_dihedral": 179.04844249033934
-                  }
-                }
-              },
-              "structural_classification": {
-                "primary_type": "organic_cation",
-                "secondary_type": "complex_ammonium",
-                "description": "Complex ammonium-based cation",
-                "connectivity": {
-                  "bond_count": 8,
-                  "is_connected": true,
-                  "connectivity_type": "linear"
-                }
-              }
-            },
-            "molecule_3": {
-              "molecular_formula": "H",
-              "atom_count": 1,
-              "atom_symbols": [
-                "H"
-              ],
-              "global_atom_indices": [
-                2
-              ],
-              "centroid": {
-                "x": 0.26048409175151815,
-                "y": 3.9355619581770247,
-                "z": 3.7966407081804627
-              },
-              "is_organic": true,
-              "is_inorganic_cation": false,
-              "connectivity": {
-                "bonds": {
-                  "bond_count": 0,
-                  "bonds": []
-                },
-                "angles": {
-                  "angle_count": 0,
-                  "angles": []
-                },
-                "dihedrals": {
-                  "dihedral_count": 0,
-                  "dihedrals": []
-                }
-              },
-              "structural_classification": {
-                "primary_type": "single_atom",
-                "secondary_type": "isolated",
-                "description": "Isolated H atom",
-                "connectivity": {
-                  "bond_count": 0,
-                  "is_connected": false,
-                  "connectivity_type": "isolated"
-                }
-              }
-            },
-            "molecule_4": {
-              "molecular_formula": "CH4N",
-              "atom_count": 6,
-              "atom_symbols": [
-                "H",
-                "N",
-                "H",
-                "C",
-                "H",
-                "H"
-              ],
-              "global_atom_indices": [
-                3,
-                15,
-                32,
-                35,
-                41,
-                50
-              ],
-              "centroid": {
-                "x": 7.055923328268094,
-                "y": 3.8934472790705428,
-                "z": 5.108551164459543
-              },
-              "is_organic": true,
-              "is_inorganic_cation": false,
-              "connectivity": {
-                "bonds": {
-                  "bond_count": 5,
-                  "bonds": [
-                    {
-                      "atom_1": {
-                        "index": 0,
-                        "symbol": "H"
-                      },
-                      "atom_2": {
-                        "index": 5,
-                        "symbol": "N"
-                      },
-                      "distance": 1.0285631091088627,
-                      "bond_type": "H-N"
-                    },
-                    {
-                      "atom_1": {
-                        "index": 1,
-                        "symbol": "H"
-                      },
-                      "atom_2": {
-                        "index": 5,
-                        "symbol": "N"
-                      },
-                      "distance": 1.0401757849769282,
-                      "bond_type": "H-N"
-                    },
-                    {
-                      "atom_1": {
-                        "index": 2,
-                        "symbol": "H"
-                      },
-                      "atom_2": {
-                        "index": 4,
-                        "symbol": "C"
-                      },
-                      "distance": 1.094221545180387,
-                      "bond_type": "H-C"
-                    },
-                    {
-                      "atom_1": {
-                        "index": 3,
-                        "symbol": "H"
-                      },
-                      "atom_2": {
-                        "index": 4,
-                        "symbol": "C"
-                      },
-                      "distance": 1.0937628979684864,
-                      "bond_type": "H-C"
-                    },
-                    {
-                      "atom_1": {
-                        "index": 4,
-                        "symbol": "C"
-                      },
-                      "atom_2": {
-                        "index": 5,
-                        "symbol": "N"
-                      },
-                      "distance": 1.48477959934866,
-                      "bond_type": "C-N"
-                    }
-                  ],
-                  "statistics": {
-                    "mean_distance": 1.148300587316665,
-                    "std_distance": 0.17037902715088754,
-                    "min_distance": 1.0285631091088627,
-                    "max_distance": 1.48477959934866
-                  }
-                },
-                "angles": {
-                  "angle_count": 6,
-                  "angles": [
-                    {
-                      "atom_1": {
-                        "index": 0,
-                        "symbol": "H"
-                      },
-                      "center_atom": {
-                        "index": 5,
-                        "symbol": "N"
-                      },
-                      "atom_3": {
-                        "index": 1,
-                        "symbol": "H"
-                      },
-                      "angle_degrees": 106.60248991150756,
-                      "angle_type": "H-N-H"
-                    },
-                    {
-                      "atom_1": {
-                        "index": 0,
-                        "symbol": "H"
-                      },
-                      "center_atom": {
-                        "index": 5,
-                        "symbol": "N"
-                      },
-                      "atom_3": {
-                        "index": 4,
-                        "symbol": "C"
-                      },
-                      "angle_degrees": 110.16951376326962,
-                      "angle_type": "H-N-C"
-                    },
-                    {
-                      "atom_1": {
-                        "index": 1,
-                        "symbol": "H"
-                      },
-                      "center_atom": {
-                        "index": 5,
-                        "symbol": "N"
-                      },
-                      "atom_3": {
-                        "index": 4,
-                        "symbol": "C"
-                      },
-                      "angle_degrees": 112.36107547586674,
-                      "angle_type": "H-N-C"
-                    },
-                    {
-                      "atom_1": {
-                        "index": 2,
-                        "symbol": "H"
-                      },
-                      "center_atom": {
-                        "index": 4,
-                        "symbol": "C"
-                      },
-                      "atom_3": {
-                        "index": 3,
-                        "symbol": "H"
-                      },
-                      "angle_degrees": 108.58453667125048,
-                      "angle_type": "H-C-H"
-                    },
-                    {
-                      "atom_1": {
-                        "index": 2,
-                        "symbol": "H"
-                      },
-                      "center_atom": {
-                        "index": 4,
-                        "symbol": "C"
-                      },
-                      "atom_3": {
-                        "index": 5,
-                        "symbol": "N"
-                      },
-                      "angle_degrees": 107.14081949210416,
-                      "angle_type": "H-C-N"
-                    },
-                    {
-                      "atom_1": {
-                        "index": 3,
-                        "symbol": "H"
-                      },
-                      "center_atom": {
-                        "index": 4,
-                        "symbol": "C"
-                      },
-                      "atom_3": {
-                        "index": 5,
-                        "symbol": "N"
-                      },
-                      "angle_degrees": 107.06023559502432,
-                      "angle_type": "H-C-N"
-                    }
-                  ],
-                  "statistics": {
-                    "mean_angle": 108.65311181817049,
-                    "std_angle": 2.0446069240199165,
-                    "min_angle": 106.60248991150756,
-                    "max_angle": 112.36107547586674
-                  }
-                },
-                "dihedrals": {
-                  "dihedral_count": 4,
-                  "dihedrals": [
-                    {
-                      "atom_1": {
-                        "index": 2,
-                        "symbol": "H"
-                      },
-                      "atom_2": {
-                        "index": 4,
-                        "symbol": "C"
-                      },
-                      "atom_3": {
-                        "index": 5,
-                        "symbol": "N"
-                      },
-                      "atom_4": {
-                        "index": 0,
-                        "symbol": "H"
-                      },
-                      "dihedral_degrees": -67.08827565866804,
-                      "dihedral_type": "H-C-N-H"
-                    },
-                    {
-                      "atom_1": {
-                        "index": 2,
-                        "symbol": "H"
-                      },
-                      "atom_2": {
-                        "index": 4,
-                        "symbol": "C"
-                      },
-                      "atom_3": {
-                        "index": 5,
-                        "symbol": "N"
-                      },
-                      "atom_4": {
-                        "index": 1,
-                        "symbol": "H"
-                      },
-                      "dihedral_degrees": 174.20964916337377,
-                      "dihedral_type": "H-C-N-H"
-                    },
-                    {
-                      "atom_1": {
-                        "index": 3,
-                        "symbol": "H"
-                      },
-                      "atom_2": {
-                        "index": 4,
-                        "symbol": "C"
-                      },
-                      "atom_3": {
-                        "index": 5,
-                        "symbol": "N"
-                      },
-                      "atom_4": {
-                        "index": 0,
-                        "symbol": "H"
-                      },
-                      "dihedral_degrees": 49.24020401671412,
-                      "dihedral_type": "H-C-N-H"
-                    },
-                    {
-                      "atom_1": {
-                        "index": 3,
-                        "symbol": "H"
-                      },
-                      "atom_2": {
-                        "index": 4,
-                        "symbol": "C"
-                      },
-                      "atom_3": {
-                        "index": 5,
-                        "symbol": "N"
-                      },
-                      "atom_4": {
-                        "index": 1,
-                        "symbol": "H"
-                      },
-                      "dihedral_degrees": -69.4618711612441,
-                      "dihedral_type": "H-C-N-H"
-                    }
-                  ],
-                  "statistics": {
-                    "mean_dihedral": 90.00000000000001,
-                    "std_dihedral": 49.242735071551685,
-                    "min_dihedral": 49.24020401671412,
-                    "max_dihedral": 174.20964916337377
-                  }
-                }
-              },
-              "structural_classification": {
-                "primary_type": "organic_cation",
-                "secondary_type": "simple_ammonium",
-                "description": "Simple ammonium-based cation",
-                "connectivity": {
-                  "bond_count": 5,
-                  "is_connected": true,
-                  "connectivity_type": "linear"
-                }
-              }
-            },
-            "molecule_13": {
-              "molecular_formula": "C2H5N",
-              "atom_count": 8,
-              "atom_symbols": [
-                "H",
-                "N",
-                "C",
-                "C",
-                "H",
-                "H",
-                "H",
-                "H"
-              ],
-              "global_atom_indices": [
-                16,
-                17,
-                18,
-                31,
-                33,
-                45,
-                46,
-                53
-              ],
-              "centroid": {
-                "x": 4.15278532231586,
-                "y": 1.1632156991320166,
-                "z": 8.214111125244292
-              },
-              "is_organic": true,
-              "is_inorganic_cation": false,
-              "connectivity": {
-                "bonds": {
-                  "bond_count": 7,
-                  "bonds": [
-                    {
-                      "atom_1": {
-                        "index": 0,
-                        "symbol": "H"
-                      },
-                      "atom_2": {
-                        "index": 7,
-                        "symbol": "N"
-                      },
-                      "distance": 1.0338693838740078,
-                      "bond_type": "H-N"
-                    },
-                    {
-                      "atom_1": {
-                        "index": 1,
-                        "symbol": "H"
-                      },
-                      "atom_2": {
-                        "index": 7,
-                        "symbol": "N"
-                      },
-                      "distance": 1.031434010048215,
-                      "bond_type": "H-N"
-                    },
-                    {
-                      "atom_1": {
-                        "index": 2,
-                        "symbol": "H"
-                      },
-                      "atom_2": {
-                        "index": 7,
-                        "symbol": "N"
-                      },
-                      "distance": 1.0419901503939275,
-                      "bond_type": "H-N"
-                    },
-                    {
-                      "atom_1": {
-                        "index": 3,
-                        "symbol": "H"
-                      },
-                      "atom_2": {
-                        "index": 6,
-                        "symbol": "C"
-                      },
-                      "distance": 1.0972995841771709,
-                      "bond_type": "H-C"
-                    },
-                    {
-                      "atom_1": {
-                        "index": 4,
-                        "symbol": "H"
-                      },
-                      "atom_2": {
-                        "index": 5,
-                        "symbol": "C"
-                      },
-                      "distance": 1.0948560416227826,
-                      "bond_type": "H-C"
-                    },
-                    {
-                      "atom_1": {
-                        "index": 5,
-                        "symbol": "C"
-                      },
-                      "atom_2": {
-                        "index": 7,
-                        "symbol": "N"
-                      },
-                      "distance": 1.4891766406969522,
-                      "bond_type": "C-N"
-                    },
-                    {
-                      "atom_1": {
-                        "index": 5,
-                        "symbol": "C"
-                      },
-                      "atom_2": {
-                        "index": 6,
-                        "symbol": "C"
-                      },
-                      "distance": 1.5169345971412005,
-                      "bond_type": "C-C"
-                    }
-                  ],
-                  "statistics": {
-                    "mean_distance": 1.186508629707751,
-                    "std_distance": 0.20191234428833005,
-                    "min_distance": 1.031434010048215,
-                    "max_distance": 1.5169345971412005
-                  }
-                },
-                "angles": {
-                  "angle_count": 10,
-                  "angles": [
-                    {
-                      "atom_1": {
-                        "index": 0,
-                        "symbol": "H"
-                      },
-                      "center_atom": {
-                        "index": 7,
-                        "symbol": "N"
-                      },
-                      "atom_3": {
-                        "index": 1,
-                        "symbol": "H"
-                      },
-                      "angle_degrees": 108.24054495976678,
-                      "angle_type": "H-N-H"
-                    },
-                    {
-                      "atom_1": {
-                        "index": 0,
-                        "symbol": "H"
-                      },
-                      "center_atom": {
-                        "index": 7,
-                        "symbol": "N"
-                      },
-                      "atom_3": {
-                        "index": 2,
-                        "symbol": "H"
-                      },
-                      "angle_degrees": 106.27112549605783,
-                      "angle_type": "H-N-H"
-                    },
-                    {
-                      "atom_1": {
-                        "index": 0,
-                        "symbol": "H"
-                      },
-                      "center_atom": {
-                        "index": 7,
-                        "symbol": "N"
-                      },
-                      "atom_3": {
-                        "index": 5,
-                        "symbol": "C"
-                      },
-                      "angle_degrees": 111.99853413924863,
-                      "angle_type": "H-N-C"
-                    },
-                    {
-                      "atom_1": {
-                        "index": 1,
-                        "symbol": "H"
-                      },
-                      "center_atom": {
-                        "index": 7,
-                        "symbol": "N"
-                      },
-                      "atom_3": {
-                        "index": 2,
-                        "symbol": "H"
-                      },
-                      "angle_degrees": 107.98351483915191,
-                      "angle_type": "H-N-H"
-                    },
-                    {
-                      "atom_1": {
-                        "index": 1,
-                        "symbol": "H"
-                      },
-                      "center_atom": {
-                        "index": 7,
-                        "symbol": "N"
-                      },
-                      "atom_3": {
-                        "index": 5,
-                        "symbol": "C"
-                      },
-                      "angle_degrees": 110.87295449883366,
-                      "angle_type": "H-N-C"
-                    },
-                    {
-                      "atom_1": {
-                        "index": 2,
-                        "symbol": "H"
-                      },
-                      "center_atom": {
-                        "index": 7,
-                        "symbol": "N"
-                      },
-                      "atom_3": {
-                        "index": 5,
-                        "symbol": "C"
-                      },
-                      "angle_degrees": 111.2646924241662,
-                      "angle_type": "H-N-C"
-                    },
-                    {
-                      "atom_1": {
-                        "index": 3,
-                        "symbol": "H"
-                      },
-                      "center_atom": {
-                        "index": 6,
-                        "symbol": "C"
-                      },
-                      "atom_3": {
-                        "index": 5,
-                        "symbol": "C"
-                      },
-                      "angle_degrees": 108.56632419623348,
-                      "angle_type": "H-C-C"
-                    },
-                    {
-                      "atom_1": {
-                        "index": 4,
-                        "symbol": "H"
-                      },
-                      "center_atom": {
-                        "index": 5,
-                        "symbol": "C"
-                      },
-                      "atom_3": {
-                        "index": 7,
-                        "symbol": "N"
-                      },
-                      "angle_degrees": 107.33155065169525,
-                      "angle_type": "H-C-N"
-                    },
-                    {
-                      "atom_1": {
-                        "index": 4,
-                        "symbol": "H"
-                      },
-                      "center_atom": {
-                        "index": 5,
-                        "symbol": "C"
-                      },
-                      "atom_3": {
-                        "index": 6,
-                        "symbol": "C"
-                      },
-                      "angle_degrees": 111.95392858872074,
-                      "angle_type": "H-C-C"
-                    },
-                    {
-                      "atom_1": {
-                        "index": 7,
-                        "symbol": "N"
-                      },
-                      "center_atom": {
-                        "index": 5,
-                        "symbol": "C"
-                      },
-                      "atom_3": {
-                        "index": 6,
-                        "symbol": "C"
-                      },
-                      "angle_degrees": 108.58999819208395,
-                      "angle_type": "N-C-C"
-                    }
-                  ],
-                  "statistics": {
-                    "mean_angle": 109.30731679859585,
-                    "std_angle": 1.9392247107294558,
-                    "min_angle": 106.27112549605783,
-                    "max_angle": 111.99853413924863
-                  }
-                },
-                "dihedrals": {
-                  "dihedral_count": 8,
-                  "dihedrals": [
-                    {
-                      "atom_1": {
-                        "index": 4,
-                        "symbol": "H"
-                      },
-                      "atom_2": {
-                        "index": 5,
-                        "symbol": "C"
-                      },
-                      "atom_3": {
-                        "index": 7,
-                        "symbol": "N"
-                      },
-                      "atom_4": {
-                        "index": 0,
-                        "symbol": "H"
-                      },
-                      "dihedral_degrees": -71.02401921421789,
-                      "dihedral_type": "H-C-N-H"
-                    },
-                    {
-                      "atom_1": {
-                        "index": 4,
-                        "symbol": "H"
-                      },
-                      "atom_2": {
-                        "index": 5,
-                        "symbol": "C"
-                      },
-                      "atom_3": {
-                        "index": 7,
-                        "symbol": "N"
-                      },
-                      "atom_4": {
-                        "index": 1,
-                        "symbol": "H"
-                      },
-                      "dihedral_degrees": 167.9551826904776,
-                      "dihedral_type": "H-C-N-H"
-                    },
-                    {
-                      "atom_1": {
-                        "index": 4,
-                        "symbol": "H"
-                      },
-                      "atom_2": {
-                        "index": 5,
-                        "symbol": "C"
-                      },
-                      "atom_3": {
-                        "index": 7,
-                        "symbol": "N"
-                      },
-                      "atom_4": {
-                        "index": 2,
-                        "symbol": "H"
-                      },
-                      "dihedral_degrees": 47.758495394455935,
-                      "dihedral_type": "H-C-N-H"
-                    },
-                    {
-                      "atom_1": {
-                        "index": 6,
-                        "symbol": "C"
-                      },
-                      "atom_2": {
-                        "index": 5,
-                        "symbol": "C"
-                      },
-                      "atom_3": {
-                        "index": 7,
-                        "symbol": "N"
-                      },
-                      "atom_4": {
-                        "index": 0,
-                        "symbol": "H"
-                      },
-                      "dihedral_degrees": 167.76678678797694,
-                      "dihedral_type": "C-C-N-H"
-                    },
-                    {
-                      "atom_1": {
-                        "index": 6,
-                        "symbol": "C"
-                      },
-                      "atom_2": {
-                        "index": 5,
-                        "symbol": "C"
-                      },
-                      "atom_3": {
-                        "index": 7,
-                        "symbol": "N"
-                      },
-                      "atom_4": {
-                        "index": 1,
-                        "symbol": "H"
-                      },
-                      "dihedral_degrees": 46.74598869267238,
-                      "dihedral_type": "C-C-N-H"
-                    },
-                    {
-                      "atom_1": {
-                        "index": 6,
-                        "symbol": "C"
-                      },
-                      "atom_2": {
-                        "index": 5,
-                        "symbol": "C"
-                      },
-                      "atom_3": {
-                        "index": 7,
-                        "symbol": "N"
-                      },
-                      "atom_4": {
-                        "index": 2,
-                        "symbol": "H"
-                      },
-                      "dihedral_degrees": -73.45069860334925,
-                      "dihedral_type": "C-C-N-H"
-                    },
-                    {
-                      "atom_1": {
-                        "index": 4,
-                        "symbol": "H"
-                      },
-                      "atom_2": {
-                        "index": 5,
-                        "symbol": "C"
-                      },
-                      "atom_3": {
-                        "index": 6,
-                        "symbol": "C"
-                      },
-                      "atom_4": {
-                        "index": 3,
-                        "symbol": "H"
-                      },
-                      "dihedral_degrees": -67.33546209230315,
-                      "dihedral_type": "H-C-C-H"
-                    },
-                    {
-                      "atom_1": {
-                        "index": 7,
-                        "symbol": "N"
-                      },
-                      "atom_2": {
-                        "index": 5,
-                        "symbol": "C"
-                      },
-                      "atom_3": {
-                        "index": 6,
-                        "symbol": "C"
-                      },
-                      "atom_4": {
-                        "index": 3,
-                        "symbol": "H"
-                      },
-                      "dihedral_degrees": 50.98806564842859,
-                      "dihedral_type": "N-C-C-H"
-                    }
-                  ],
-                  "statistics": {
-                    "mean_dihedral": 86.62808739048522,
-                    "std_dihedral": 47.9042782639214,
-                    "min_dihedral": 46.74598869267238,
-                    "max_dihedral": 167.9551826904776
-                  }
-                }
-              },
-              "structural_classification": {
-                "primary_type": "organic_cation",
-                "secondary_type": "complex_ammonium",
-                "description": "Complex ammonium-based cation",
-                "connectivity": {
-                  "bond_count": 7,
-                  "is_connected": true,
-                  "connectivity_type": "linear"
-                }
-              }
-            },
-            "molecule_14": {
-              "molecular_formula": "H",
-              "atom_count": 1,
-              "atom_symbols": [
-                "H"
-              ],
-              "global_atom_indices": [
-                19
-              ],
-              "centroid": {
-                "x": 4.881928096669262,
-                "y": 7.095556194285194,
-                "z": 8.662865535002457
-              },
-              "is_organic": true,
-              "is_inorganic_cation": false,
-              "connectivity": {
-                "bonds": {
-                  "bond_count": 0,
-                  "bonds": []
-                },
-                "angles": {
-                  "angle_count": 0,
-                  "angles": []
-                },
-                "dihedrals": {
-                  "dihedral_count": 0,
-                  "dihedrals": []
-                }
-              },
-              "structural_classification": {
-                "primary_type": "single_atom",
-                "secondary_type": "isolated",
-                "description": "Isolated H atom",
-                "connectivity": {
-                  "bond_count": 0,
-                  "is_connected": false,
-                  "connectivity_type": "isolated"
-                }
-              }
-            },
-            "molecule_15": {
-              "molecular_formula": "H",
-              "atom_count": 1,
-              "atom_symbols": [
-                "H"
-              ],
-              "global_atom_indices": [
-                21
-              ],
-              "centroid": {
-                "x": 3.599594903840918,
-                "y": 0.9554341744628654,
-                "z": 4.205719634424164
-              },
-              "is_organic": true,
-              "is_inorganic_cation": false,
-              "connectivity": {
-                "bonds": {
-                  "bond_count": 0,
-                  "bonds": []
-                },
-                "angles": {
-                  "angle_count": 0,
-                  "angles": []
-                },
-                "dihedrals": {
-                  "dihedral_count": 0,
-                  "dihedrals": []
-                }
-              },
-              "structural_classification": {
-                "primary_type": "single_atom",
-                "secondary_type": "isolated",
-                "description": "Isolated H atom",
-                "connectivity": {
-                  "bond_count": 0,
-                  "is_connected": false,
-                  "connectivity_type": "isolated"
-                }
-              }
-            },
-            "molecule_16": {
-              "molecular_formula": "H",
-              "atom_count": 1,
-              "atom_symbols": [
-                "H"
-              ],
-              "global_atom_indices": [
-                24
-              ],
-              "centroid": {
-                "x": 7.180959266724609,
-                "y": 4.856017700378275,
-                "z": 8.270324523095466
-              },
-              "is_organic": true,
-              "is_inorganic_cation": false,
-              "connectivity": {
-                "bonds": {
-                  "bond_count": 0,
-                  "bonds": []
-                },
-                "angles": {
-                  "angle_count": 0,
-                  "angles": []
-                },
-                "dihedrals": {
-                  "dihedral_count": 0,
-                  "dihedrals": []
-                }
-              },
-              "structural_classification": {
-                "primary_type": "single_atom",
-                "secondary_type": "isolated",
-                "description": "Isolated H atom",
-                "connectivity": {
-                  "bond_count": 0,
-                  "is_connected": false,
-                  "connectivity_type": "isolated"
-                }
-              }
-            },
-            "molecule_17": {
-              "molecular_formula": "CH4N",
-              "atom_count": 6,
-              "atom_symbols": [
-                "H",
-                "N",
-                "C",
-                "H",
-                "H",
-                "H"
-              ],
-              "global_atom_indices": [
-                26,
-                29,
-                30,
-                34,
-                40,
-                52
-              ],
-              "centroid": {
-                "x": 3.992041696224472,
-                "y": 7.127427629053233,
-                "z": 5.104964498254346
-              },
-              "is_organic": true,
-              "is_inorganic_cation": false,
-              "connectivity": {
-                "bonds": {
-                  "bond_count": 5,
-                  "bonds": [
-                    {
-                      "atom_1": {
-                        "index": 0,
-                        "symbol": "H"
-                      },
-                      "atom_2": {
-                        "index": 5,
-                        "symbol": "N"
-                      },
-                      "distance": 1.0327642210881098,
-                      "bond_type": "H-N"
-                    },
-                    {
-                      "atom_1": {
-                        "index": 1,
-                        "symbol": "H"
-                      },
-                      "atom_2": {
-                        "index": 4,
-                        "symbol": "C"
-                      },
-                      "distance": 1.0950892811598056,
-                      "bond_type": "H-C"
-                    },
-                    {
-                      "atom_1": {
-                        "index": 2,
-                        "symbol": "H"
-                      },
-                      "atom_2": {
-                        "index": 4,
-                        "symbol": "C"
-                      },
-                      "distance": 1.0938854881986089,
-                      "bond_type": "H-C"
-                    },
-                    {
-                      "atom_1": {
-                        "index": 3,
-                        "symbol": "H"
-                      },
-                      "atom_2": {
-                        "index": 5,
-                        "symbol": "N"
-                      },
-                      "distance": 1.0326443345244123,
-                      "bond_type": "H-N"
-                    },
-                    {
-                      "atom_1": {
-                        "index": 4,
-                        "symbol": "C"
-                      },
-                      "atom_2": {
-                        "index": 5,
-                        "symbol": "N"
-                      },
-                      "distance": 1.4881687494669695,
-                      "bond_type": "C-N"
-                    }
-                  ],
-                  "statistics": {
-                    "mean_distance": 1.148510414887581,
-                    "std_distance": 0.17206255510805907,
-                    "min_distance": 1.0326443345244123,
-                    "max_distance": 1.4881687494669695
-                  }
-                },
-                "angles": {
-                  "angle_count": 6,
-                  "angles": [
-                    {
-                      "atom_1": {
-                        "index": 0,
-                        "symbol": "H"
-                      },
-                      "center_atom": {
-                        "index": 5,
-                        "symbol": "N"
-                      },
-                      "atom_3": {
-                        "index": 3,
-                        "symbol": "H"
-                      },
-                      "angle_degrees": 109.37381572106261,
-                      "angle_type": "H-N-H"
-                    },
-                    {
-                      "atom_1": {
-                        "index": 0,
-                        "symbol": "H"
-                      },
-                      "center_atom": {
-                        "index": 5,
-                        "symbol": "N"
-                      },
-                      "atom_3": {
-                        "index": 4,
-                        "symbol": "C"
-                      },
-                      "angle_degrees": 110.37829109487845,
-                      "angle_type": "H-N-C"
-                    },
-                    {
-                      "atom_1": {
-                        "index": 3,
-                        "symbol": "H"
-                      },
-                      "center_atom": {
-                        "index": 5,
-                        "symbol": "N"
-                      },
-                      "atom_3": {
-                        "index": 4,
-                        "symbol": "C"
-                      },
-                      "angle_degrees": 113.01072148002933,
-                      "angle_type": "H-N-C"
-                    },
-                    {
-                      "atom_1": {
-                        "index": 1,
-                        "symbol": "H"
-                      },
-                      "center_atom": {
-                        "index": 4,
-                        "symbol": "C"
-                      },
-                      "atom_3": {
-                        "index": 2,
-                        "symbol": "H"
-                      },
-                      "angle_degrees": 108.56061968083695,
-                      "angle_type": "H-C-H"
-                    },
-                    {
-                      "atom_1": {
-                        "index": 1,
-                        "symbol": "H"
-                      },
-                      "center_atom": {
-                        "index": 4,
-                        "symbol": "C"
-                      },
-                      "atom_3": {
-                        "index": 5,
-                        "symbol": "N"
-                      },
-                      "angle_degrees": 106.34329322267999,
-                      "angle_type": "H-C-N"
-                    },
-                    {
-                      "atom_1": {
-                        "index": 2,
-                        "symbol": "H"
-                      },
-                      "center_atom": {
-                        "index": 4,
-                        "symbol": "C"
-                      },
-                      "atom_3": {
-                        "index": 5,
-                        "symbol": "N"
-                      },
-                      "angle_degrees": 108.25950880861468,
-                      "angle_type": "H-C-N"
-                    }
-                  ],
-                  "statistics": {
-                    "mean_angle": 109.321041668017,
-                    "std_angle": 2.0537111927893603,
-                    "min_angle": 106.34329322267999,
-                    "max_angle": 113.01072148002933
-                  }
-                },
-                "dihedrals": {
-                  "dihedral_count": 4,
-                  "dihedrals": [
-                    {
-                      "atom_1": {
-                        "index": 1,
-                        "symbol": "H"
-                      },
-                      "atom_2": {
-                        "index": 4,
-                        "symbol": "C"
-                      },
-                      "atom_3": {
-                        "index": 5,
-                        "symbol": "N"
-                      },
-                      "atom_4": {
-                        "index": 0,
-                        "symbol": "H"
-                      },
-                      "dihedral_degrees": 62.32598983054597,
-                      "dihedral_type": "H-C-N-H"
-                    },
-                    {
-                      "atom_1": {
-                        "index": 1,
-                        "symbol": "H"
-                      },
-                      "atom_2": {
-                        "index": 4,
-                        "symbol": "C"
-                      },
-                      "atom_3": {
-                        "index": 5,
-                        "symbol": "N"
-                      },
-                      "atom_4": {
-                        "index": 3,
-                        "symbol": "H"
-                      },
-                      "dihedral_degrees": -174.83849238906475,
-                      "dihedral_type": "H-C-N-H"
-                    },
-                    {
-                      "atom_1": {
-                        "index": 2,
-                        "symbol": "H"
-                      },
-                      "atom_2": {
-                        "index": 4,
-                        "symbol": "C"
-                      },
-                      "atom_3": {
-                        "index": 5,
-                        "symbol": "N"
-                      },
-                      "atom_4": {
-                        "index": 0,
-                        "symbol": "H"
-                      },
-                      "dihedral_degrees": -54.1645357909253,
-                      "dihedral_type": "H-C-N-H"
-                    },
-                    {
-                      "atom_1": {
-                        "index": 2,
-                        "symbol": "H"
-                      },
-                      "atom_2": {
-                        "index": 4,
-                        "symbol": "C"
-                      },
-                      "atom_3": {
-                        "index": 5,
-                        "symbol": "N"
-                      },
-                      "atom_4": {
-                        "index": 3,
-                        "symbol": "H"
-                      },
-                      "dihedral_degrees": 68.67098198946402,
-                      "dihedral_type": "H-C-N-H"
-                    }
-                  ],
-                  "statistics": {
-                    "mean_dihedral": 90.00000000000003,
-                    "std_dihedral": 49.250705919007096,
-                    "min_dihedral": 54.1645357909253,
-                    "max_dihedral": 174.83849238906475
-                  }
-                }
-              },
-              "structural_classification": {
-                "primary_type": "organic_cation",
-                "secondary_type": "simple_ammonium",
-                "description": "Simple ammonium-based cation",
-                "connectivity": {
-                  "bond_count": 5,
-                  "is_connected": true,
-                  "connectivity_type": "linear"
-                }
-              }
-            },
-            "molecule_18": {
-              "molecular_formula": "H",
-              "atom_count": 1,
-              "atom_symbols": [
-                "H"
-              ],
-              "global_atom_indices": [
-                28
-              ],
-              "centroid": {
-                "x": 2.7987953880115453,
-                "y": 7.452336626177421,
-                "z": 7.366236872894219
-              },
-              "is_organic": true,
-              "is_inorganic_cation": false,
-              "connectivity": {
-                "bonds": {
-                  "bond_count": 0,
-                  "bonds": []
-                },
-                "angles": {
-                  "angle_count": 0,
-                  "angles": []
-                },
-                "dihedrals": {
-                  "dihedral_count": 0,
-                  "dihedrals": []
-                }
-              },
-              "structural_classification": {
-                "primary_type": "single_atom",
-                "secondary_type": "isolated",
-                "description": "Isolated H atom",
-                "connectivity": {
-                  "bond_count": 0,
-                  "is_connected": false,
-                  "connectivity_type": "isolated"
-                }
-              }
-            }
-          }
-        },
-        "below_layer_2": {
-          "region": "below_layer_2",
-          "molecule_count": 2,
-          "molecules": {
-            "molecule_6": {
-              "molecular_formula": "H",
-              "atom_count": 1,
-              "atom_symbols": [
-                "H"
-              ],
-              "global_atom_indices": [
-                5
-              ],
-              "centroid": {
-                "x": 0.8152695337501765,
-                "y": 3.760991531920686,
-                "z": 0.6143919937949366
-              },
-              "is_organic": true,
-              "is_inorganic_cation": false,
-              "connectivity": {
-                "bonds": {
-                  "bond_count": 0,
-                  "bonds": []
-                },
-                "angles": {
-                  "angle_count": 0,
-                  "angles": []
-                },
-                "dihedrals": {
-                  "dihedral_count": 0,
-                  "dihedrals": []
-                }
-              },
-              "structural_classification": {
-                "primary_type": "single_atom",
-                "secondary_type": "isolated",
-                "description": "Isolated H atom",
-                "connectivity": {
-                  "bond_count": 0,
-                  "is_connected": false,
-                  "connectivity_type": "isolated"
-                }
-              }
-            },
-            "molecule_9": {
-              "molecular_formula": "H",
-              "atom_count": 1,
-              "atom_symbols": [
-                "H"
-              ],
-              "global_atom_indices": [
-                9
-              ],
-              "centroid": {
-                "x": 4.682746864486189,
-                "y": 7.618613811531678,
-                "z": 0.7136166232847665
-              },
-              "is_organic": true,
-              "is_inorganic_cation": false,
-              "connectivity": {
-                "bonds": {
-                  "bond_count": 0,
-                  "bonds": []
-                },
-                "angles": {
-                  "angle_count": 0,
-                  "angles": []
-                },
-                "dihedrals": {
-                  "dihedral_count": 0,
-                  "dihedrals": []
-                }
-              },
-              "structural_classification": {
-                "primary_type": "single_atom",
-                "secondary_type": "isolated",
-                "description": "Isolated H atom",
-                "connectivity": {
-                  "bond_count": 0,
-                  "is_connected": false,
-                  "connectivity_type": "isolated"
-                }
-              }
-            }
-          }
+        "element_distribution": {
+          "H": 26,
+          "C": 6,
+          "N": 4
         }
       },
       "summary": {
-        "total_interlayer_regions": 3,
-        "total_molecules": 18,
-        "molecule_types": {},
-        "formula_distribution": {
-          "H": 10,
-          "CH2": 2,
-          "H2N": 1,
-          "HN": 1,
-          "C2H6N": 1,
-          "CH4N": 2,
-          "C2H5N": 1
-        },
-        "structural_types": {
-          "single_atom": 10,
-          "organic_molecule": 4,
-          "organic_cation": 4
-        },
-        "region_analysis": {
-          "above_layer_1": {
-            "molecule_count": 7,
-            "formulas": [
-              "H",
-              "CH2",
-              "H",
-              "H2N",
-              "CH2",
-              "HN",
-              "H"
-            ],
-            "types": [
-              "single_atom",
-              "organic_molecule",
-              "single_atom",
-              "organic_molecule",
-              "organic_molecule",
-              "organic_molecule",
-              "single_atom"
-            ]
-          },
-          "interlayer_layer_2_to_layer_1": {
-            "molecule_count": 9,
-            "formulas": [
-              "C2H6N",
-              "H",
-              "CH4N",
-              "C2H5N",
-              "H",
-              "H",
-              "H",
-              "CH4N",
-              "H"
-            ],
-            "types": [
-              "organic_cation",
-              "single_atom",
-              "organic_cation",
-              "organic_cation",
-              "single_atom",
-              "single_atom",
-              "single_atom",
-              "organic_cation",
-              "single_atom"
-            ]
-          },
-          "below_layer_2": {
-            "molecule_count": 2,
-            "formulas": [
-              "H",
-              "H"
-            ],
-            "types": [
-              "single_atom",
-              "single_atom"
-            ]
-          }
-        },
-        "molecular_statistics": {
-          "mean_atoms_per_molecule": 2.7777777777777777,
-          "std_atoms_per_molecule": 2.57240820062005,
-          "min_atoms_per_molecule": 1,
-          "max_atoms_per_molecule": 9,
-          "organic_molecule_fraction": 1.0,
-          "inorganic_molecule_fraction": 0.0
-        },
-        "dominant_species": {
-          "formula": "H",
-          "count": 10,
-          "fraction": 0.5555555555555556,
-          "all_species": {
-            "H": 10,
-            "CH2": 2,
-            "CH4N": 2,
-            "H2N": 1,
-            "HN": 1,
-            "C2H6N": 1,
-            "C2H5N": 1
-          }
-        }
+        "total_groups": 2,
+        "total_atoms": 36,
+        "group_names": [
+          "A1",
+          "A2"
+        ],
+        "elements_found": [
+          "H",
+          "C",
+          "N"
+        ],
+        "dominant_element": "H"
       }
     }
   }

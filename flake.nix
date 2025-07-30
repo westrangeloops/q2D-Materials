@@ -37,6 +37,7 @@
             pythonPackages.seaborn
             pythonPackages.pymatgen
             pythonPackages.rmsd
+            pythonPackages.graphtool
             # Add more packages as needed
           ];
           # For ase-gui visualization

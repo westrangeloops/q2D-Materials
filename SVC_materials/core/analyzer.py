@@ -65,7 +65,6 @@ class q2D_analyzer:
         self.angular_analyzer = AngularAnalyzer(self.geometry_calc)
         self.connectivity_analyzer = ConnectivityAnalyzer(self.geometry_calc)
         self.layers_analyzer = LayersAnalyzer()
-        self.a_site_identifier = ASiteIdentifier(atoms=self.atoms, geometry_calculator=self.geometry_calc)
         
         # Initialize analysis
         self.all_octahedra = self.find_all_octahedra()
@@ -437,10 +436,6 @@ class q2D_analyzer:
         # Analyze layers using layers analyzer with connectivity information
         layers_analysis = self.layers_analyzer.identify_layers(octahedra_data, connectivity_analysis)
         
-        # Analyze A-site using ASiteIdentifier
-        a_site_analysis = self.a_site_identifier.identify_a_site_atoms(
-            octahedra_data, layers_analysis, self.coord, self.chemical_symbols
-        )
         
         # Create unified structure
         unified_ontology = {
@@ -453,9 +448,6 @@ class q2D_analyzer:
             "octahedra": octahedra_data,
             "connectivity_analysis": connectivity_analysis,
             "layers_analysis": layers_analysis,
-            "molecular_analysis": {
-                "a_site": a_site_analysis
-            }
         }
         
         return unified_ontology
@@ -521,112 +513,6 @@ class q2D_analyzer:
         print(f"Unified ontology exported to {filename}")
         return serializable_ontology
 
-    def print_ontology_summary(self):
-        """
-        Print a summary of the ontology structure.
-        """
-        print(f"\n=== UNIFIED ONTOLOGY SUMMARY ===")
-        print(f"Experiment: {self.ontology['experiment']['name']}")
-        print(f"\nCell Properties:")
-        cell_props = self.ontology['cell_properties']
-        lattice = cell_props['lattice_parameters']
-        print(f"  A={lattice['A']:.3f}, B={lattice['B']:.3f}, C={lattice['C']:.3f}")
-        print(f"  α={lattice['Alpha']:.1f}°, β={lattice['Beta']:.1f}°, γ={lattice['Gamma']:.1f}°")
-        print(f"  Volume: {cell_props['structure_info']['cell_volume']:.3f}")
-        print(f"  Composition: {cell_props['composition']['metal_B']}-{cell_props['composition']['halogen_X']}")
-        
-        print(f"\nOctahedra Analysis:")
-        for oct_key, oct_data in self.ontology['octahedra'].items():
-            central = oct_data['central_atom']
-            distortion = oct_data['distortion_parameters']
-            ligands = oct_data['ligand_atoms']
-            bond_analysis = oct_data['bond_distance_analysis']
-            geometric = oct_data['geometric_properties']
-            detailed = oct_data['detailed_atom_info']
-            angular_data = oct_data.get('angular_analysis', {})
-            
-            print(f"  {oct_key}: Central atom {central['symbol']} (index {central['global_index']})")
-            print(f"    Distortion: ζ={distortion['zeta']:.4f}, δ={distortion['delta']:.4f}, σ={distortion['sigma']:.4f}")
-            print(f"    Theta: mean={distortion['theta_mean']:.2f}°, min={distortion['theta_min']:.2f}°, max={distortion['theta_max']:.2f}°")
-            print(f"    Bond distances: mean={bond_analysis['mean_bond_distance']:.3f}Å, variance={bond_analysis['bond_distance_variance']:.6f}")
-            print(f"    Volume: {geometric['octahedral_volume']:.3f}Å³, Is octahedral: {geometric['is_octahedral']}")
-            print(f"    Ligand indices: {ligands['all_ligand_global_indices']}")
-            print(f"    Ligand symbols: {detailed['all_ligand_symbols']}")
-            
-            # Add angular analysis information
-            if angular_data:
-                if 'axial_central_axial' in angular_data:
-                    aca = angular_data['axial_central_axial']
-                    print(f"    Axial-Central-Axial angle: {aca['angle_degrees']:.2f}° (deviation from 180°: {aca['deviation_from_180']:.2f}°)")
-                    print(f"    Is linear: {aca['is_linear']}")
-                
-                if 'central_axial_central' in angular_data:
-                    cac_angles = angular_data['central_axial_central']
-                    if cac_angles:
-                        print(f"    Central-Axial-Central bridges: {len(cac_angles)}")
-                        for i, cac in enumerate(cac_angles):
-                            print(f"      Bridge {i+1}: {cac['angle_degrees']:.2f}° to {cac['connected_octahedron']} via atom {cac['axial_atom_global_index']}")
-                
-                if 'central_equatorial_central' in angular_data:
-                    cec_angles = angular_data['central_equatorial_central']
-                    if cec_angles:
-                        print(f"    Central-Equatorial-Central bridges: {len(cec_angles)}")
-                        for i, cec in enumerate(cec_angles):
-                            print(f"      Bridge {i+1}: {cec['angle_degrees']:.2f}° to {cec['connected_octahedron']} via atom {cec['equatorial_atom_global_index']}")
-                
-                if 'summary' in angular_data:
-                    summary = angular_data['summary']
-                    print(f"    Angular summary: {summary['total_axial_bridges']} axial + {summary['total_equatorial_bridges']} equatorial bridges")
-                    if summary['average_central_axial_central_angle'] > 0:
-                        print(f"    Average C-A-C angle: {summary['average_central_axial_central_angle']:.2f}°")
-                    if summary['average_central_equatorial_central_angle'] > 0:
-                        print(f"    Average C-E-C angle: {summary['average_central_equatorial_central_angle']:.2f}°")
-            
-            if ligands['axial_global_indices'] and ligands['equatorial_global_indices']:
-                print(f"    Axial: {ligands['axial_global_indices']} ({detailed['axial_atom_symbols']})")
-                print(f"    Equatorial: {ligands['equatorial_global_indices']} ({detailed['equatorial_atom_symbols']})")
-            
-            # Show connectivity information
-            connectivity = self.ontology.get('connectivity_analysis', {})
-            connections = connectivity.get('octahedra_connections', {}).get(oct_key, [])
-            if connections:
-                shared_info = []
-                for conn in connections:
-                    shared_info.append(f"{conn['connected_octahedron']} (atom {conn['shared_atom_index']}:{conn['atom_symbol']})")
-                print(f"    Connected to: {', '.join(shared_info)}")
-            print()
-        
-        # Show overall connectivity summary using connectivity analyzer
-        connectivity = self.ontology.get('connectivity_analysis', {})
-        if connectivity:
-            print(self.connectivity_analyzer.get_connectivity_summary(connectivity))
-        
-        # Show layer analysis summary
-        layers_analysis = self.ontology.get('layers_analysis', {})
-        if layers_analysis:
-            print(self.layers_analyzer.get_layer_summary())
-            
-        # Show molecular analysis summary
-        molecular_analysis = self.ontology.get('molecular_analysis', {})
-        if molecular_analysis:
-            a_site = molecular_analysis.get('a_site', {})
-            if a_site:
-                summary_data = a_site.get('summary', {})
-                print(f"\nMolecular Analysis (A-site):")
-                print(f"  Total molecules found: {summary_data.get('total_molecules', 0)}")
-                print(f"  Interlayer regions: {summary_data.get('total_interlayer_regions', 0)}")
-                
-                # Show dominant species
-                dominant = summary_data.get('dominant_species', {})
-                if dominant.get('formula'):
-                    print(f"  Dominant A-site species: {dominant['formula']} ({dominant['count']} molecules)")
-                
-                # Show formula distribution
-                formulas = summary_data.get('formula_distribution', {})
-                if formulas:
-                    print(f"  Molecular formulas: {', '.join(formulas.keys())}")
-            else:
-                print(f"\nMolecular Analysis (A-site): No A-site molecules identified")
             
     def get_layers_analysis(self):
         """
@@ -700,26 +586,3 @@ class q2D_analyzer:
         print(f"Layer analysis updated with z_window={z_window} Å")
         return self.layers_analyzer.get_layer_summary()
 
-    def get_a_site_analysis(self):
-        """
-        Get A-site molecular analysis results.
-        
-        Returns:
-            dict: A-site analysis data
-        """
-        return self.ontology.get('molecular_analysis', {}).get('a_site', {})
-    
-    def get_a_site_summary(self):
-        """
-        Get formatted A-site analysis summary.
-        
-        Returns:
-            str: Formatted A-site summary
-        """
-        if hasattr(self.a_site_identifier, 'get_a_site_summary'):
-            return self.a_site_identifier.get_a_site_summary()
-        else:
-            a_site_data = self.get_a_site_analysis()
-            if a_site_data:
-                return f"A-site analysis available with {a_site_data.get('summary', {}).get('total_molecules', 0)} molecules"
-            return "No A-site analysis available"
