@@ -18,7 +18,6 @@ from .geometry import GeometryCalculator
 from .angular_analysis import AngularAnalyzer
 from .connectivity import ConnectivityAnalyzer
 from .layers_analysis import LayersAnalyzer
-from .A_analysis import ASiteIdentifier
 
 # Import the refactored main analyzer
 from .analyzer import q2D_analyzer

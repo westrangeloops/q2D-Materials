@@ -9,6 +9,7 @@ import pandas as pd
 import numpy as np
 import os
 from ase.io import read
+from ase import Atoms
 from ..utils.file_handlers import vasp_load, save_vasp
 from ..utils.plots import plot_gaussian_projection, plot_multi_element_comparison, save_beautiful_plot, create_summary_plot
 from ..utils.octadist.io import extract_octa
@@ -20,7 +21,6 @@ from .geometry import GeometryCalculator
 from .angular_analysis import AngularAnalyzer
 from .connectivity import ConnectivityAnalyzer
 from .layers_analysis import LayersAnalyzer
-from .A_analysis import ASiteIdentifier
 
 # Use matplotlib without x server
 import matplotlib
@@ -65,13 +65,28 @@ class q2D_analyzer:
         self.angular_analyzer = AngularAnalyzer(self.geometry_calc)
         self.connectivity_analyzer = ConnectivityAnalyzer(self.geometry_calc)
         self.layers_analyzer = LayersAnalyzer()
-        
-        # Initialize analysis
+
+        # Initialize analysis first to get connectivity data
         self.all_octahedra = self.find_all_octahedra()
         self.ordered_octahedra = self.order_octahedra()
         
         # Create unified ontology
         self.ontology = self._create_unified_ontology()
+
+        # Get terminal X atoms from connectivity analysis after ontology is created
+        connectivity_analysis = self.ontology.get('connectivity_analysis', {})
+        self.terminal_x_atoms = connectivity_analysis.get('terminal_axial_atoms', {})
+
+        # Isolate the spacer, the idea is to eliminate all the octahedra, we just need to eliminate X, B and MA and save the structure:
+        self.spacer = self.isolate_spacer()
+
+        # Analyze molecules in the isolated spacer and create molecule ontology
+        if self.spacer is not None and len(self.spacer) > 0:
+            self.spacer_molecules = self.analyze_spacer_molecules()
+            self.molecule_ontology = self._create_molecule_ontology()
+        else:
+            self.spacer_molecules = None
+            self.molecule_ontology = None
 
     def find_all_octahedra(self):
         """
@@ -585,4 +600,754 @@ class q2D_analyzer:
             
         print(f"Layer analysis updated with z_window={z_window} Å")
         return self.layers_analyzer.get_layer_summary()
+
+    def isolate_spacer(self):
+        """
+        Isolate the spacer by eliminating all octahedral elements (B and X atoms).
+        This creates a new ASE Atoms object containing only the spacer molecules.
+        
+        Returns:
+            ase.Atoms: New atoms object containing only spacer atoms
+        """
+        # Get all indices that belong to octahedra (central B atoms and ligand X atoms)
+        octahedral_indices = set()
+        
+        # Add all central B atom indices
+        for i, symbol in enumerate(self.chemical_symbols):
+            if symbol == self.b:
+                octahedral_indices.add(i)
+        
+        # Add all ligand X atom indices that are within cutoff of any B atom
+        b_indices = [i for i, symbol in enumerate(self.chemical_symbols) if symbol == self.b]
+        
+        for i, symbol in enumerate(self.chemical_symbols):
+            if symbol == self.x:
+                # Check if this X atom is within cutoff of any B atom
+                x_coord = self.coord[i]
+                for b_idx in b_indices:
+                    b_coord = self.coord[b_idx]
+                    # Use geometry calculator for PBC-aware distance calculation
+                    distance = self.geometry_calc.calculate_distance(x_coord, b_coord)
+                    if distance <= self.cutoff_ref_ligand:
+                        octahedral_indices.add(i)
+                        break
+        
+        # Create list of indices to keep (all atoms except octahedral ones)
+        spacer_indices = []
+        spacer_symbols = []
+        spacer_positions = []
+        
+        for i in range(len(self.chemical_symbols)):
+            if i not in octahedral_indices:
+                spacer_indices.append(i)
+                spacer_symbols.append(self.chemical_symbols[i])
+                spacer_positions.append(self.coord[i])
+        
+        if not spacer_indices:
+            print("Warning: No spacer atoms found after eliminating octahedral elements")
+            # Return empty atoms object with same cell
+            spacer_atoms = Atoms(cell=self.atoms.get_cell(), pbc=self.atoms.get_pbc())
+            return spacer_atoms
+        
+        # Create new ASE Atoms object with only spacer atoms
+        spacer_atoms = Atoms(
+            symbols=spacer_symbols,
+            positions=spacer_positions,
+            cell=self.atoms.get_cell(),
+            pbc=self.atoms.get_pbc()
+        )
+        
+        print(f"Spacer isolation complete:")
+        print(f"  - Original structure: {len(self.chemical_symbols)} atoms")
+        print(f"  - Eliminated octahedral atoms: {len(octahedral_indices)} atoms")
+        print(f"    - B ({self.b}) atoms: {sum(1 for s in self.chemical_symbols if s == self.b)}")
+        print(f"    - X ({self.x}) atoms in octahedra: {len([i for i in octahedral_indices if self.chemical_symbols[i] == self.x])}")
+        print(f"  - Spacer atoms remaining: {len(spacer_indices)} atoms")
+        
+        # Print composition of spacer
+        spacer_composition = {}
+        for symbol in spacer_symbols:
+            spacer_composition[symbol] = spacer_composition.get(symbol, 0) + 1
+        
+        if spacer_composition:
+            print(f"  - Spacer composition: {spacer_composition}")
+        
+        return spacer_atoms
+    
+    def save_spacer_structure(self, output_path):
+        """
+        Save the isolated spacer structure to a file.
+        
+        Parameters:
+            output_path (str): Path where to save the spacer structure
+        """
+        if hasattr(self, 'spacer') and self.spacer is not None:
+            self.spacer.write(output_path)
+            print(f"Spacer structure saved to: {output_path}")
+        else:
+            print("Error: No spacer structure available. Run isolate_spacer() first.")
+    
+    def analyze_spacer_molecules(self):
+        """
+        Analyze and identify individual molecules in the isolated spacer.
+        
+        Returns:
+            dict: Molecule analysis results
+        """
+        if not hasattr(self, 'spacer') or self.spacer is None:
+            print("Error: No spacer structure available. Run isolate_spacer() first.")
+            return None
+        
+        # Use the connectivity analyzer to identify molecules
+        molecule_analysis = self.connectivity_analyzer.analyze_spacer_molecules(self.spacer)
+        
+        # Store results for later use
+        self.spacer_molecules = molecule_analysis
+        
+        return molecule_analysis
+
+    def _create_molecule_ontology(self):
+        """
+        Create a comprehensive molecule ontology from the spacer_molecules analysis.
+        
+        Returns:
+            dict: Complete molecule ontology
+        """
+        if self.spacer_molecules is None:
+            return {}
+
+        molecule_ontology = {}
+        for mol_id, mol_data in self.spacer_molecules.get('molecules', {}).items():
+            molecule_ontology[f"molecule_{mol_id}"] = {
+                "molecule_id": mol_id,
+                "formula": mol_data['formula'],
+                "number_of_atoms": len(mol_data['atom_indices']),
+                "atom_indices": mol_data['atom_indices'],
+                "symbols": mol_data['symbols'],
+                "coordinates": mol_data['coordinates']
+            }
+        return molecule_ontology
+
+    def get_molecule_ontology(self):
+        """
+        Get the comprehensive molecule ontology.
+        
+        Returns:
+            dict: Complete molecule ontology
+        """
+        return self.molecule_ontology
+
+    def get_spacer_molecule_summary(self):
+        """
+        Get a human-readable summary of spacer molecules.
+        
+        Returns:
+            str: Formatted summary of molecule analysis
+        """
+        if not hasattr(self, 'spacer_molecules'):
+            print("Error: No spacer molecule analysis available. Run analyze_spacer_molecules() first.")
+            return None
+        
+        return self.connectivity_analyzer.molecule_identifier.get_molecule_summary(self.spacer_molecules)
+    
+    def save_spacer_molecules_info(self, output_path):
+        """
+        Save spacer molecule analysis to a JSON file.
+        
+        Parameters:
+            output_path (str): Path where to save the molecule analysis
+        """
+        if not hasattr(self, 'spacer_molecules'):
+            print("Error: No spacer molecule analysis available. Run analyze_spacer_molecules() first.")
+            return
+        
+        import json
+        
+        with open(output_path, 'w') as f:
+            json.dump(self.spacer_molecules, f, indent=2)
+        
+        print(f"Spacer molecule analysis saved to: {output_path}")
+    
+    def save_individual_molecules(self, output_dir):
+        """
+        Save each identified molecule as a separate XYZ structure file.
+        
+        Parameters:
+            output_dir (str): Directory where to save individual molecule files
+        """
+        if not hasattr(self, 'spacer_molecules') or not hasattr(self, 'spacer'):
+            print("Error: No spacer molecule analysis available. Run analyze_spacer_molecules() first.")
+            return
+        
+        import os
+        from ase import Atoms
+        
+        # Create output directory if it doesn't exist
+        os.makedirs(output_dir, exist_ok=True)
+        
+        molecules = self.spacer_molecules.get('molecules', {})
+        
+        for mol_id, mol_data in molecules.items():
+            # Extract atom information for this molecule
+            atom_indices = mol_data['atom_indices']
+            mol_symbols = mol_data['symbols']
+            mol_coordinates = mol_data['coordinates']
+            formula = mol_data['formula']
+            
+            # Create a new ASE Atoms object for this molecule (no PBC for individual molecules)
+            mol_atoms = Atoms(
+                symbols=mol_symbols,
+                positions=mol_coordinates,
+                cell=[20.0, 20.0, 20.0],  # Large vacuum cell
+                pbc=False  # No periodic boundary conditions for isolated molecules
+            )
+            
+            # Generate filename with XYZ extension
+            filename = f"molecule_{mol_id}_{formula}.xyz"
+            filepath = os.path.join(output_dir, filename)
+            
+            # Save the molecule as XYZ format
+            mol_atoms.write(filepath, format='xyz')
+            
+            print(f"Molecule {mol_id} ({formula}) saved to: {filepath}")
+        
+        print(f"All {len(molecules)} molecules saved as XYZ files to directory: {output_dir}")
+
+    def isolate_individual_molecules(self):
+        """
+        Isolate each molecule as a separate ASE Atoms object.
+        
+        Returns:
+            dict: Dictionary of isolated molecules with their ASE Atoms objects
+        """
+        if not hasattr(self, 'spacer_molecules') or not hasattr(self, 'spacer'):
+            print("Error: No spacer molecule analysis available. Run analyze_spacer_molecules() first.")
+            return {}
+        
+        isolated_molecules = {}
+        molecules = self.spacer_molecules.get('molecules', {})
+        
+        print(f"Isolating {len(molecules)} molecules from spacer structure...")
+        
+        for mol_id, mol_data in molecules.items():
+            # Extract atom information for this molecule
+            mol_symbols = mol_data['symbols']
+            mol_coordinates = mol_data['coordinates']
+            formula = mol_data['formula']
+            
+            # Create a new ASE Atoms object for this molecule
+            # Note: We don't use PBC for individual isolated molecules
+            mol_atoms = Atoms(
+                symbols=mol_symbols,
+                positions=mol_coordinates,
+                cell=[20.0, 20.0, 20.0],  # Large vacuum cell
+                pbc=False  # No periodic boundary conditions for isolated molecules
+            )
+            
+            isolated_molecules[mol_id] = {
+                'atoms': mol_atoms,
+                'formula': formula,
+                'size': len(mol_symbols),
+                'original_indices': mol_data['atom_indices']
+            }
+            
+            print(f"  - Molecule {mol_id}: {formula} ({len(mol_symbols)} atoms)")
+        
+        self.isolated_molecules = isolated_molecules
+        return isolated_molecules
+    
+    def export_molecule_ontology_json(self, filename=None):
+        """
+        Export the molecule ontology to JSON format.
+        
+        Parameters:
+            filename (str, optional): Output filename
+        """
+        if filename is None:
+            filename = f"{self.experiment_name}_molecule_ontology.json"
+        
+        import json
+        
+        if self.molecule_ontology is None:
+            print("Error: No molecule ontology available.")
+            return
+        
+        # Create comprehensive molecule ontology with additional metadata
+        comprehensive_ontology = {
+            "experiment": {
+                "name": str(self.experiment_name),
+                "file_path": str(self.file_path),
+                "timestamp": str(pd.Timestamp.now())
+            },
+            "spacer_info": {
+                "total_spacer_atoms": len(self.spacer) if self.spacer is not None else 0,
+                "spacer_composition": self._get_spacer_composition(),
+                "cell_parameters": {
+                    "a": float(self.spacer.get_cell()[0][0]) if self.spacer is not None else 0,
+                    "b": float(self.spacer.get_cell()[1][1]) if self.spacer is not None else 0,
+                    "c": float(self.spacer.get_cell()[2][2]) if self.spacer is not None else 0,
+                }
+            },
+            "molecule_analysis": {
+                "total_molecules": len(self.molecule_ontology),
+                "unique_formulas": list(set([mol['formula'] for mol in self.molecule_ontology.values()])),
+                "molecule_distribution": self._get_molecule_distribution()
+            },
+            "molecules": self.molecule_ontology
+        }
+        
+        # Ensure all data is JSON serializable
+        serializable_ontology = self._make_json_serializable(comprehensive_ontology)
+        
+        with open(filename, 'w') as f:
+            json.dump(serializable_ontology, f, indent=2)
+        
+        print(f"Molecule ontology exported to {filename}")
+        return serializable_ontology
+    
+    def _get_spacer_composition(self):
+        """
+        Get the composition of the spacer structure.
+        
+        Returns:
+            dict: Element counts in spacer
+        """
+        if self.spacer is None:
+            return {}
+        
+        composition = {}
+        for symbol in self.spacer.get_chemical_symbols():
+            composition[symbol] = composition.get(symbol, 0) + 1
+        
+        return composition
+    
+    def _get_molecule_distribution(self):
+        """
+        Get the distribution of molecule types.
+        
+        Returns:
+            dict: Formula distribution counts
+        """
+        if self.molecule_ontology is None:
+            return {}
+        
+        distribution = {}
+        for mol_data in self.molecule_ontology.values():
+            formula = mol_data['formula']
+            distribution[formula] = distribution.get(formula, 0) + 1
+        
+        return distribution
+    
+    def create_molecule_analysis_report(self, output_dir):
+        """
+        Create a comprehensive analysis report for all molecules.
+        
+        Parameters:
+            output_dir (str): Directory where to save the analysis report
+        """
+        import os
+        
+        if not hasattr(self, 'spacer_molecules'):
+            print("Error: No spacer molecule analysis available.")
+            return
+        
+        # Create output directory if it doesn't exist
+        os.makedirs(output_dir, exist_ok=True)
+        
+        # 1. Export molecule ontology
+        ontology_file = os.path.join(output_dir, f"{self.experiment_name}_molecule_ontology.json")
+        self.export_molecule_ontology_json(ontology_file)
+        
+        # 2. Save spacer structure (VASP format)
+        spacer_file = os.path.join(output_dir, f"{self.experiment_name}_spacer.vasp")
+        self.save_spacer_structure(spacer_file)
+        
+        # 3. Save salt structure (spacer + 4 terminal halogens, VASP format)
+        salt_file = os.path.join(output_dir, f"{self.experiment_name}_salt.vasp")
+        self.save_salt_structure(salt_file)
+        
+        # 4. Save separated structures (spacer and A-sites, VASP format)
+        separated_dir = os.path.join(output_dir, "separated_structures")
+        spacer_file, a_sites_file = self.save_separated_structures(separated_dir)
+        
+        # 5. Isolate and save individual molecules (XYZ format)
+        molecule_dir = os.path.join(output_dir, "individual_molecules")
+        self.save_individual_molecules(molecule_dir)
+        
+        # 6. Create analysis summary
+        summary_file = os.path.join(output_dir, f"{self.experiment_name}_molecule_summary.txt")
+        self._create_molecule_summary_report(summary_file)
+        
+        print(f"Complete molecule analysis report created in: {output_dir}")
+    
+    def _create_molecule_summary_report(self, output_file):
+        """
+        Create a human-readable summary report of the molecule analysis.
+        
+        Parameters:
+            output_file (str): Path to output summary file
+        """
+        if self.spacer_molecules is None:
+            return
+        
+        with open(output_file, 'w') as f:
+            f.write("=" * 80 + "\n")
+            f.write(f"MOLECULE ANALYSIS SUMMARY - {self.experiment_name}\n")
+            f.write("=" * 80 + "\n\n")
+            
+            # Basic information
+            f.write(f"Experiment: {self.experiment_name}\n")
+            f.write(f"File: {self.file_path}\n")
+            f.write(f"Analysis timestamp: {pd.Timestamp.now()}\n\n")
+            
+            # Spacer information
+            f.write("SPACER STRUCTURE ANALYSIS:\n")
+            f.write("-" * 40 + "\n")
+            if self.spacer is not None:
+                f.write(f"Total spacer atoms: {len(self.spacer)}\n")
+                composition = self._get_spacer_composition()
+                f.write("Spacer composition:\n")
+                for element, count in sorted(composition.items()):
+                    f.write(f"  {element}: {count} atoms\n")
+            else:
+                f.write("No spacer structure available\n")
+            f.write("\n")
+            
+            # Molecule analysis
+            f.write("MOLECULE IDENTIFICATION:\n")
+            f.write("-" * 40 + "\n")
+            molecules = self.spacer_molecules.get('molecules', {})
+            f.write(f"Total molecules identified: {len(molecules)}\n")
+            
+            # Molecule distribution
+            distribution = self._get_molecule_distribution()
+            f.write("Molecule distribution:\n")
+            for formula, count in sorted(distribution.items()):
+                f.write(f"  {formula}: {count} molecules\n")
+            f.write("\n")
+            
+            # Individual molecule details
+            f.write("INDIVIDUAL MOLECULES:\n")
+            f.write("-" * 40 + "\n")
+            for mol_id, mol_data in molecules.items():
+                f.write(f"Molecule {mol_id}:\n")
+                f.write(f"  Formula: {mol_data['formula']}\n")
+                f.write(f"  Atoms: {len(mol_data['symbols'])}\n")
+                f.write(f"  Atom types: {', '.join(sorted(set(mol_data['symbols'])))}\n")
+                f.write(f"  Original indices: {mol_data['atom_indices']}\n")
+                f.write("\n")
+            
+            # Spacer and salt structure information
+            f.write("SPACER AND SALT STRUCTURES:\n")
+            f.write("-" * 40 + "\n")
+            spacer_molecules, a_site_molecules = self.separate_molecules_by_size()
+            
+            f.write("Spacer molecules (2 largest molecules):\n")
+            total_spacer_atoms = 0
+            for mol_id, mol_data in spacer_molecules.items():
+                f.write(f"  Molecule {mol_id}: {mol_data['formula']} ({len(mol_data['symbols'])} atoms)\n")
+                total_spacer_atoms += len(mol_data['symbols'])
+            
+            f.write(f"\nSalt structure composition:\n")
+            f.write(f"  - Spacer molecules: {len(spacer_molecules)} molecules, {total_spacer_atoms} atoms\n")
+            
+            # Count actual terminal halogens from connectivity analysis
+            terminal_count = 0
+            if self.terminal_x_atoms:
+                for oct_key, oct_terminal_data in self.terminal_x_atoms.items():
+                    terminal_atoms = oct_terminal_data.get('terminal_axial_atoms', [])
+                    terminal_count += len(terminal_atoms)
+            
+            f.write(f"  - Terminal halogens ({self.x}): {terminal_count} atoms\n")
+            f.write(f"  - Total salt atoms: {total_spacer_atoms + terminal_count} atoms\n")
+            
+            if a_site_molecules:
+                f.write(f"\nA-site molecules (smaller molecules):\n")
+                for mol_id, mol_data in a_site_molecules.items():
+                    f.write(f"  Molecule {mol_id}: {mol_data['formula']} ({len(mol_data['symbols'])} atoms)\n")
+            f.write("\n")
+        
+        print(f"Molecule summary report saved to: {output_file}")
+
+    def separate_molecules_by_size(self):
+        """
+        Separate molecules into largest (spacer) and smaller (A-sites) groups.
+        
+        Returns:
+            tuple: (spacer_molecules, a_site_molecules) dictionaries
+        """
+        if not hasattr(self, 'spacer_molecules') or not self.spacer_molecules:
+            print("Error: No spacer molecule analysis available. Run analyze_spacer_molecules() first.")
+            return {}, {}
+        
+        molecules = self.spacer_molecules.get('molecules', {})
+        
+        if len(molecules) == 0:
+            return {}, {}
+        
+        # Sort molecules by size (number of atoms)
+        sorted_molecules = sorted(
+            molecules.items(), 
+            key=lambda x: len(x[1]['symbols']), 
+            reverse=True
+        )
+        
+        # Take the 2 largest molecules as spacer
+        spacer_molecules = {}
+        a_site_molecules = {}
+        
+        for i, (mol_id, mol_data) in enumerate(sorted_molecules):
+            if i < 2:  # First 2 largest molecules
+                spacer_molecules[mol_id] = mol_data
+            else:  # Remaining smaller molecules
+                a_site_molecules[mol_id] = mol_data
+        
+        print(f"Molecule separation by size:")
+        print(f"  - Spacer molecules (2 largest): {len(spacer_molecules)} molecules")
+        for mol_id, mol_data in spacer_molecules.items():
+            print(f"    • Molecule {mol_id}: {mol_data['formula']} ({len(mol_data['symbols'])} atoms)")
+        
+        print(f"  - A-site molecules (remaining): {len(a_site_molecules)} molecules")
+        for mol_id, mol_data in a_site_molecules.items():
+            print(f"    • Molecule {mol_id}: {mol_data['formula']} ({len(mol_data['symbols'])} atoms)")
+        
+        return spacer_molecules, a_site_molecules
+    
+    def create_spacer_structure(self, spacer_molecules):
+        """
+        Create a VASP structure containing only the 2 largest molecules (spacer).
+        
+        Parameters:
+            spacer_molecules (dict): Dictionary of spacer molecule data
+            
+        Returns:
+            ase.Atoms: ASE Atoms object with spacer molecules
+        """
+        if not spacer_molecules:
+            print("No spacer molecules to create structure from")
+            return None
+        
+        all_symbols = []
+        all_positions = []
+        
+        for mol_id, mol_data in spacer_molecules.items():
+            all_symbols.extend(mol_data['symbols'])
+            all_positions.extend(mol_data['coordinates'])
+        
+        if not all_symbols:
+            return None
+        
+        # Create ASE Atoms object with original cell parameters but only spacer molecules
+        spacer_structure = Atoms(
+            symbols=all_symbols,
+            positions=all_positions,
+            cell=self.spacer.get_cell() if self.spacer is not None else [20.0, 20.0, 20.0],
+            pbc=self.spacer.get_pbc() if self.spacer is not None else [True, True, True]
+        )
+        
+        return spacer_structure
+    
+    def create_a_sites_structure(self, a_site_molecules):
+        """
+        Create a VASP structure containing only the smaller molecules (A-sites).
+        
+        Parameters:
+            a_site_molecules (dict): Dictionary of A-site molecule data
+            
+        Returns:
+            ase.Atoms: ASE Atoms object with A-site molecules
+        """
+        if not a_site_molecules:
+            print("No A-site molecules to create structure from")
+            return None
+        
+        all_symbols = []
+        all_positions = []
+        
+        for mol_id, mol_data in a_site_molecules.items():
+            all_symbols.extend(mol_data['symbols'])
+            all_positions.extend(mol_data['coordinates'])
+        
+        if not all_symbols:
+            return None
+        
+        # Create ASE Atoms object with original cell parameters but only A-site molecules
+        a_sites_structure = Atoms(
+            symbols=all_symbols,
+            positions=all_positions,
+            cell=self.spacer.get_cell() if self.spacer is not None else [20.0, 20.0, 20.0],
+            pbc=self.spacer.get_pbc() if self.spacer is not None else [True, True, True]
+        )
+        
+        return a_sites_structure
+    
+    def create_salt_structure(self, spacer_molecules):
+        """
+        Create a VASP structure containing the spacer molecules plus terminal halogens.
+        This creates a "salt" structure with the organic molecules and their terminal atoms.
+        
+        Parameters:
+            spacer_molecules (dict): Dictionary of spacer molecule data
+            
+        Returns:
+            ase.Atoms: ASE Atoms object with spacer molecules and terminal halogens
+        """
+        if not spacer_molecules:
+            print("No spacer molecules to create salt structure from")
+            return None
+        
+        all_symbols = []
+        all_positions = []
+        
+        # Add spacer molecules first
+        for mol_id, mol_data in spacer_molecules.items():
+            all_symbols.extend(mol_data['symbols'])
+            all_positions.extend(mol_data['coordinates'])
+        
+        # Add terminal X atoms from connectivity analysis
+        terminal_count = 0
+        if self.terminal_x_atoms:
+            for oct_key, oct_terminal_data in self.terminal_x_atoms.items():
+                terminal_atoms = oct_terminal_data.get('terminal_axial_atoms', [])
+                for terminal_atom in terminal_atoms:
+                    atom_index = terminal_atom['atom_index']
+                    # Get atom symbol and position from original structure
+                    atom_symbol = self.chemical_symbols[atom_index]
+                    atom_position = self.coord[atom_index]
+                    
+                    all_symbols.append(atom_symbol)
+                    all_positions.append(atom_position.tolist())
+                    terminal_count += 1
+        
+        if not all_symbols:
+            print("No atoms found for salt structure")
+            return None
+        
+        print(f"Salt structure: Added {terminal_count} terminal halogen atoms to spacer molecules")
+        
+        # Create ASE Atoms object
+        salt_structure = Atoms(
+            symbols=all_symbols,
+            positions=all_positions,
+            cell=self.spacer.get_cell() if self.spacer is not None else [20.0, 20.0, 20.0],
+            pbc=self.spacer.get_pbc() if self.spacer is not None else [True, True, True]
+        )
+        
+        return salt_structure
+    
+    def create_layers_only_structure(self):
+        """
+        Create a VASP structure containing only the inorganic layers (without large molecules).
+        This removes the 2 largest molecules but keeps the octahedral framework and any small molecules.
+        
+        Returns:
+            ase.Atoms: ASE Atoms object with layers only
+        """
+        if not hasattr(self, 'spacer_molecules') or not self.spacer_molecules:
+            print("No molecule analysis available - returning original structure")
+            return self.atoms.copy()
+        
+        # Get spacer molecules and identify which ones to remove (2 largest)
+        spacer_molecules, a_site_molecules = self.separate_molecules_by_size()
+        
+        # Get indices of atoms in large molecules that should be removed
+        large_mol_indices = set()
+        if spacer_molecules:
+            for mol_id, mol_data in spacer_molecules.items():
+                # Find atom indices in original structure corresponding to this molecule
+                mol_positions = np.array(mol_data['coordinates'])
+                
+                for mol_pos in mol_positions:
+                    # Find corresponding atom in original structure
+                    for i, orig_pos in enumerate(self.atoms.get_positions()):
+                        dist = self.geometry_calc.calculate_distance(mol_pos, orig_pos)
+                        if dist < 0.1:  # Very small tolerance for exact match
+                            large_mol_indices.add(i)
+                            break
+        
+        # Create mask for atoms to keep (all except large molecules)
+        all_indices = set(range(len(self.atoms)))
+        keep_indices = sorted(all_indices - large_mol_indices)
+        
+        if not keep_indices:
+            print("Warning: No atoms left after removing large molecules")
+            return self.atoms.copy()
+        
+        # Create new structure with only the atoms we want to keep
+        layers_structure = self.atoms[keep_indices]
+        
+        print(f"Layers-only structure: {len(layers_structure)} atoms (removed {len(large_mol_indices)} from large molecules)")
+        
+        return layers_structure
+
+    def save_separated_structures(self, output_dir):
+        """
+        Save separate VASP structures for spacer and A-site molecules.
+        
+        Parameters:
+            output_dir (str): Directory where to save the structures
+        """
+        import os
+        
+        # Create output directory if it doesn't exist
+        os.makedirs(output_dir, exist_ok=True)
+        
+        # Separate molecules by size
+        spacer_molecules, a_site_molecules = self.separate_molecules_by_size()
+        
+        # Create and save spacer structure (2 largest molecules)
+        if spacer_molecules:
+            spacer_structure = self.create_spacer_structure(spacer_molecules)
+            if spacer_structure is not None:
+                spacer_file = os.path.join(output_dir, "spacer.vasp")
+                spacer_structure.write(spacer_file)
+                print(f"✓ Spacer structure saved: {spacer_file}")
+                print(f"  Contains {len(spacer_structure)} atoms from {len(spacer_molecules)} molecules")
+            else:
+                print("✗ Failed to create spacer structure")
+        else:
+            print("✗ No spacer molecules found")
+        
+        # Create and save A-sites structure (remaining smaller molecules)
+        if a_site_molecules:
+            a_sites_structure = self.create_a_sites_structure(a_site_molecules)
+            if a_sites_structure is not None:
+                a_sites_file = os.path.join(output_dir, "a_sites.vasp")
+                a_sites_structure.write(a_sites_file)
+                print(f"✓ A-sites structure saved: {a_sites_file}")
+                print(f"  Contains {len(a_sites_structure)} atoms from {len(a_site_molecules)} molecules")
+            else:
+                print("✗ Failed to create A-sites structure")
+        else:
+            print("✗ No A-site molecules found")
+        
+        return spacer_file if spacer_molecules else None, a_sites_file if a_site_molecules else None
+
+    def save_salt_structure(self, output_path):
+        """
+        Save the salt structure (spacer molecules + 4 terminal halogens) to a VASP file.
+        
+        Parameters:
+            output_path (str): Path where to save the salt structure
+        """
+        if not hasattr(self, 'spacer_molecules') or not self.spacer_molecules:
+            print("Error: No spacer molecule analysis available. Run analyze_spacer_molecules() first.")
+            return
+        
+        # Get spacer molecules (2 largest)
+        spacer_molecules, _ = self.separate_molecules_by_size()
+        
+        if not spacer_molecules:
+            print("Error: No spacer molecules found to create salt structure.")
+            return
+        
+        # Create salt structure
+        salt_structure = self.create_salt_structure(spacer_molecules)
+        
+        if salt_structure is not None:
+            salt_structure.write(output_path)
+            print(f"Salt structure saved to: {output_path}")
+            print(f"  Contains {len(salt_structure)} atoms (spacer molecules + 4 terminal halogens)")
+        else:
+            print("Error: Failed to create salt structure.")
 
