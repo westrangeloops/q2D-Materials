@@ -1,0 +1,13 @@
+{
+  "total_energy_eV": -738.76116566,
+  "energy_per_atom_eV": -5.302574716714285,
+  "n_total_atoms": 70,
+  "chemical_formula": "C14H32Br14N6Pb4",
+  "halogen": "Br",
+  "n_layers": 2,
+  "n_Br": 14,
+  "n_N": 6,
+  "n_H": 32,
+  "n_C": 14,
+  "n_Pb": 4
+}

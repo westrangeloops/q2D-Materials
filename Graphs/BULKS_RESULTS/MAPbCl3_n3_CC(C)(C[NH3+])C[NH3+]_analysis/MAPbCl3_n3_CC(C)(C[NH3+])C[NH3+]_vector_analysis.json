@@ -1,0 +1,47 @@
+{
+  "experiment": {
+    "name": "CONTCAR",
+    "file_path": "/home/dotempo/Documents/DION-JACOBSON/BULKS/MAPbCl3/MAPbCl3_n3_CC(C)(C[NH3+])C[NH3+]/CONTCAR",
+    "timestamp": "2025-08-06 13:13:49.643958"
+  },
+  "salt_structure_info": {
+    "total_atoms": 50,
+    "halogen_symbol": "Cl"
+  },
+  "vector_analysis": {
+    "plane_analysis": {
+      "low_plane": {
+        "normal_vector": [
+          0.014101853562221196,
+          -0.011015909088572492,
+          0.9998398809174707
+        ],
+        "center_position": [
+          2.307732143475875,
+          2.191941105707116,
+          4.73812680112758
+        ],
+        "angle_vs_z_axis_degrees": 0.926559930377195
+      },
+      "high_plane": {
+        "normal_vector": [
+          0.0088095154712893,
+          -0.015296657993355611,
+          0.9998441902073522
+        ],
+        "center_position": [
+          2.1774400402327525,
+          2.3889949293926818,
+          8.847908426982025
+        ],
+        "angle_vs_z_axis_degrees": 1.314259472325934
+      }
+    },
+    "vector_analysis_results": {
+      "angle_between_planes_degrees": 0.39000648801967913,
+      "distance_between_plane_centers_angstrom": 4.1165654681794415,
+      "angle_between_low_plane_and_z": 0.926559930377195,
+      "angle_between_high_plane_and_z": 1.314259472325934
+    }
+  }
+}

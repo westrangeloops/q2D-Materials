@@ -1,0 +1,41 @@
+============================================================
+PENETRATION DEPTH ANALYSIS SUMMARY
+============================================================
+
+Molecule 1 (C6H18N2):
+------------------------------
+  Molecular length: 8.004 Å
+  Penetration segments:
+    N1 → Low plane:      0.423 Å
+    Low → High plane:    6.983 Å
+    High plane → N2:     0.598 Å
+    Total calculated:    8.004 Å
+    Length difference:   0.000000 Å
+  N1 position: (5.257, 6.632, 4.703)
+  N2 position: (2.993, 3.106, 11.523)
+
+Molecule 2 (C6H18N2):
+------------------------------
+  Molecular length: 7.246 Å
+  Penetration segments:
+    N1 → Low plane:      0.797 Å
+    Low → High plane:    6.382 Å
+    High plane → N2:     0.067 Å
+    Total calculated:    7.246 Å
+    Length difference:   0.000000 Å
+  N1 position: (0.074, 2.781, 4.753)
+  N2 position: (0.061, 5.988, 11.251)
+
+COMPARATIVE ANALYSIS:
+------------------------------
+  Segment differences between molecules:
+    N1 → Low plane difference:   0.374 Å
+    Low → High plane difference: 0.601 Å
+    High plane → N2 difference:  0.531 Å
+
+PLANE INFORMATION:
+------------------------------
+  Angle between planes: 0.71°
+  Distance between plane centers: 6.296 Å
+
+============================================================

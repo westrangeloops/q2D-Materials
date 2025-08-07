@@ -93,15 +93,15 @@ def extract_comprehensive_properties(root_path: str, cutoff_ref_ligand: float = 
                     # Extract energy from XML if available
                     energy_data = extract_energy_properties(experiment_dir, halogen, n_slab)
                     
-                        try:
+                    try:
                         # Initialize analyzer with comprehensive analysis
-                            analyzer = q2D_analyzer(
-                                file_path=str(structure_path),
-                                b='Pb',  # Central atom
-                                x=halogen,  # Ligand atom
-                                cutoff_ref_ligand=cutoff_ref_ligand
-                            )
-                            
+                        analyzer = q2D_analyzer(
+                            file_path=str(structure_path),
+                            b='Pb',  # Central atom
+                            x=halogen,  # Ligand atom
+                            cutoff_ref_ligand=cutoff_ref_ligand
+                        )
+                        
                         # Get unified ontology
                         ontology = analyzer.get_ontology()
                                 
@@ -118,7 +118,7 @@ def extract_comprehensive_properties(root_path: str, cutoff_ref_ligand: float = 
                                 
                         print(f"    ✓ Extracted {octahedra_count} octahedra and {molecules_count} molecules")
                                 
-                        except Exception as e:
+                    except Exception as e:
                         print(f"    ✗ Analysis failed: {str(e)}")
                         continue
     
@@ -130,7 +130,7 @@ def extract_comprehensive_properties(root_path: str, cutoff_ref_ligand: float = 
 
 def extract_energy_properties(experiment_dir: Path, halogen: str, n_slab: Optional[int]) -> Dict:
     """Extract energy properties from vasprun.xml if available."""
-                    xml_path = experiment_dir / 'vasprun.xml'
+    xml_path = experiment_dir / 'vasprun.xml'
     energy_data = {
         'energy': None,
         'eslab': None,
@@ -142,10 +142,10 @@ def extract_energy_properties(experiment_dir: Path, halogen: str, n_slab: Option
         'cell_beta': None,
         'cell_gamma': None
     }
-                    
-                    if xml_path.exists():
-                        try:
-                            atoms = read(str(xml_path), format='vasp-xml')
+    
+    if xml_path.exists():
+        try:
+            atoms = read(str(xml_path), format='vasp-xml')
             energy_data['energy'] = atoms.get_potential_energy()
             energy_data['total_atoms'] = len(atoms)
             
@@ -161,27 +161,27 @@ def extract_energy_properties(experiment_dir: Path, halogen: str, n_slab: Option
             })
             
             # Calculate formation energy if possible
-                            if halogen and n_slab in [1, 2, 3]:
-                                halogen_energies = {
-                                    'Br': -25.57722651 / 2,
-                                    'Cl': -11.54663106 / 2,
-                                    'I': -47.93611241 / 2
-                                }
-                                EPb = -56.04078139 / 2
-                                EMA = -38.22939357
-                                
-                                EX = halogen_energies[halogen]
-                                
-                                if n_slab == 1:
-                                    NX, NB, NMA = 8, 2, 0
-                                elif n_slab == 2:
-                                    NX, NB, NMA = 14, 4, 2
-                                elif n_slab == 3:
-                                    NX, NB, NMA = 20, 6, 4
-                                
+            if halogen and n_slab in [1, 2, 3]:
+                halogen_energies = {
+                    'Br': -25.57722651 / 2,
+                    'Cl': -11.54663106 / 2,
+                    'I': -47.93611241 / 2
+                }
+                EPb = -56.04078139 / 2
+                EMA = -38.22939357
+                
+                EX = halogen_energies[halogen]
+                
+                if n_slab == 1:
+                    NX, NB, NMA = 8, 2, 0
+                elif n_slab == 2:
+                    NX, NB, NMA = 14, 4, 2
+                elif n_slab == 3:
+                    NX, NB, NMA = 20, 6, 4
+                
                 energy_data['eslab'] = energy_data['energy'] - (NX * EX + NB * EPb + NMA * EMA)
                 
-                        except Exception as e:
+        except Exception as e:
             print(f"      Warning: Could not extract energy: {str(e)}")
     
     return energy_data
@@ -261,7 +261,7 @@ def extract_properties_from_ontology(ontology: Dict, analyzer, experiment_name: 
             entity.update({
                 'entity_id': f"molecule_{mol_id}",
                 'entity_type': 'molecule',
-                'entity_index': int(mol_id) if mol_id.isdigit() else 0,
+                'entity_index': int(mol_id) if str(mol_id).isdigit() else 0,
             })
             
             # Add molecular-specific properties

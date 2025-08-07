@@ -8,6 +8,7 @@ Main Classes:
 - GeometryCalculator: Geometric calculations and coordinate transformations
 - AngularAnalyzer: Angular analysis between octahedra
 - ConnectivityAnalyzer: Connectivity and network analysis
+- VectorAnalyzer: Vector and plane analysis for salt structures
 
 Legacy support:
 - The original q2D_analyzer from analyzer.py is still available for backward compatibility
@@ -18,6 +19,7 @@ from .geometry import GeometryCalculator
 from .angular_analysis import AngularAnalyzer
 from .connectivity import ConnectivityAnalyzer
 from .layers_analysis import LayersAnalyzer
+from .vector_analysis import VectorAnalyzer
 
 # Import the refactored main analyzer
 from .analyzer import q2D_analyzer
@@ -34,6 +36,7 @@ __all__ = [
     'AngularAnalyzer',
     'ConnectivityAnalyzer',
     'LayersAnalyzer',
+    'VectorAnalyzer',
     'ASiteIdentifier',
     'q2D_analyzer_legacy'
 ] 

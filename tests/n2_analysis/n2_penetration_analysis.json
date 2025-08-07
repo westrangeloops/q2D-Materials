@@ -1,0 +1,192 @@
+{
+  "experiment": {
+    "name": "n2_relaxado",
+    "file_path": "/home/dotempo/Documents/REPO/SVC-Materials/Graphs/henrique/n2_relaxado.vasp",
+    "timestamp": "2025-08-07 16:38:36.732827"
+  },
+  "analysis_parameters": {
+    "halogen_symbol": "Br",
+    "central_metal": "Pb",
+    "total_spacer_molecules": 8,
+    "analyzed_molecules": 2
+  },
+  "penetration_analysis": {
+    "molecule_1": {
+      "formula": "C6H18N2",
+      "n1_position": [
+        0.3536293455157012,
+        5.928152126722914,
+        3.6830809654122385
+      ],
+      "n2_position": [
+        12.496850532180135,
+        5.646476497073223,
+        11.705007182468103
+      ],
+      "molecular_vector": [
+        0.340706048437927,
+        -0.3375631954425944,
+        7.40226722549855
+      ],
+      "n1_n2_straight_distance": 7.417788727110634,
+      "low_plane_intersection": [
+        0.39747085672576826,
+        5.884715032826417,
+        4.635592912395569
+      ],
+      "high_plane_intersection": [
+        0.6943353939536282,
+        5.590588931280319,
+        11.08534819091079
+      ],
+      "penetration_segments": {
+        "n1_to_low_plane": 0.9545092290687028,
+        "low_plane_to_high_plane": 6.46327949804193,
+        "high_plane_to_n2": 0.0,
+        "total_calculated": 7.417788727110633,
+        "n1_n2_straight_distance": 7.417788727110634,
+        "length_difference": 8.881784197001252e-16
+      },
+      "penetration_parameters": {
+        "t_low_plane": 0.1286784059486825,
+        "t_high_plane": 1.0
+      }
+    },
+    "molecule_2": {
+      "formula": "C6H18N2",
+      "n1_position": [
+        6.224459041392954,
+        0.1431255269557891,
+        4.028127713303793
+      ],
+      "n2_position": [
+        6.6260306288387065,
+        11.431493447423886,
+        11.359961010114047
+      ],
+      "molecular_vector": [
+        0.3407060484379277,
+        -0.3375631954425126,
+        7.40226722549855
+      ],
+      "n1_n2_straight_distance": 7.41778872711063,
+      "low_plane_intersection": [
+        6.236763637003677,
+        0.130934435450291,
+        4.295460521834369
+      ],
+      "high_plane_intersection": [
+        6.54437912157554,
+        -0.17384344100878593,
+        10.978793647095884
+      ],
+      "penetration_segments": {
+        "n1_to_low_plane": 0.26789336740965425,
+        "low_plane_to_high_plane": 6.697347124313113,
+        "high_plane_to_n2": 0.452548235387863,
+        "total_calculated": 7.417788727110631,
+        "n1_n2_straight_distance": 7.41778872711063,
+        "length_difference": 8.881784197001252e-16
+      },
+      "penetration_parameters": {
+        "t_low_plane": 0.03611499023024936,
+        "t_high_plane": 0.9389914903165301
+      }
+    },
+    "comparative_analysis": {
+      "molecule_1": {
+        "id": "molecule_1",
+        "segments": {
+          "n1_to_low_plane": 0.9545092290687028,
+          "low_plane_to_high_plane": 6.46327949804193,
+          "high_plane_to_n2": 0.0,
+          "total_calculated": 7.417788727110633,
+          "n1_n2_straight_distance": 7.417788727110634,
+          "length_difference": 8.881784197001252e-16
+        }
+      },
+      "molecule_2": {
+        "id": "molecule_2",
+        "segments": {
+          "n1_to_low_plane": 0.26789336740965425,
+          "low_plane_to_high_plane": 6.697347124313113,
+          "high_plane_to_n2": 0.452548235387863,
+          "total_calculated": 7.417788727110631,
+          "n1_n2_straight_distance": 7.41778872711063,
+          "length_difference": 8.881784197001252e-16
+        }
+      },
+      "penetration_comparison": {
+        "n1_to_low_diff": 0.6866158616590485,
+        "low_to_high_diff": 0.23406762627118294,
+        "high_to_n2_diff": 0.452548235387863
+      }
+    },
+    "plane_reference": {
+      "terminal_atom_analysis": {
+        "total_terminal_atoms_found": 8,
+        "terminal_atom_indices": [
+          166,
+          168,
+          144,
+          148,
+          149,
+          150,
+          151,
+          152
+        ],
+        "low_plane_atom_indices": [
+          166,
+          149
+        ],
+        "high_plane_atom_indices": [
+          152,
+          144
+        ],
+        "halogen_symbol": "Br"
+      },
+      "plane_analysis": {
+        "low_plane": {
+          "normal_vector": [
+            0.06375791434547724,
+            0.005712128474692718,
+            0.9979490467687232
+          ],
+          "center_position": [
+            2.1909633033193803,
+            5.862955541052004,
+            4.521133115929538
+          ],
+          "angle_vs_z_axis_degrees": 0.5807119863161702,
+          "atom_indices": [
+            166,
+            149
+          ]
+        },
+        "high_plane": {
+          "normal_vector": [
+            0.06375791434547724,
+            0.005712128474692713,
+            0.9979490467687232
+          ],
+          "center_position": [
+            10.53221108356268,
+            5.785182218974847,
+            10.689906584430886
+          ],
+          "angle_vs_z_axis_degrees": 0.5807119863161702,
+          "atom_indices": [
+            152,
+            144
+          ]
+        }
+      },
+      "vector_analysis_results": {
+        "angle_between_planes_degrees": 8.537736462515939e-07,
+        "distance_between_plane_centers_angstrom": 10.37478815816144,
+        "angle_between_low_plane_and_z": 0.5807119863161702,
+        "angle_between_high_plane_and_z": 0.5807119863161702
+      }
+    }
+  }
+}

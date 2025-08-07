@@ -1,0 +1,77 @@
+{
+  "experiment": {
+    "name": "n2_relaxado",
+    "file_path": "/home/dotempo/Documents/REPO/SVC-Materials/Graphs/henrique/n2_relaxado.vasp",
+    "timestamp": "2025-08-07 16:38:36.710811"
+  },
+  "salt_structure_info": {
+    "total_atoms": 60,
+    "halogen_symbol": "Br"
+  },
+  "vector_analysis": {
+    "terminal_atom_analysis": {
+      "total_terminal_atoms_found": 8,
+      "terminal_atom_indices": [
+        166,
+        168,
+        144,
+        148,
+        149,
+        150,
+        151,
+        152
+      ],
+      "low_plane_atom_indices": [
+        166,
+        149
+      ],
+      "high_plane_atom_indices": [
+        152,
+        144
+      ],
+      "halogen_symbol": "Br"
+    },
+    "plane_analysis": {
+      "low_plane": {
+        "normal_vector": [
+          0.06375791434547724,
+          0.005712128474692718,
+          0.9979490467687232
+        ],
+        "center_position": [
+          2.1909633033193803,
+          5.862955541052004,
+          4.521133115929538
+        ],
+        "angle_vs_z_axis_degrees": 0.5807119863161702,
+        "atom_indices": [
+          166,
+          149
+        ]
+      },
+      "high_plane": {
+        "normal_vector": [
+          0.06375791434547724,
+          0.005712128474692713,
+          0.9979490467687232
+        ],
+        "center_position": [
+          10.53221108356268,
+          5.785182218974847,
+          10.689906584430886
+        ],
+        "angle_vs_z_axis_degrees": 0.5807119863161702,
+        "atom_indices": [
+          152,
+          144
+        ]
+      }
+    },
+    "vector_analysis_results": {
+      "angle_between_planes_degrees": 8.537736462515939e-07,
+      "distance_between_plane_centers_angstrom": 10.37478815816144,
+      "angle_between_low_plane_and_z": 0.5807119863161702,
+      "angle_between_high_plane_and_z": 0.5807119863161702
+    }
+  }
+}

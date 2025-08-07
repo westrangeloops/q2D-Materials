@@ -1,0 +1,47 @@
+{
+  "experiment": {
+    "name": "CONTCAR",
+    "file_path": "/home/dotempo/Documents/DION-JACOBSON/BULKS/MAPbBr3/MAPbBr3_n1_[NH3+]C1=CC=C([NH3+])C=C1/CONTCAR",
+    "timestamp": "2025-08-06 13:14:59.526170"
+  },
+  "salt_structure_info": {
+    "total_atoms": 40,
+    "halogen_symbol": "Br"
+  },
+  "vector_analysis": {
+    "plane_analysis": {
+      "low_plane": {
+        "normal_vector": [
+          -0.00911595689935117,
+          -0.0461064215490919,
+          0.9988949380298945
+        ],
+        "center_position": [
+          2.126811332537846,
+          1.9934213067850342,
+          3.137942671762085
+        ],
+        "angle_vs_z_axis_degrees": 4.534389583733444
+      },
+      "high_plane": {
+        "normal_vector": [
+          -0.00940245386968473,
+          -0.04618715696745547,
+          0.9988885525385163
+        ],
+        "center_position": [
+          6.256691902760887,
+          6.059184859572357,
+          8.174272463143737
+        ],
+        "angle_vs_z_axis_degrees": 4.549893252309344
+      }
+    },
+    "vector_analysis_results": {
+      "angle_between_planes_degrees": 0.017058320619756238,
+      "distance_between_plane_centers_angstrom": 7.677953149052027,
+      "angle_between_low_plane_and_z": 4.534389583733444,
+      "angle_between_high_plane_and_z": 4.549893252309344
+    }
+  }
+}

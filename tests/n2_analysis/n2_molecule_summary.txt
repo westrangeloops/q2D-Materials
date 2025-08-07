@@ -1,25 +1,25 @@
 ================================================================================
-MOLECULE ANALYSIS SUMMARY - structure_n2_test
+MOLECULE ANALYSIS SUMMARY - n2_relaxado
 ================================================================================
 
-Experiment: structure_n2_test
-File: tests/structures/structure_n2_test.vasp
-Analysis timestamp: 2025-07-31 14:51:03.906998
+Experiment: n2_relaxado
+File: /home/dotempo/Documents/REPO/SVC-Materials/Graphs/henrique/n2_relaxado.vasp
+Analysis timestamp: 2025-08-07 16:38:36.733431
 
 SPACER STRUCTURE ANALYSIS:
 ----------------------------------------
-Total spacer atoms: 50
+Total spacer atoms: 136
 Spacer composition:
-  C: 8 atoms
-  H: 36 atoms
-  N: 6 atoms
+  C: 28 atoms
+  H: 96 atoms
+  N: 12 atoms
 
 MOLECULE IDENTIFICATION:
 ----------------------------------------
-Total molecules identified: 4
+Total molecules identified: 8
 Molecule distribution:
-  C3H12N2: 2 molecules
-  CH6N: 2 molecules
+  C6H18N2: 4 molecules
+  CH6N: 4 molecules
 
 INDIVIDUAL MOLECULES:
 ----------------------------------------
@@ -27,38 +27,66 @@ Molecule 0:
   Formula: CH6N
   Atoms: 8
   Atom types: C, H, N
-  Original indices: [0, 9, 10, 11, 12, 14, 38, 47]
+  Original indices: [0, 34, 40, 44, 47, 51, 69, 74]
 
 Molecule 1:
-  Formula: C3H12N2
-  Atoms: 17
+  Formula: C6H18N2
+  Atoms: 26
   Atom types: C, H, N
-  Original indices: [1, 2, 3, 13, 15, 20, 22, 23, 24, 27, 32, 35, 37, 40, 43, 45, 46]
+  Original indices: [1, 2, 3, 12, 13, 14, 30, 31, 55, 66, 67, 80, 81, 82, 83, 84, 85, 87, 88, 89, 90, 91, 92, 93, 94, 95]
 
 Molecule 2:
+  Formula: C6H18N2
+  Atoms: 26
+  Atom types: C, H, N
+  Original indices: [4, 5, 7, 8, 9, 10, 29, 35, 52, 53, 54, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 86, 96, 97, 98, 99]
+
+Molecule 3:
   Formula: CH6N
   Atoms: 8
   Atom types: C, H, N
-  Original indices: [4, 5, 6, 7, 8, 25, 39, 44]
+  Original indices: [6, 28, 41, 43, 49, 72, 77, 78]
 
-Molecule 3:
-  Formula: C3H12N2
-  Atoms: 17
+Molecule 4:
+  Formula: CH6N
+  Atoms: 8
   Atom types: C, H, N
-  Original indices: [16, 17, 18, 19, 21, 26, 28, 29, 30, 31, 33, 34, 36, 41, 42, 48, 49]
+  Original indices: [11, 32, 42, 50, 68, 70, 73, 76]
+
+Molecule 5:
+  Formula: CH6N
+  Atoms: 8
+  Atom types: C, H, N
+  Original indices: [15, 33, 45, 46, 48, 71, 75, 79]
+
+Molecule 6:
+  Formula: C6H18N2
+  Atoms: 26
+  Atom types: C, H, N
+  Original indices: [16, 18, 20, 22, 24, 27, 37, 39, 101, 103, 104, 106, 109, 110, 113, 115, 117, 119, 120, 123, 125, 126, 129, 131, 133, 135]
+
+Molecule 7:
+  Formula: C6H18N2
+  Atoms: 26
+  Atom types: C, H, N
+  Original indices: [17, 19, 21, 23, 25, 26, 36, 38, 100, 102, 105, 107, 108, 111, 112, 114, 116, 118, 121, 122, 124, 127, 128, 130, 132, 134]
 
 SPACER AND SALT STRUCTURES:
 ----------------------------------------
 Spacer molecules (2 largest molecules):
-  Molecule 1: C3H12N2 (17 atoms)
-  Molecule 3: C3H12N2 (17 atoms)
+  Molecule 1: C6H18N2 (26 atoms)
+  Molecule 2: C6H18N2 (26 atoms)
 
 Salt structure composition:
-  - Spacer molecules: 2 molecules, 34 atoms
-  - Terminal halogens (Cl): 4 atoms
-  - Total salt atoms: 38 atoms
+  - Spacer molecules: 2 molecules, 52 atoms
+  - Terminal halogens (Br): 8 atoms
+  - Total salt atoms: 60 atoms
 
 A-site molecules (smaller molecules):
+  Molecule 6: C6H18N2 (26 atoms)
+  Molecule 7: C6H18N2 (26 atoms)
   Molecule 0: CH6N (8 atoms)
-  Molecule 2: CH6N (8 atoms)
+  Molecule 3: CH6N (8 atoms)
+  Molecule 4: CH6N (8 atoms)
+  Molecule 5: CH6N (8 atoms)
 

@@ -1,0 +1,47 @@
+================================================================================
+MOLECULE ANALYSIS SUMMARY - CONTCAR
+================================================================================
+
+Experiment: CONTCAR
+File: /home/dotempo/Documents/DION-JACOBSON/BULKS/MAPbBr3/MAPbBr3_n1_CC(C)(C[NH3+])C[NH3+]/CONTCAR
+Analysis timestamp: 2025-08-06 13:14:18.526698
+
+SPACER STRUCTURE ANALYSIS:
+----------------------------------------
+Total spacer atoms: 46
+Spacer composition:
+  C: 10 atoms
+  H: 32 atoms
+  N: 4 atoms
+
+MOLECULE IDENTIFICATION:
+----------------------------------------
+Total molecules identified: 2
+Molecule distribution:
+  C5H16N2: 2 molecules
+
+INDIVIDUAL MOLECULES:
+----------------------------------------
+Molecule 0:
+  Formula: C5H16N2
+  Atoms: 23
+  Atom types: C, H, N
+  Original indices: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 30, 31, 36, 38, 39, 40, 41, 43, 44]
+
+Molecule 1:
+  Formula: C5H16N2
+  Atoms: 23
+  Atom types: C, H, N
+  Original indices: [14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 32, 33, 34, 35, 37, 42, 45]
+
+SPACER AND SALT STRUCTURES:
+----------------------------------------
+Spacer molecules (2 largest molecules):
+  Molecule 0: C5H16N2 (23 atoms)
+  Molecule 1: C5H16N2 (23 atoms)
+
+Salt structure composition:
+  - Spacer molecules: 2 molecules, 46 atoms
+  - Terminal halogens (Br): 4 atoms
+  - Total salt atoms: 50 atoms
+

@@ -1,0 +1,1818 @@
+{
+  "experiment": {
+    "name": "CONTCAR",
+    "file_path": "/home/dotempo/Documents/DION-JACOBSON/BULKS/MAPbI3/MAPbI3_n2_[NH3+]CCC1=CC=C(CC[NH3+])C=C1/CONTCAR",
+    "timestamp": "2025-08-06 13:15:59.324794"
+  },
+  "cell_properties": {
+    "lattice_parameters": {
+      "A": 8.724646668088472,
+      "B": 8.651232646846521,
+      "C": 20.149174857792275,
+      "Alpha": 94.0976541133634,
+      "Beta": 103.2675639278164,
+      "Gamma": 90.13901667954546
+    },
+    "composition": {
+      "metal_B": "Pb",
+      "halogen_X": "I",
+      "number_of_atoms": 94,
+      "number_of_octahedra": 4
+    },
+    "structure_info": {
+      "cell_volume": 1476.1841922830986,
+      "cutoff_ref_ligand": 3.5
+    }
+  },
+  "octahedra": {
+    "octahedron_1": {
+      "central_atom": {
+        "global_index": 51,
+        "symbol": "Pb",
+        "coordinates": {
+          "x": 4.938011555310468,
+          "y": 4.48524870417162,
+          "z": 1.374337845419681
+        }
+      },
+      "ligand_atoms": {
+        "axial_global_indices": [
+          75,
+          81
+        ],
+        "equatorial_global_indices": [
+          74,
+          77,
+          78,
+          79
+        ],
+        "all_ligand_global_indices": [
+          74,
+          75,
+          77,
+          78,
+          79,
+          81
+        ]
+      },
+      "distortion_parameters": {
+        "zeta": 0.1959847398628085,
+        "delta": 0.00011132218928277574,
+        "sigma": 37.6975594686714,
+        "theta_mean": 112.6887645363598,
+        "theta_min": 93.25520737124646,
+        "theta_max": 132.12232170147314,
+        "eight_theta": {
+          "theta_face_1": {
+            "value": 25.896799364243577,
+            "description": "Theta angle for octahedral face 1"
+          },
+          "theta_face_2": {
+            "value": 26.00189660861438,
+            "description": "Theta angle for octahedral face 2"
+          },
+          "theta_face_3": {
+            "value": 32.660440682242545,
+            "description": "Theta angle for octahedral face 3"
+          },
+          "theta_face_4": {
+            "value": 35.325793526585684,
+            "description": "Theta angle for octahedral face 4"
+          },
+          "theta_face_5": {
+            "value": 31.46558540388081,
+            "description": "Theta angle for octahedral face 5"
+          },
+          "theta_face_6": {
+            "value": 30.055693577872958,
+            "description": "Theta angle for octahedral face 6"
+          },
+          "theta_face_7": {
+            "value": 11.30081782051554,
+            "description": "Theta angle for octahedral face 7"
+          },
+          "theta_face_8": {
+            "value": 32.67050208876412,
+            "description": "Theta angle for octahedral face 8"
+          }
+        }
+      },
+      "bond_distances": {
+        "bond_1": {
+          "distance": 3.1586047632168066,
+          "central_atom_index": 51,
+          "ligand_atom_index": 74
+        },
+        "bond_2": {
+          "distance": 3.1759843253974367,
+          "central_atom_index": 51,
+          "ligand_atom_index": 75
+        },
+        "bond_3": {
+          "distance": 3.189048441010706,
+          "central_atom_index": 51,
+          "ligand_atom_index": 77
+        },
+        "bond_4": {
+          "distance": 3.2393168851173524,
+          "central_atom_index": 51,
+          "ligand_atom_index": 78
+        },
+        "bond_5": {
+          "distance": 3.239192753698639,
+          "central_atom_index": 51,
+          "ligand_atom_index": 79
+        },
+        "bond_6": {
+          "distance": 3.241112630671766,
+          "central_atom_index": 51,
+          "ligand_atom_index": 81
+        }
+      },
+      "bond_distance_analysis": {
+        "mean_bond_distance": 3.2072099665187843,
+        "bond_distance_variance": 0.0011450818324338675
+      },
+      "bond_angles": {
+        "cis_angles": {
+          "cis_angle_1": {
+            "value": 83.55726724128043,
+            "atom_indices": "See ligand_global_indices for atoms involved"
+          },
+          "cis_angle_2": {
+            "value": 85.6807612093664,
+            "atom_indices": "See ligand_global_indices for atoms involved"
+          },
+          "cis_angle_3": {
+            "value": 86.09691454200018,
+            "atom_indices": "See ligand_global_indices for atoms involved"
+          },
+          "cis_angle_4": {
+            "value": 87.86807901665931,
+            "atom_indices": "See ligand_global_indices for atoms involved"
+          },
+          "cis_angle_5": {
+            "value": 87.91642490215712,
+            "atom_indices": "See ligand_global_indices for atoms involved"
+          },
+          "cis_angle_6": {
+            "value": 90.10344608122794,
+            "atom_indices": "See ligand_global_indices for atoms involved"
+          },
+          "cis_angle_7": {
+            "value": 90.43608321691086,
+            "atom_indices": "See ligand_global_indices for atoms involved"
+          },
+          "cis_angle_8": {
+            "value": 90.86221560127784,
+            "atom_indices": "See ligand_global_indices for atoms involved"
+          },
+          "cis_angle_9": {
+            "value": 91.68275558915208,
+            "atom_indices": "See ligand_global_indices for atoms involved"
+          },
+          "cis_angle_10": {
+            "value": 92.6835127217756,
+            "atom_indices": "See ligand_global_indices for atoms involved"
+          },
+          "cis_angle_11": {
+            "value": 93.46262664693083,
+            "atom_indices": "See ligand_global_indices for atoms involved"
+          },
+          "cis_angle_12": {
+            "value": 99.58636652285968,
+            "atom_indices": "See ligand_global_indices for atoms involved"
+          }
+        },
+        "trans_angles": {
+          "trans_angle_1": {
+            "value": 172.77402445567176,
+            "atom_indices": "See ligand_global_indices for atoms involved"
+          },
+          "trans_angle_2": {
+            "value": 174.53604252656703,
+            "atom_indices": "See ligand_global_indices for atoms involved"
+          },
+          "trans_angle_3": {
+            "value": 177.73421036778356,
+            "atom_indices": "See ligand_global_indices for atoms involved"
+          }
+        }
+      },
+      "geometric_properties": {
+        "octahedral_volume": 43.65,
+        "is_octahedral": true
+      },
+      "detailed_atom_info": {
+        "all_ligand_symbols": [
+          "I",
+          "I",
+          "I",
+          "I",
+          "I",
+          "I"
+        ],
+        "axial_atom_symbols": [
+          "I",
+          "I"
+        ],
+        "equatorial_atom_symbols": [
+          "I",
+          "I",
+          "I",
+          "I"
+        ],
+        "ligand_coordinates": [
+          [
+            7.621420884249053,
+            6.148999143348094,
+            1.4639642908549542
+          ],
+          [
+            5.054747706827366,
+            3.9513695430529987,
+            4.502951299878783
+          ],
+          [
+            6.440069830442291,
+            1.7266646266448262,
+            0.8229171490031675
+          ],
+          [
+            3.2172118458059114,
+            7.128315672005328,
+            2.1134043143666568
+          ],
+          [
+            2.140770686164692,
+            2.8617000272073314,
+            1.195723990632708
+          ],
+          [
+            4.780448565309454,
+            4.625519015535507,
+            -1.8599022861462906
+          ]
+        ]
+      },
+      "angular_analysis": {
+        "axial_central_axial": {
+          "angle_degrees": 172.77402445567176,
+          "axial_atom_1_global_index": 75,
+          "axial_atom_2_global_index": 81,
+          "central_atom_global_index": 51,
+          "deviation_from_180": 7.225975544328236,
+          "is_linear": false
+        },
+        "central_axial_central": [
+          {
+            "angle_degrees": 13.297508310800001,
+            "central_atom_1_global_index": 51,
+            "axial_atom_global_index": 81,
+            "central_atom_2_global_index": 48,
+            "connected_octahedron": "octahedron_4",
+            "axial_position": 2,
+            "bridge_type": "axial_bridge"
+          }
+        ],
+        "central_equatorial_central": [],
+        "summary": {
+          "total_axial_bridges": 1,
+          "total_equatorial_bridges": 0,
+          "average_axial_central_axial_angle": 172.77402445567176,
+          "average_central_axial_central_angle": 13.297508310800001,
+          "average_central_equatorial_central_angle": 0.0
+        }
+      }
+    },
+    "octahedron_2": {
+      "central_atom": {
+        "global_index": 50,
+        "symbol": "Pb",
+        "coordinates": {
+          "x": 0.5802286244210195,
+          "y": 0.19157673816540127,
+          "z": 2.019328961568408
+        }
+      },
+      "ligand_atoms": {
+        "axial_global_indices": [
+          76,
+          82
+        ],
+        "equatorial_global_indices": [
+          74,
+          77,
+          78,
+          79
+        ],
+        "all_ligand_global_indices": [
+          74,
+          76,
+          77,
+          78,
+          79,
+          82
+        ]
+      },
+      "distortion_parameters": {
+        "zeta": 0.10793752299333326,
+        "delta": 4.4249916774316106e-05,
+        "sigma": 34.08268851776856,
+        "theta_mean": 93.91824450222322,
+        "theta_min": 68.67148095614739,
+        "theta_max": 119.16500804829901,
+        "eight_theta": {
+          "theta_face_1": {
+            "value": 22.564566153779445,
+            "description": "Theta angle for octahedral face 1"
+          },
+          "theta_face_2": {
+            "value": 10.9309071265507,
+            "description": "Theta angle for octahedral face 2"
+          },
+          "theta_face_3": {
+            "value": 30.760037852085723,
+            "description": "Theta angle for octahedral face 3"
+          },
+          "theta_face_4": {
+            "value": 13.923690126652644,
+            "description": "Theta angle for octahedral face 4"
+          },
+          "theta_face_5": {
+            "value": 29.13769987943394,
+            "description": "Theta angle for octahedral face 5"
+          },
+          "theta_face_6": {
+            "value": 21.2523175491646,
+            "description": "Theta angle for octahedral face 6"
+          },
+          "theta_face_7": {
+            "value": 30.78900765075643,
+            "description": "Theta angle for octahedral face 7"
+          },
+          "theta_face_8": {
+            "value": 28.47826266602293,
+            "description": "Theta angle for octahedral face 8"
+          }
+        }
+      },
+      "bond_distances": {
+        "bond_1": {
+          "distance": 3.177744295753845,
+          "central_atom_index": 50,
+          "ligand_atom_index": 74
+        },
+        "bond_2": {
+          "distance": 3.184807039168353,
+          "central_atom_index": 50,
+          "ligand_atom_index": 76
+        },
+        "bond_3": {
+          "distance": 3.226595793653317,
+          "central_atom_index": 50,
+          "ligand_atom_index": 77
+        },
+        "bond_4": {
+          "distance": 3.2042865648035974,
+          "central_atom_index": 50,
+          "ligand_atom_index": 78
+        },
+        "bond_5": {
+          "distance": 3.2380243302691256,
+          "central_atom_index": 50,
+          "ligand_atom_index": 79
+        },
+        "bond_6": {
+          "distance": 3.200496063629089,
+          "central_atom_index": 50,
+          "ligand_atom_index": 82
+        }
+      },
+      "bond_distance_analysis": {
+        "mean_bond_distance": 3.2053256812128876,
+        "bond_distance_variance": 0.00045462863290688895
+      },
+      "bond_angles": {
+        "cis_angles": {
+          "cis_angle_1": {
+            "value": 83.4539647216524,
+            "atom_indices": "See ligand_global_indices for atoms involved"
+          },
+          "cis_angle_2": {
+            "value": 86.17386724366679,
+            "atom_indices": "See ligand_global_indices for atoms involved"
+          },
+          "cis_angle_3": {
+            "value": 86.79166534702745,
+            "atom_indices": "See ligand_global_indices for atoms involved"
+          },
+          "cis_angle_4": {
+            "value": 87.55865696913337,
+            "atom_indices": "See ligand_global_indices for atoms involved"
+          },
+          "cis_angle_5": {
+            "value": 89.11324341654709,
+            "atom_indices": "See ligand_global_indices for atoms involved"
+          },
+          "cis_angle_6": {
+            "value": 90.18164519794452,
+            "atom_indices": "See ligand_global_indices for atoms involved"
+          },
+          "cis_angle_7": {
+            "value": 90.59420974672216,
+            "atom_indices": "See ligand_global_indices for atoms involved"
+          },
+          "cis_angle_8": {
+            "value": 91.30709179703597,
+            "atom_indices": "See ligand_global_indices for atoms involved"
+          },
+          "cis_angle_9": {
+            "value": 92.35443455679255,
+            "atom_indices": "See ligand_global_indices for atoms involved"
+          },
+          "cis_angle_10": {
+            "value": 93.52378591128634,
+            "atom_indices": "See ligand_global_indices for atoms involved"
+          },
+          "cis_angle_11": {
+            "value": 93.96890989926376,
+            "atom_indices": "See ligand_global_indices for atoms involved"
+          },
+          "cis_angle_12": {
+            "value": 95.24400910675035,
+            "atom_indices": "See ligand_global_indices for atoms involved"
+          }
+        },
+        "trans_angles": {
+          "trans_angle_1": {
+            "value": 172.4432631848567,
+            "atom_indices": "See ligand_global_indices for atoms involved"
+          },
+          "trans_angle_2": {
+            "value": 175.73978620359358,
+            "atom_indices": "See ligand_global_indices for atoms involved"
+          },
+          "trans_angle_3": {
+            "value": 176.93643146806207,
+            "atom_indices": "See ligand_global_indices for atoms involved"
+          }
+        }
+      },
+      "geometric_properties": {
+        "octahedral_volume": 43.68,
+        "is_octahedral": true
+      },
+      "detailed_atom_info": {
+        "all_ligand_symbols": [
+          "I",
+          "I",
+          "I",
+          "I",
+          "I",
+          "I"
+        ],
+        "axial_atom_symbols": [
+          "I",
+          "I"
+        ],
+        "equatorial_atom_symbols": [
+          "I",
+          "I",
+          "I",
+          "I"
+        ],
+        "ligand_coordinates": [
+          [
+            0.5499047552864795,
+            1.0006567250734775,
+            5.092198767945118
+          ],
+          [
+            -1.0125062826820481,
+            -2.4873300376194387,
+            2.67480579493916
+          ],
+          [
+            -2.2376023252839508,
+            1.7360173703314978,
+            1.7270067280307424
+          ],
+          [
+            3.2609568346010525,
+            -1.5173662526488754,
+            2.420156239423288
+          ],
+          [
+            0.4180817755678154,
+            -0.258987963148804,
+            -1.1830922182190724
+          ],
+          [
+            2.1407706861646925,
+            2.861700027207333,
+            1.195723990632708
+          ]
+        ]
+      },
+      "angular_analysis": {
+        "axial_central_axial": {
+          "angle_degrees": 172.4432631848567,
+          "axial_atom_1_global_index": 76,
+          "axial_atom_2_global_index": 82,
+          "central_atom_global_index": 50,
+          "deviation_from_180": 7.556736815143296,
+          "is_linear": false
+        },
+        "central_axial_central": [
+          {
+            "angle_degrees": 24.18151225728422,
+            "central_atom_1_global_index": 50,
+            "axial_atom_global_index": 82,
+            "central_atom_2_global_index": 49,
+            "connected_octahedron": "octahedron_3",
+            "axial_position": 2,
+            "bridge_type": "axial_bridge"
+          }
+        ],
+        "central_equatorial_central": [],
+        "summary": {
+          "total_axial_bridges": 1,
+          "total_equatorial_bridges": 0,
+          "average_axial_central_axial_angle": 172.4432631848567,
+          "average_central_axial_central_angle": 24.18151225728422,
+          "average_central_equatorial_central_angle": 0.0
+        }
+      }
+    },
+    "octahedron_3": {
+      "central_atom": {
+        "global_index": 49,
+        "symbol": "Pb",
+        "coordinates": {
+          "x": 5.978435644727887,
+          "y": 7.837987393377706,
+          "z": 14.341146710561821
+        }
+      },
+      "ligand_atoms": {
+        "axial_global_indices": [
+          82,
+          86
+        ],
+        "equatorial_global_indices": [
+          83,
+          84,
+          85,
+          87
+        ],
+        "all_ligand_global_indices": [
+          82,
+          83,
+          84,
+          85,
+          86,
+          87
+        ]
+      },
+      "distortion_parameters": {
+        "zeta": 0.2662452047027397,
+        "delta": 0.00023015247407538012,
+        "sigma": 42.41012235091806,
+        "theta_mean": 135.43701415335136,
+        "theta_min": 99.05231146891435,
+        "theta_max": 171.8217168377884,
+        "eight_theta": {
+          "theta_face_1": {
+            "value": 24.90527557643346,
+            "description": "Theta angle for octahedral face 1"
+          },
+          "theta_face_2": {
+            "value": 30.657220541096436,
+            "description": "Theta angle for octahedral face 2"
+          },
+          "theta_face_3": {
+            "value": 45.165198398025545,
+            "description": "Theta angle for octahedral face 3"
+          },
+          "theta_face_4": {
+            "value": 10.417146595286376,
+            "description": "Theta angle for octahedral face 4"
+          },
+          "theta_face_5": {
+            "value": 33.072668756098075,
+            "description": "Theta angle for octahedral face 5"
+          },
+          "theta_face_6": {
+            "value": 38.58123792074902,
+            "description": "Theta angle for octahedral face 6"
+          },
+          "theta_face_7": {
+            "value": 45.957158473726885,
+            "description": "Theta angle for octahedral face 7"
+          },
+          "theta_face_8": {
+            "value": 42.11812204528694,
+            "description": "Theta angle for octahedral face 8"
+          }
+        }
+      },
+      "bond_distances": {
+        "bond_1": {
+          "distance": 3.1393404757646115,
+          "central_atom_index": 49,
+          "ligand_atom_index": 82
+        },
+        "bond_2": {
+          "distance": 3.1721031345844364,
+          "central_atom_index": 49,
+          "ligand_atom_index": 83
+        },
+        "bond_3": {
+          "distance": 3.1724826299710625,
+          "central_atom_index": 49,
+          "ligand_atom_index": 84
+        },
+        "bond_4": {
+          "distance": 3.244388295834068,
+          "central_atom_index": 49,
+          "ligand_atom_index": 85
+        },
+        "bond_5": {
+          "distance": 3.28121326471181,
+          "central_atom_index": 49,
+          "ligand_atom_index": 86
+        },
+        "bond_6": {
+          "distance": 3.224569884476972,
+          "central_atom_index": 49,
+          "ligand_atom_index": 87
+        }
+      },
+      "bond_distance_analysis": {
+        "mean_bond_distance": 3.2056829475571598,
+        "bond_distance_variance": 0.0023651396119296086
+      },
+      "bond_angles": {
+        "cis_angles": {
+          "cis_angle_1": {
+            "value": 82.66910358736035,
+            "atom_indices": "See ligand_global_indices for atoms involved"
+          },
+          "cis_angle_2": {
+            "value": 84.74056056047228,
+            "atom_indices": "See ligand_global_indices for atoms involved"
+          },
+          "cis_angle_3": {
+            "value": 86.71139329524165,
+            "atom_indices": "See ligand_global_indices for atoms involved"
+          },
+          "cis_angle_4": {
+            "value": 87.32211298783272,
+            "atom_indices": "See ligand_global_indices for atoms involved"
+          },
+          "cis_angle_5": {
+            "value": 88.4812755445986,
+            "atom_indices": "See ligand_global_indices for atoms involved"
+          },
+          "cis_angle_6": {
+            "value": 89.53018500179817,
+            "atom_indices": "See ligand_global_indices for atoms involved"
+          },
+          "cis_angle_7": {
+            "value": 89.70854764733186,
+            "atom_indices": "See ligand_global_indices for atoms involved"
+          },
+          "cis_angle_8": {
+            "value": 90.62008000108955,
+            "atom_indices": "See ligand_global_indices for atoms involved"
+          },
+          "cis_angle_9": {
+            "value": 91.33980403939283,
+            "atom_indices": "See ligand_global_indices for atoms involved"
+          },
+          "cis_angle_10": {
+            "value": 94.68999130899707,
+            "atom_indices": "See ligand_global_indices for atoms involved"
+          },
+          "cis_angle_11": {
+            "value": 97.00011757223885,
+            "atom_indices": "See ligand_global_indices for atoms involved"
+          },
+          "cis_angle_12": {
+            "value": 97.9233080538354,
+            "atom_indices": "See ligand_global_indices for atoms involved"
+          }
+        },
+        "trans_angles": {
+          "trans_angle_1": {
+            "value": 169.52590728688745,
+            "atom_indices": "See ligand_global_indices for atoms involved"
+          },
+          "trans_angle_2": {
+            "value": 171.87213433348936,
+            "atom_indices": "See ligand_global_indices for atoms involved"
+          },
+          "trans_angle_3": {
+            "value": 178.47765346838884,
+            "atom_indices": "See ligand_global_indices for atoms involved"
+          }
+        }
+      },
+      "geometric_properties": {
+        "octahedral_volume": 43.52,
+        "is_octahedral": true
+      },
+      "detailed_atom_info": {
+        "all_ligand_symbols": [
+          "I",
+          "I",
+          "I",
+          "I",
+          "I",
+          "I"
+        ],
+        "axial_atom_symbols": [
+          "I",
+          "I"
+        ],
+        "equatorial_atom_symbols": [
+          "I",
+          "I",
+          "I",
+          "I"
+        ],
+        "ligand_coordinates": [
+          [
+            5.3955229030671505,
+            8.58942992407983,
+            11.349323607262509
+          ],
+          [
+            8.518363366039395,
+            6.017956839214188,
+            13.794800438619772
+          ],
+          [
+            7.644455535440277,
+            10.518609720252256,
+            14.662530751672234
+          ],
+          [
+            4.2051478746496125,
+            5.14354755765496,
+            13.99257839544082
+          ],
+          [
+            6.482633871575215,
+            7.63219554179018,
+            17.57685287002453
+          ],
+          [
+            3.249286916796421,
+            9.346511331032703,
+            15.162093536018716
+          ]
+        ]
+      },
+      "angular_analysis": {
+        "axial_central_axial": {
+          "angle_degrees": 169.52590728688745,
+          "axial_atom_1_global_index": 86,
+          "axial_atom_2_global_index": 82,
+          "central_atom_global_index": 49,
+          "deviation_from_180": 10.474092713112555,
+          "is_linear": false
+        },
+        "central_axial_central": [
+          {
+            "angle_degrees": 30.02081624625446,
+            "central_atom_1_global_index": 49,
+            "axial_atom_global_index": 82,
+            "central_atom_2_global_index": 50,
+            "connected_octahedron": "octahedron_2",
+            "axial_position": 2,
+            "bridge_type": "axial_bridge"
+          }
+        ],
+        "central_equatorial_central": [],
+        "summary": {
+          "total_axial_bridges": 1,
+          "total_equatorial_bridges": 0,
+          "average_axial_central_axial_angle": 169.52590728688745,
+          "average_central_axial_central_angle": 30.02081624625446,
+          "average_central_equatorial_central_angle": 0.0
+        }
+      }
+    },
+    "octahedron_4": {
+      "central_atom": {
+        "global_index": 48,
+        "symbol": "Pb",
+        "coordinates": {
+          "x": 1.695128482515052,
+          "y": 3.387210882082022,
+          "z": 14.908790985162415
+        }
+      },
+      "ligand_atoms": {
+        "axial_global_indices": [
+          80,
+          81
+        ],
+        "equatorial_global_indices": [
+          83,
+          84,
+          85,
+          87
+        ],
+        "all_ligand_global_indices": [
+          80,
+          81,
+          83,
+          84,
+          85,
+          87
+        ]
+      },
+      "distortion_parameters": {
+        "zeta": 0.22678320484093906,
+        "delta": 0.00019592568938841843,
+        "sigma": 39.638994932020864,
+        "theta_mean": 112.59030340241083,
+        "theta_min": 96.0580368860629,
+        "theta_max": 129.12256991875878,
+        "eight_theta": {
+          "theta_face_1": {
+            "value": 33.83507390031095,
+            "description": "Theta angle for octahedral face 1"
+          },
+          "theta_face_2": {
+            "value": 31.914460085423023,
+            "description": "Theta angle for octahedral face 2"
+          },
+          "theta_face_3": {
+            "value": 22.60996175081919,
+            "description": "Theta angle for octahedral face 3"
+          },
+          "theta_face_4": {
+            "value": 27.01386692913389,
+            "description": "Theta angle for octahedral face 4"
+          },
+          "theta_face_5": {
+            "value": 23.199701617698686,
+            "description": "Theta angle for octahedral face 5"
+          },
+          "theta_face_6": {
+            "value": 33.11309956282657,
+            "description": "Theta angle for octahedral face 6"
+          },
+          "theta_face_7": {
+            "value": 30.259936370198233,
+            "description": "Theta angle for octahedral face 7"
+          },
+          "theta_face_8": {
+            "value": 23.234506588411122,
+            "description": "Theta angle for octahedral face 8"
+          }
+        }
+      },
+      "bond_distances": {
+        "bond_1": {
+          "distance": 3.1392540417852306,
+          "central_atom_index": 48,
+          "ligand_atom_index": 80
+        },
+        "bond_2": {
+          "distance": 3.1754687525580803,
+          "central_atom_index": 48,
+          "ligand_atom_index": 81
+        },
+        "bond_3": {
+          "distance": 3.197555531404968,
+          "central_atom_index": 48,
+          "ligand_atom_index": 83
+        },
+        "bond_4": {
+          "distance": 3.225261250871492,
+          "central_atom_index": 48,
+          "ligand_atom_index": 84
+        },
+        "bond_5": {
+          "distance": 3.2806722026442703,
+          "central_atom_index": 48,
+          "ligand_atom_index": 85
+        },
+        "bond_6": {
+          "distance": 3.2331280770734554,
+          "central_atom_index": 48,
+          "ligand_atom_index": 87
+        }
+      },
+      "bond_distance_analysis": {
+        "mean_bond_distance": 3.2085566427229164,
+        "bond_distance_variance": 0.0020170227874548295
+      },
+      "bond_angles": {
+        "cis_angles": {
+          "cis_angle_1": {
+            "value": 82.87054219598376,
+            "atom_indices": "See ligand_global_indices for atoms involved"
+          },
+          "cis_angle_2": {
+            "value": 84.78688246146459,
+            "atom_indices": "See ligand_global_indices for atoms involved"
+          },
+          "cis_angle_3": {
+            "value": 85.58462659464477,
+            "atom_indices": "See ligand_global_indices for atoms involved"
+          },
+          "cis_angle_4": {
+            "value": 88.35893311422875,
+            "atom_indices": "See ligand_global_indices for atoms involved"
+          },
+          "cis_angle_5": {
+            "value": 89.03260546848654,
+            "atom_indices": "See ligand_global_indices for atoms involved"
+          },
+          "cis_angle_6": {
+            "value": 89.6273819792559,
+            "atom_indices": "See ligand_global_indices for atoms involved"
+          },
+          "cis_angle_7": {
+            "value": 90.23889184072748,
+            "atom_indices": "See ligand_global_indices for atoms involved"
+          },
+          "cis_angle_8": {
+            "value": 91.76618952361407,
+            "atom_indices": "See ligand_global_indices for atoms involved"
+          },
+          "cis_angle_9": {
+            "value": 91.98419534577529,
+            "atom_indices": "See ligand_global_indices for atoms involved"
+          },
+          "cis_angle_10": {
+            "value": 94.22370627007119,
+            "atom_indices": "See ligand_global_indices for atoms involved"
+          },
+          "cis_angle_11": {
+            "value": 94.78293249990315,
+            "atom_indices": "See ligand_global_indices for atoms involved"
+          },
+          "cis_angle_12": {
+            "value": 96.90405126599398,
+            "atom_indices": "See ligand_global_indices for atoms involved"
+          }
+        },
+        "trans_angles": {
+          "trans_angle_1": {
+            "value": 172.2566147769795,
+            "atom_indices": "See ligand_global_indices for atoms involved"
+          },
+          "trans_angle_2": {
+            "value": 172.45913137073802,
+            "atom_indices": "See ligand_global_indices for atoms involved"
+          },
+          "trans_angle_3": {
+            "value": 174.49137211887086,
+            "atom_indices": "See ligand_global_indices for atoms involved"
+          }
+        }
+      },
+      "geometric_properties": {
+        "octahedral_volume": 43.72,
+        "is_octahedral": true
+      },
+      "detailed_atom_info": {
+        "all_ligand_symbols": [
+          "I",
+          "I",
+          "I",
+          "I",
+          "I",
+          "I"
+        ],
+        "axial_atom_symbols": [
+          "I",
+          "I"
+        ],
+        "equatorial_atom_symbols": [
+          "I",
+          "I",
+          "I",
+          "I"
+        ],
+        "ligand_coordinates": [
+          [
+            1.2445327113552989,
+            2.513132189558161,
+            11.927538592433207
+          ],
+          [
+            3.2930319055915627,
+            0.7008294063785003,
+            15.468845461075347
+          ],
+          [
+            4.2051478746496125,
+            5.143547557654962,
+            13.99257839544082
+          ],
+          [
+            -0.9894716314908247,
+            1.8822805392847242,
+            15.87337225575644
+          ],
+          [
+            2.211073494385754,
+            3.880373339506961,
+            18.110884306181518
+          ],
+          [
+            -0.15930878968684792,
+            6.02730958290086,
+            14.698890017647347
+          ]
+        ]
+      },
+      "angular_analysis": {
+        "axial_central_axial": {
+          "angle_degrees": 172.45913137073802,
+          "axial_atom_1_global_index": 80,
+          "axial_atom_2_global_index": 81,
+          "central_atom_global_index": 48,
+          "deviation_from_180": 7.540868629261979,
+          "is_linear": false
+        },
+        "central_axial_central": [
+          {
+            "angle_degrees": 21.23558777045161,
+            "central_atom_1_global_index": 48,
+            "axial_atom_global_index": 81,
+            "central_atom_2_global_index": 51,
+            "connected_octahedron": "octahedron_1",
+            "axial_position": 2,
+            "bridge_type": "axial_bridge"
+          }
+        ],
+        "central_equatorial_central": [],
+        "summary": {
+          "total_axial_bridges": 1,
+          "total_equatorial_bridges": 0,
+          "average_axial_central_axial_angle": 172.45913137073802,
+          "average_central_axial_central_angle": 21.23558777045161,
+          "average_central_equatorial_central_angle": 0.0
+        }
+      }
+    }
+  },
+  "connectivity_analysis": {
+    "shared_atoms": {
+      "74": [
+        {
+          "octahedron": "octahedron_1",
+          "role": "ligand"
+        },
+        {
+          "octahedron": "octahedron_2",
+          "role": "ligand"
+        }
+      ],
+      "77": [
+        {
+          "octahedron": "octahedron_1",
+          "role": "ligand"
+        },
+        {
+          "octahedron": "octahedron_2",
+          "role": "ligand"
+        }
+      ],
+      "78": [
+        {
+          "octahedron": "octahedron_1",
+          "role": "ligand"
+        },
+        {
+          "octahedron": "octahedron_2",
+          "role": "ligand"
+        }
+      ],
+      "79": [
+        {
+          "octahedron": "octahedron_1",
+          "role": "ligand"
+        },
+        {
+          "octahedron": "octahedron_2",
+          "role": "ligand"
+        }
+      ],
+      "81": [
+        {
+          "octahedron": "octahedron_1",
+          "role": "ligand"
+        },
+        {
+          "octahedron": "octahedron_4",
+          "role": "ligand"
+        }
+      ],
+      "82": [
+        {
+          "octahedron": "octahedron_2",
+          "role": "ligand"
+        },
+        {
+          "octahedron": "octahedron_3",
+          "role": "ligand"
+        }
+      ],
+      "83": [
+        {
+          "octahedron": "octahedron_3",
+          "role": "ligand"
+        },
+        {
+          "octahedron": "octahedron_4",
+          "role": "ligand"
+        }
+      ],
+      "84": [
+        {
+          "octahedron": "octahedron_3",
+          "role": "ligand"
+        },
+        {
+          "octahedron": "octahedron_4",
+          "role": "ligand"
+        }
+      ],
+      "85": [
+        {
+          "octahedron": "octahedron_3",
+          "role": "ligand"
+        },
+        {
+          "octahedron": "octahedron_4",
+          "role": "ligand"
+        }
+      ],
+      "87": [
+        {
+          "octahedron": "octahedron_3",
+          "role": "ligand"
+        },
+        {
+          "octahedron": "octahedron_4",
+          "role": "ligand"
+        }
+      ]
+    },
+    "octahedra_connections": {
+      "octahedron_1": [
+        {
+          "connected_octahedron": "octahedron_2",
+          "shared_atom_index": 74,
+          "atom_symbol": "I",
+          "connection_type": "equatorial"
+        },
+        {
+          "connected_octahedron": "octahedron_2",
+          "shared_atom_index": 77,
+          "atom_symbol": "I",
+          "connection_type": "equatorial"
+        },
+        {
+          "connected_octahedron": "octahedron_2",
+          "shared_atom_index": 78,
+          "atom_symbol": "I",
+          "connection_type": "equatorial"
+        },
+        {
+          "connected_octahedron": "octahedron_2",
+          "shared_atom_index": 79,
+          "atom_symbol": "I",
+          "connection_type": "equatorial"
+        },
+        {
+          "connected_octahedron": "octahedron_4",
+          "shared_atom_index": 81,
+          "atom_symbol": "I",
+          "connection_type": "axial"
+        }
+      ],
+      "octahedron_2": [
+        {
+          "connected_octahedron": "octahedron_1",
+          "shared_atom_index": 74,
+          "atom_symbol": "I",
+          "connection_type": "equatorial"
+        },
+        {
+          "connected_octahedron": "octahedron_1",
+          "shared_atom_index": 77,
+          "atom_symbol": "I",
+          "connection_type": "equatorial"
+        },
+        {
+          "connected_octahedron": "octahedron_1",
+          "shared_atom_index": 78,
+          "atom_symbol": "I",
+          "connection_type": "equatorial"
+        },
+        {
+          "connected_octahedron": "octahedron_1",
+          "shared_atom_index": 79,
+          "atom_symbol": "I",
+          "connection_type": "equatorial"
+        },
+        {
+          "connected_octahedron": "octahedron_3",
+          "shared_atom_index": 82,
+          "atom_symbol": "I",
+          "connection_type": "axial"
+        }
+      ],
+      "octahedron_3": [
+        {
+          "connected_octahedron": "octahedron_2",
+          "shared_atom_index": 82,
+          "atom_symbol": "I",
+          "connection_type": "axial"
+        },
+        {
+          "connected_octahedron": "octahedron_4",
+          "shared_atom_index": 83,
+          "atom_symbol": "I",
+          "connection_type": "equatorial"
+        },
+        {
+          "connected_octahedron": "octahedron_4",
+          "shared_atom_index": 84,
+          "atom_symbol": "I",
+          "connection_type": "equatorial"
+        },
+        {
+          "connected_octahedron": "octahedron_4",
+          "shared_atom_index": 85,
+          "atom_symbol": "I",
+          "connection_type": "equatorial"
+        },
+        {
+          "connected_octahedron": "octahedron_4",
+          "shared_atom_index": 87,
+          "atom_symbol": "I",
+          "connection_type": "equatorial"
+        }
+      ],
+      "octahedron_4": [
+        {
+          "connected_octahedron": "octahedron_1",
+          "shared_atom_index": 81,
+          "atom_symbol": "I",
+          "connection_type": "axial"
+        },
+        {
+          "connected_octahedron": "octahedron_3",
+          "shared_atom_index": 83,
+          "atom_symbol": "I",
+          "connection_type": "equatorial"
+        },
+        {
+          "connected_octahedron": "octahedron_3",
+          "shared_atom_index": 84,
+          "atom_symbol": "I",
+          "connection_type": "equatorial"
+        },
+        {
+          "connected_octahedron": "octahedron_3",
+          "shared_atom_index": 85,
+          "atom_symbol": "I",
+          "connection_type": "equatorial"
+        },
+        {
+          "connected_octahedron": "octahedron_3",
+          "shared_atom_index": 87,
+          "atom_symbol": "I",
+          "connection_type": "equatorial"
+        }
+      ]
+    },
+    "sharing_types": {
+      "corner_sharing": [
+        {
+          "octahedron_1": "octahedron_1",
+          "octahedron_2": "octahedron_4",
+          "shared_atoms": [
+            81
+          ],
+          "num_shared_atoms": 1,
+          "shared_atom_symbols": [
+            "I"
+          ]
+        },
+        {
+          "octahedron_1": "octahedron_2",
+          "octahedron_2": "octahedron_3",
+          "shared_atoms": [
+            82
+          ],
+          "num_shared_atoms": 1,
+          "shared_atom_symbols": [
+            "I"
+          ]
+        }
+      ],
+      "edge_sharing": [],
+      "face_sharing": [
+        {
+          "octahedron_1": "octahedron_1",
+          "octahedron_2": "octahedron_2",
+          "shared_atoms": [
+            74,
+            77,
+            78,
+            79
+          ],
+          "num_shared_atoms": 4,
+          "shared_atom_symbols": [
+            "I",
+            "I",
+            "I",
+            "I"
+          ]
+        },
+        {
+          "octahedron_1": "octahedron_3",
+          "octahedron_2": "octahedron_4",
+          "shared_atoms": [
+            83,
+            84,
+            85,
+            87
+          ],
+          "num_shared_atoms": 4,
+          "shared_atom_symbols": [
+            "I",
+            "I",
+            "I",
+            "I"
+          ]
+        }
+      ],
+      "summary": {
+        "total_corner_sharing_pairs": 2,
+        "total_edge_sharing_pairs": 0,
+        "total_face_sharing_pairs": 2,
+        "total_connected_pairs": 4
+      }
+    },
+    "network_statistics": {
+      "total_octahedra": 4,
+      "total_shared_atoms": 10,
+      "connections_per_octahedron": {
+        "octahedron_1": 5,
+        "octahedron_2": 5,
+        "octahedron_3": 5,
+        "octahedron_4": 5
+      },
+      "average_connectivity": 5.0,
+      "max_connectivity": 5,
+      "min_connectivity": 5,
+      "connectivity_variance": 0.0,
+      "most_connected_octahedra": [
+        "octahedron_1",
+        "octahedron_2",
+        "octahedron_3",
+        "octahedron_4"
+      ],
+      "least_connected_octahedra": [
+        "octahedron_1",
+        "octahedron_2",
+        "octahedron_3",
+        "octahedron_4"
+      ]
+    },
+    "terminal_axial_atoms": {
+      "octahedron_1": {
+        "terminal_axial_atoms": [
+          {
+            "atom_index": 75,
+            "atom_type": "terminal_axial"
+          }
+        ],
+        "connected_axial_atoms": [
+          {
+            "atom_index": 81,
+            "connected_to_octahedra": [
+              "octahedron_4"
+            ]
+          }
+        ]
+      },
+      "octahedron_2": {
+        "terminal_axial_atoms": [
+          {
+            "atom_index": 76,
+            "atom_type": "terminal_axial"
+          }
+        ],
+        "connected_axial_atoms": [
+          {
+            "atom_index": 82,
+            "connected_to_octahedra": [
+              "octahedron_3"
+            ]
+          }
+        ]
+      },
+      "octahedron_3": {
+        "terminal_axial_atoms": [
+          {
+            "atom_index": 86,
+            "atom_type": "terminal_axial"
+          }
+        ],
+        "connected_axial_atoms": [
+          {
+            "atom_index": 82,
+            "connected_to_octahedra": [
+              "octahedron_2"
+            ]
+          }
+        ]
+      },
+      "octahedron_4": {
+        "terminal_axial_atoms": [
+          {
+            "atom_index": 80,
+            "atom_type": "terminal_axial"
+          }
+        ],
+        "connected_axial_atoms": [
+          {
+            "atom_index": 81,
+            "connected_to_octahedra": [
+              "octahedron_1"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "layers_analysis": {
+    "layers": {
+      "layer_1": {
+        "layer_number": 1,
+        "octahedron_keys": [
+          "octahedron_4",
+          "octahedron_3"
+        ],
+        "octahedra_count": 2
+      },
+      "layer_2": {
+        "layer_number": 2,
+        "octahedron_keys": [
+          "octahedron_2",
+          "octahedron_1"
+        ],
+        "octahedra_count": 2
+      }
+    },
+    "statistics": {
+      "total_layers": 2
+    },
+    "layer_distortion_stats": {
+      "layer_1": {
+        "zeta": {
+          "mean": 0.24651420477183938,
+          "std": 0.019730999930900328,
+          "min": 0.22678320484093906,
+          "max": 0.2662452047027397,
+          "count": 2
+        },
+        "delta": {
+          "mean": 0.0002130390817318993,
+          "std": 1.7113392343480848e-05,
+          "min": 0.00019592568938841843,
+          "max": 0.00023015247407538012,
+          "count": 2
+        },
+        "sigma": {
+          "mean": 41.02455864146946,
+          "std": 1.385563709448597,
+          "min": 39.638994932020864,
+          "max": 42.41012235091806,
+          "count": 2
+        },
+        "theta_mean": {
+          "mean": 124.01365877788109,
+          "std": 11.423355375470265,
+          "min": 112.59030340241083,
+          "max": 135.43701415335136,
+          "count": 2
+        },
+        "theta_min": {
+          "mean": 97.55517417748862,
+          "std": 1.4971372914257302,
+          "min": 96.0580368860629,
+          "max": 99.05231146891435,
+          "count": 2
+        },
+        "theta_max": {
+          "mean": 150.47214337827359,
+          "std": 21.3495734595148,
+          "min": 129.12256991875878,
+          "max": 171.8217168377884,
+          "count": 2
+        },
+        "mean_bond_distance": {
+          "mean": 3.207119795140038,
+          "std": 0.00143684758287832,
+          "min": 3.2056829475571598,
+          "max": 3.2085566427229164,
+          "count": 2
+        },
+        "bond_distance_variance": {
+          "mean": 0.002191081199692219,
+          "std": 0.00017405841223738956,
+          "min": 0.0020170227874548295,
+          "max": 0.0023651396119296086,
+          "count": 2
+        },
+        "octahedral_volume": {
+          "mean": 43.620000000000005,
+          "std": 0.09999999999999788,
+          "min": 43.52,
+          "max": 43.72,
+          "count": 2
+        }
+      },
+      "layer_2": {
+        "zeta": {
+          "mean": 0.15196113142807088,
+          "std": 0.04402360843473763,
+          "min": 0.10793752299333326,
+          "max": 0.1959847398628085,
+          "count": 2
+        },
+        "delta": {
+          "mean": 7.778605302854593e-05,
+          "std": 3.3536136254229815e-05,
+          "min": 4.4249916774316106e-05,
+          "max": 0.00011132218928277574,
+          "count": 2
+        },
+        "sigma": {
+          "mean": 35.89012399321998,
+          "std": 1.8074354754514204,
+          "min": 34.08268851776856,
+          "max": 37.6975594686714,
+          "count": 2
+        },
+        "theta_mean": {
+          "mean": 103.30350451929151,
+          "std": 9.38526001706829,
+          "min": 93.91824450222322,
+          "max": 112.6887645363598,
+          "count": 2
+        },
+        "theta_min": {
+          "mean": 80.96334416369692,
+          "std": 12.291863207549532,
+          "min": 68.67148095614739,
+          "max": 93.25520737124646,
+          "count": 2
+        },
+        "theta_max": {
+          "mean": 125.64366487488607,
+          "std": 6.478656826587063,
+          "min": 119.16500804829901,
+          "max": 132.12232170147314,
+          "count": 2
+        },
+        "mean_bond_distance": {
+          "mean": 3.206267823865836,
+          "std": 0.0009421426529483412,
+          "min": 3.2053256812128876,
+          "max": 3.2072099665187843,
+          "count": 2
+        },
+        "bond_distance_variance": {
+          "mean": 0.0007998552326703782,
+          "std": 0.00034522659976348927,
+          "min": 0.00045462863290688895,
+          "max": 0.0011450818324338675,
+          "count": 2
+        },
+        "octahedral_volume": {
+          "mean": 43.665,
+          "std": 0.015000000000000568,
+          "min": 43.65,
+          "max": 43.68,
+          "count": 2
+        }
+      }
+    }
+  },
+  "vector_analysis": {
+    "plane_analysis": {
+      "low_plane": {
+        "normal_vector": [
+          0.06897348745452732,
+          0.09305099738288658,
+          0.9932694347025938
+        ],
+        "center_position": [
+          2.802326231056923,
+          2.476013134063238,
+          4.797575033911951
+        ],
+        "angle_vs_z_axis_degrees": 13.532058772248472
+      },
+      "high_plane": {
+        "normal_vector": [
+          -0.0050453516828292515,
+          -0.1132093458562018,
+          0.9935583467704386
+        ],
+        "center_position": [
+          3.341900301608795,
+          1.2284400944918947,
+          11.791807062376172
+        ],
+        "angle_vs_z_axis_degrees": 8.273672748703108
+      }
+    },
+    "vector_analysis_results": {
+      "angle_between_planes_degrees": 12.581038909608301,
+      "distance_between_plane_centers_angstrom": 7.125086689625041,
+      "angle_between_low_plane_and_z": 13.532058772248472,
+      "angle_between_high_plane_and_z": 8.273672748703108
+    }
+  },
+  "salt_structure_info": {
+    "total_atoms": 64,
+    "composition": {
+      "H": 36,
+      "C": 20,
+      "N": 4,
+      "I": 4
+    },
+    "cell_parameters": {
+      "a": 8.677672155726242,
+      "b": 8.645681924654204,
+      "c": 19.97078659232781
+    }
+  },
+  "penetration_analysis": {
+    "molecule_1": {
+      "formula": "C10H18N2",
+      "n1_position": [
+        1.5717649070218842,
+        4.370274073771818,
+        4.317560924390145
+      ],
+      "n2_position": [
+        6.5249684125671745,
+        3.205420269672261,
+        11.849035055052964
+      ],
+      "molecular_vector": [
+        4.95320350554529,
+        -1.164853804099557,
+        7.531474130662819
+      ],
+      "molecular_vector_length": 9.089236047826827,
+      "low_plane_intersection": [
+        1.8192292288757246,
+        4.312077442769751,
+        4.693836830723826
+      ],
+      "high_plane_intersection": [
+        6.644404455671928,
+        3.177332279949768,
+        12.030640649877633
+      ],
+      "penetration_segments": {
+        "n1_to_low_plane": 0.4541024071041737,
+        "low_plane_to_high_plane": 8.854301374732003,
+        "high_plane_to_n2": 0.21916773400935022,
+        "total_calculated": 9.527571515845526,
+        "molecular_length": 9.089236047826827,
+        "length_difference": 0.4383354680186997
+      },
+      "penetration_parameters": {
+        "t_low_plane": 0.4541024071041735,
+        "t_high_plane": 9.308403781836176
+      }
+    },
+    "molecule_3": {
+      "formula": "C10H18N2",
+      "n1_position": [
+        5.765749180168382,
+        0.4686760738804387,
+        4.095803982803333
+      ],
+      "n2_position": [
+        2.035031738074048,
+        7.5823851710411905,
+        12.199750170405899
+      ],
+      "molecular_vector": [
+        -3.730717442094334,
+        7.1137090971607515,
+        8.103946187602567
+      ],
+      "molecular_vector_length": 11.410392349228518,
+      "low_plane_intersection": [
+        5.465917900446945,
+        1.0403925158981897,
+        4.747104059514181
+      ],
+      "high_plane_intersection": [
+        1.8771720987518101,
+        7.883390961415579,
+        12.542656338486967
+      ],
+      "penetration_segments": {
+        "n1_to_low_plane": 0.9170334106761804,
+        "low_plane_to_high_plane": 10.97617235145001,
+        "high_plane_to_n2": 0.48281341289767316,
+        "total_calculated": 12.376019175023865,
+        "molecular_length": 11.410392349228518,
+        "length_difference": 0.9656268257953471
+      },
+      "penetration_parameters": {
+        "t_low_plane": 0.9170334106761804,
+        "t_high_plane": 11.89320576212619
+      }
+    },
+    "comparative_analysis": {
+      "molecule_1": {
+        "id": "molecule_1",
+        "segments": {
+          "n1_to_low_plane": 0.4541024071041737,
+          "low_plane_to_high_plane": 8.854301374732003,
+          "high_plane_to_n2": 0.21916773400935022,
+          "total_calculated": 9.527571515845526,
+          "molecular_length": 9.089236047826827,
+          "length_difference": 0.4383354680186997
+        }
+      },
+      "molecule_2": {
+        "id": "molecule_3",
+        "segments": {
+          "n1_to_low_plane": 0.9170334106761804,
+          "low_plane_to_high_plane": 10.97617235145001,
+          "high_plane_to_n2": 0.48281341289767316,
+          "total_calculated": 12.376019175023865,
+          "molecular_length": 11.410392349228518,
+          "length_difference": 0.9656268257953471
+        }
+      },
+      "penetration_comparison": {
+        "n1_to_low_diff": 0.46293100357200667,
+        "low_to_high_diff": 2.1218709767180073,
+        "high_to_n2_diff": 0.2636456788883229
+      }
+    },
+    "plane_reference": {
+      "plane_analysis": {
+        "low_plane": {
+          "normal_vector": [
+            0.06897348745452732,
+            0.09305099738288658,
+            0.9932694347025938
+          ],
+          "center_position": [
+            2.802326231056923,
+            2.476013134063238,
+            4.797575033911951
+          ],
+          "angle_vs_z_axis_degrees": 13.532058772248472
+        },
+        "high_plane": {
+          "normal_vector": [
+            -0.0050453516828292515,
+            -0.1132093458562018,
+            0.9935583467704386
+          ],
+          "center_position": [
+            3.341900301608795,
+            1.2284400944918947,
+            11.791807062376172
+          ],
+          "angle_vs_z_axis_degrees": 8.273672748703108
+        }
+      },
+      "vector_analysis_results": {
+        "angle_between_planes_degrees": 12.581038909608301,
+        "distance_between_plane_centers_angstrom": 7.125086689625041,
+        "angle_between_low_plane_and_z": 13.532058772248472,
+        "angle_between_high_plane_and_z": 8.273672748703108
+      }
+    }
+  }
+}

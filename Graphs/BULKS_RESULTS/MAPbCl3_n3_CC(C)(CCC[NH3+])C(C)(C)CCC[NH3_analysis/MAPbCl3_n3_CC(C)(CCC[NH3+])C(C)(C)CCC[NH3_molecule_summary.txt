@@ -1,0 +1,78 @@
+================================================================================
+MOLECULE ANALYSIS SUMMARY - CONTCAR
+================================================================================
+
+Experiment: CONTCAR
+File: /home/dotempo/Documents/DION-JACOBSON/BULKS/MAPbCl3/MAPbCl3_n3_CC(C)(CCC[NH3+])C(C)(C)CCC[NH3+]/CONTCAR
+Analysis timestamp: 2025-08-06 13:13:28.364873
+
+SPACER STRUCTURE ANALYSIS:
+----------------------------------------
+Total spacer atoms: 120
+Spacer composition:
+  C: 28 atoms
+  H: 84 atoms
+  N: 8 atoms
+
+MOLECULE IDENTIFICATION:
+----------------------------------------
+Total molecules identified: 6
+Molecule distribution:
+  C12H30N2: 2 molecules
+  CH6N: 4 molecules
+
+INDIVIDUAL MOLECULES:
+----------------------------------------
+Molecule 0:
+  Formula: C12H30N2
+  Atoms: 44
+  Atom types: C, H, N
+  Original indices: [0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 16, 17, 23, 24, 25, 45, 46, 47, 48, 50, 51, 53, 54, 55, 61, 62, 63, 64, 71, 81, 87, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 103, 112, 117]
+
+Molecule 1:
+  Formula: CH6N
+  Atoms: 8
+  Atom types: C, H, N
+  Original indices: [9, 26, 31, 34, 37, 38, 100, 114]
+
+Molecule 2:
+  Formula: CH6N
+  Atoms: 8
+  Atom types: C, H, N
+  Original indices: [11, 12, 13, 14, 19, 22, 107, 119]
+
+Molecule 3:
+  Formula: CH6N
+  Atoms: 8
+  Atom types: C, H, N
+  Original indices: [15, 21, 27, 28, 35, 40, 101, 115]
+
+Molecule 4:
+  Formula: C12H30N2
+  Atoms: 44
+  Atom types: C, H, N
+  Original indices: [18, 20, 36, 42, 43, 44, 49, 52, 56, 57, 58, 59, 60, 65, 66, 67, 68, 69, 70, 72, 73, 74, 75, 76, 77, 78, 79, 80, 82, 83, 84, 85, 86, 88, 89, 104, 105, 106, 108, 109, 110, 111, 113, 118]
+
+Molecule 5:
+  Formula: CH6N
+  Atoms: 8
+  Atom types: C, H, N
+  Original indices: [29, 30, 32, 33, 39, 41, 102, 116]
+
+SPACER AND SALT STRUCTURES:
+----------------------------------------
+Spacer molecules (2 largest molecules):
+  Molecule 0: C12H30N2 (44 atoms)
+  Molecule 4: C12H30N2 (44 atoms)
+
+Salt structure composition:
+  - Spacer molecules: 2 molecules, 88 atoms
+  - Terminal halogens (Cl): 4 atoms
+  - Total salt atoms: 92 atoms
+
+A-site molecules (smaller molecules):
+  Molecule 1: CH6N (8 atoms)
+  Molecule 2: CH6N (8 atoms)
+  Molecule 3: CH6N (8 atoms)
+  Molecule 5: CH6N (8 atoms)
+

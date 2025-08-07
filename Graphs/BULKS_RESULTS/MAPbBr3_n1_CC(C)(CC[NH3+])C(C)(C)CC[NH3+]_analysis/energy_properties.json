@@ -1,0 +1,13 @@
+{
+  "total_energy_eV": -655.18575331,
+  "energy_per_atom_eV": -5.777163556744186,
+  "n_total_atoms": 86,
+  "chemical_formula": "C20H52Br8N4Pb2",
+  "halogen": "Br",
+  "n_layers": 1,
+  "n_Br": 8,
+  "n_N": 4,
+  "n_H": 52,
+  "n_C": 20,
+  "n_Pb": 2
+}

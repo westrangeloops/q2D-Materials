@@ -1,0 +1,22 @@
+============================================================
+PENETRATION DEPTH ANALYSIS SUMMARY
+============================================================
+
+Molecule 1 (C6H18N2):
+------------------------------
+  N1-N2 straight distance: 5.197 Å
+  Penetration segments:
+    N1 → Low plane:      5.197 Å
+    Low → High plane:    0.000 Å
+    High plane → N2:     0.000 Å
+    Total calculated:    5.197 Å
+    Length difference:   0.000000 Å
+  N1 position: (7.966, 0.111, 2.738)
+  N2 position: (0.761, 7.711, 5.458)
+
+PLANE INFORMATION:
+------------------------------
+  Angle between planes: 0.01°
+  Distance between plane centers: 5.043 Å
+
+============================================================

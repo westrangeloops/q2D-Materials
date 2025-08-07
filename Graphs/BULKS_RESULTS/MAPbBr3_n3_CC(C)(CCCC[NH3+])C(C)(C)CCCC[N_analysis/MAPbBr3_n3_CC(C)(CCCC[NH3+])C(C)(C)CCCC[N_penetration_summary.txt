@@ -1,0 +1,41 @@
+============================================================
+PENETRATION DEPTH ANALYSIS SUMMARY
+============================================================
+
+Molecule 0 (C14H34N2):
+------------------------------
+  Molecular length: 15.401 Å
+  Penetration segments:
+    N1 → Low plane:      0.148 Å
+    Low → High plane:    14.869 Å
+    High plane → N2:     0.384 Å
+    Total calculated:    15.401 Å
+    Length difference:   0.000000 Å
+  N1 position: (7.713, 2.640, 3.795)
+  N2 position: (0.761, 8.237, 16.346)
+
+Molecule 3 (C14H34N2):
+------------------------------
+  Molecular length: 12.420 Å
+  Penetration segments:
+    N1 → Low plane:      0.284 Å
+    Low → High plane:    11.864 Å
+    High plane → N2:     0.272 Å
+    Total calculated:    12.420 Å
+    Length difference:   0.000000 Å
+  N1 position: (3.467, 6.610, 4.012)
+  N2 position: (4.631, 3.749, 16.042)
+
+COMPARATIVE ANALYSIS:
+------------------------------
+  Segment differences between molecules:
+    N1 → Low plane difference:   0.136 Å
+    Low → High plane difference: 3.005 Å
+    High plane → N2 difference:  0.112 Å
+
+PLANE INFORMATION:
+------------------------------
+  Angle between planes: 0.63°
+  Distance between plane centers: 11.780 Å
+
+============================================================

@@ -1,0 +1,78 @@
+================================================================================
+MOLECULE ANALYSIS SUMMARY - CONTCAR
+================================================================================
+
+Experiment: CONTCAR
+File: /home/dotempo/Documents/DION-JACOBSON/BULKS/MAPbI3/MAPbI3_n3_[NH3+]CC1CCC(C[NH3+])CC1/CONTCAR
+Analysis timestamp: 2025-08-06 13:15:38.978261
+
+SPACER STRUCTURE ANALYSIS:
+----------------------------------------
+Total spacer atoms: 92
+Spacer composition:
+  C: 20 atoms
+  H: 64 atoms
+  N: 8 atoms
+
+MOLECULE IDENTIFICATION:
+----------------------------------------
+Total molecules identified: 6
+Molecule distribution:
+  C8H20N2: 2 molecules
+  CH6N: 4 molecules
+
+INDIVIDUAL MOLECULES:
+----------------------------------------
+Molecule 0:
+  Formula: C8H20N2
+  Atoms: 30
+  Atom types: C, H, N
+  Original indices: [0, 23, 24, 25, 26, 27, 28, 29, 30, 36, 41, 42, 43, 44, 46, 47, 48, 49, 53, 63, 64, 75, 76, 77, 78, 79, 80, 81, 87, 88]
+
+Molecule 1:
+  Formula: C8H20N2
+  Atoms: 30
+  Atom types: C, H, N
+  Original indices: [1, 10, 21, 22, 33, 34, 35, 37, 38, 39, 40, 45, 50, 51, 52, 54, 55, 56, 57, 62, 68, 69, 70, 71, 72, 73, 74, 83, 86, 91]
+
+Molecule 2:
+  Formula: CH6N
+  Atoms: 8
+  Atom types: C, H, N
+  Original indices: [2, 4, 7, 19, 31, 60, 66, 85]
+
+Molecule 3:
+  Formula: CH6N
+  Atoms: 8
+  Atom types: C, H, N
+  Original indices: [3, 8, 12, 16, 20, 61, 65, 84]
+
+Molecule 4:
+  Formula: CH6N
+  Atoms: 8
+  Atom types: C, H, N
+  Original indices: [5, 11, 14, 17, 32, 59, 82, 89]
+
+Molecule 5:
+  Formula: CH6N
+  Atoms: 8
+  Atom types: C, H, N
+  Original indices: [6, 9, 13, 15, 18, 58, 67, 90]
+
+SPACER AND SALT STRUCTURES:
+----------------------------------------
+Spacer molecules (2 largest molecules):
+  Molecule 0: C8H20N2 (30 atoms)
+  Molecule 1: C8H20N2 (30 atoms)
+
+Salt structure composition:
+  - Spacer molecules: 2 molecules, 60 atoms
+  - Terminal halogens (I): 4 atoms
+  - Total salt atoms: 64 atoms
+
+A-site molecules (smaller molecules):
+  Molecule 2: CH6N (8 atoms)
+  Molecule 3: CH6N (8 atoms)
+  Molecule 4: CH6N (8 atoms)
+  Molecule 5: CH6N (8 atoms)
+

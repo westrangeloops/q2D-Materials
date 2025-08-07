@@ -1,0 +1,78 @@
+================================================================================
+MOLECULE ANALYSIS SUMMARY - CONTCAR
+================================================================================
+
+Experiment: CONTCAR
+File: /home/dotempo/Documents/DION-JACOBSON/BULKS/MAPbCl3/MAPbCl3_n3_[NH3+]CCCCCCCCC[NH3+]/CONTCAR
+Analysis timestamp: 2025-08-06 13:14:00.218310
+
+SPACER STRUCTURE ANALYSIS:
+----------------------------------------
+Total spacer atoms: 102
+Spacer composition:
+  C: 22 atoms
+  H: 72 atoms
+  N: 8 atoms
+
+MOLECULE IDENTIFICATION:
+----------------------------------------
+Total molecules identified: 6
+Molecule distribution:
+  C9H24N2: 2 molecules
+  CH6N: 4 molecules
+
+INDIVIDUAL MOLECULES:
+----------------------------------------
+Molecule 0:
+  Formula: CH6N
+  Atoms: 8
+  Atom types: C, H, N
+  Original indices: [0, 24, 28, 29, 31, 32, 91, 97]
+
+Molecule 1:
+  Formula: CH6N
+  Atoms: 8
+  Atom types: C, H, N
+  Original indices: [1, 2, 3, 13, 23, 26, 93, 99]
+
+Molecule 2:
+  Formula: C9H24N2
+  Atoms: 35
+  Atom types: C, H, N
+  Original indices: [4, 5, 6, 7, 14, 20, 21, 22, 27, 39, 40, 43, 44, 45, 46, 47, 48, 49, 50, 51, 53, 54, 55, 69, 72, 73, 74, 75, 76, 77, 78, 80, 88, 95, 96]
+
+Molecule 3:
+  Formula: CH6N
+  Atoms: 8
+  Atom types: C, H, N
+  Original indices: [8, 9, 10, 11, 12, 25, 82, 94]
+
+Molecule 4:
+  Formula: C9H24N2
+  Atoms: 35
+  Atom types: C, H, N
+  Original indices: [15, 17, 30, 36, 37, 38, 41, 42, 52, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 70, 71, 79, 81, 83, 84, 85, 86, 87, 90, 92, 100, 101]
+
+Molecule 5:
+  Formula: CH6N
+  Atoms: 8
+  Atom types: C, H, N
+  Original indices: [16, 18, 19, 33, 34, 35, 89, 98]
+
+SPACER AND SALT STRUCTURES:
+----------------------------------------
+Spacer molecules (2 largest molecules):
+  Molecule 2: C9H24N2 (35 atoms)
+  Molecule 4: C9H24N2 (35 atoms)
+
+Salt structure composition:
+  - Spacer molecules: 2 molecules, 70 atoms
+  - Terminal halogens (Cl): 4 atoms
+  - Total salt atoms: 74 atoms
+
+A-site molecules (smaller molecules):
+  Molecule 0: CH6N (8 atoms)
+  Molecule 1: CH6N (8 atoms)
+  Molecule 3: CH6N (8 atoms)
+  Molecule 5: CH6N (8 atoms)
+

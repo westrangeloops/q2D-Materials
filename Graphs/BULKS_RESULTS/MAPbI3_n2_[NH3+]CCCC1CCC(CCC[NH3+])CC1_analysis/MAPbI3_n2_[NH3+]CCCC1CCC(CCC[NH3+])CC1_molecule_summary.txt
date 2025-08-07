@@ -1,0 +1,64 @@
+================================================================================
+MOLECULE ANALYSIS SUMMARY - CONTCAR
+================================================================================
+
+Experiment: CONTCAR
+File: /home/dotempo/Documents/DION-JACOBSON/BULKS/MAPbI3/MAPbI3_n2_[NH3+]CCCC1CCC(CCC[NH3+])CC1/CONTCAR
+Analysis timestamp: 2025-08-06 13:16:12.789883
+
+SPACER STRUCTURE ANALYSIS:
+----------------------------------------
+Total spacer atoms: 100
+Spacer composition:
+  C: 26 atoms
+  H: 68 atoms
+  N: 6 atoms
+
+MOLECULE IDENTIFICATION:
+----------------------------------------
+Total molecules identified: 4
+Molecule distribution:
+  C12H28N2: 2 molecules
+  CH6N: 2 molecules
+
+INDIVIDUAL MOLECULES:
+----------------------------------------
+Molecule 0:
+  Formula: C12H28N2
+  Atoms: 42
+  Atom types: C, H, N
+  Original indices: [0, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 26, 28, 29, 30, 31, 32, 34, 54, 55, 56, 57, 59, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 80, 90, 94, 96]
+
+Molecule 1:
+  Formula: CH6N
+  Atoms: 8
+  Atom types: C, H, N
+  Original indices: [1, 23, 33, 50, 53, 66, 87, 97]
+
+Molecule 2:
+  Formula: CH6N
+  Atoms: 8
+  Atom types: C, H, N
+  Original indices: [2, 22, 24, 35, 36, 63, 84, 98]
+
+Molecule 3:
+  Formula: C12H28N2
+  Atoms: 42
+  Atom types: C, H, N
+  Original indices: [18, 19, 20, 21, 25, 27, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 51, 52, 58, 60, 61, 62, 64, 65, 67, 68, 79, 81, 82, 83, 85, 86, 88, 89, 91, 92, 93, 95, 99]
+
+SPACER AND SALT STRUCTURES:
+----------------------------------------
+Spacer molecules (2 largest molecules):
+  Molecule 0: C12H28N2 (42 atoms)
+  Molecule 3: C12H28N2 (42 atoms)
+
+Salt structure composition:
+  - Spacer molecules: 2 molecules, 84 atoms
+  - Terminal halogens (I): 4 atoms
+  - Total salt atoms: 88 atoms
+
+A-site molecules (smaller molecules):
+  Molecule 1: CH6N (8 atoms)
+  Molecule 2: CH6N (8 atoms)
+

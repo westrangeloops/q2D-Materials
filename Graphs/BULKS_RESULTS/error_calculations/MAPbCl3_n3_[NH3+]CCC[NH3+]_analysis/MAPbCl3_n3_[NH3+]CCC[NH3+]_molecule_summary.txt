@@ -1,0 +1,78 @@
+================================================================================
+MOLECULE ANALYSIS SUMMARY - CONTCAR
+================================================================================
+
+Experiment: CONTCAR
+File: /home/dotempo/Documents/DION-JACOBSON/BULKS/MAPbCl3/MAPbCl3_n3_[NH3+]CCC[NH3+]/CONTCAR
+Analysis timestamp: 2025-08-06 13:13:42.069952
+
+SPACER STRUCTURE ANALYSIS:
+----------------------------------------
+Total spacer atoms: 66
+Spacer composition:
+  C: 10 atoms
+  H: 48 atoms
+  N: 8 atoms
+
+MOLECULE IDENTIFICATION:
+----------------------------------------
+Total molecules identified: 6
+Molecule distribution:
+  C3H12N2: 2 molecules
+  CH6N: 4 molecules
+
+INDIVIDUAL MOLECULES:
+----------------------------------------
+Molecule 0:
+  Formula: CH6N
+  Atoms: 8
+  Atom types: C, H, N
+  Original indices: [0, 4, 5, 15, 20, 25, 51, 59]
+
+Molecule 1:
+  Formula: C3H12N2
+  Atoms: 17
+  Atom types: C, H, N
+  Original indices: [1, 2, 11, 18, 24, 26, 27, 34, 43, 44, 45, 47, 48, 49, 52, 62, 63]
+
+Molecule 2:
+  Formula: CH6N
+  Atoms: 8
+  Atom types: C, H, N
+  Original indices: [3, 6, 7, 8, 9, 10, 53, 65]
+
+Molecule 3:
+  Formula: CH6N
+  Atoms: 8
+  Atom types: C, H, N
+  Original indices: [12, 13, 14, 17, 19, 23, 54, 58]
+
+Molecule 4:
+  Formula: CH6N
+  Atoms: 8
+  Atom types: C, H, N
+  Original indices: [16, 21, 22, 29, 30, 31, 50, 60]
+
+Molecule 5:
+  Formula: C3H12N2
+  Atoms: 17
+  Atom types: C, H, N
+  Original indices: [28, 32, 33, 35, 36, 37, 38, 39, 40, 41, 42, 46, 55, 56, 57, 61, 64]
+
+SPACER AND SALT STRUCTURES:
+----------------------------------------
+Spacer molecules (2 largest molecules):
+  Molecule 1: C3H12N2 (17 atoms)
+  Molecule 5: C3H12N2 (17 atoms)
+
+Salt structure composition:
+  - Spacer molecules: 2 molecules, 34 atoms
+  - Terminal halogens (Cl): 4 atoms
+  - Total salt atoms: 38 atoms
+
+A-site molecules (smaller molecules):
+  Molecule 0: CH6N (8 atoms)
+  Molecule 2: CH6N (8 atoms)
+  Molecule 3: CH6N (8 atoms)
+  Molecule 4: CH6N (8 atoms)
+

@@ -1,0 +1,13 @@
+{
+  "total_energy_eV": -636.69458627,
+  "energy_per_atom_eV": -4.963889444999999,
+  "n_total_atoms": 74,
+  "chemical_formula": "C10H40Cl14N6Pb4",
+  "halogen": "Cl",
+  "n_layers": 2,
+  "n_N": 6,
+  "n_H": 40,
+  "n_Cl": 14,
+  "n_C": 10,
+  "n_Pb": 4
+}

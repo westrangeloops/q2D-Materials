@@ -1,0 +1,41 @@
+============================================================
+PENETRATION DEPTH ANALYSIS SUMMARY
+============================================================
+
+Molecule 0 (C5H16N2):
+------------------------------
+  Molecular length: 8.988 Å
+  Penetration segments:
+    N1 → Low plane:      0.008 Å
+    Low → High plane:    8.456 Å
+    High plane → N2:     0.539 Å
+    Total calculated:    9.004 Å
+    Length difference:   0.015605 Å
+  N1 position: (0.502, 3.737, 4.515)
+  N2 position: (8.072, 4.775, 9.249)
+
+Molecule 1 (C5H16N2):
+------------------------------
+  Molecular length: 9.314 Å
+  Penetration segments:
+    N1 → Low plane:      0.035 Å
+    Low → High plane:    8.738 Å
+    High plane → N2:     0.541 Å
+    Total calculated:    9.314 Å
+    Length difference:   0.000000 Å
+  N1 position: (4.757, 0.723, 4.451)
+  N2 position: (3.811, 8.619, 9.299)
+
+COMPARATIVE ANALYSIS:
+------------------------------
+  Segment differences between molecules:
+    N1 → Low plane difference:   0.027 Å
+    Low → High plane difference: 0.281 Å
+    High plane → N2 difference:  0.001 Å
+
+PLANE INFORMATION:
+------------------------------
+  Angle between planes: 0.13°
+  Distance between plane centers: 7.417 Å
+
+============================================================

@@ -1,0 +1,162 @@
+{
+  "experiment": {
+    "name": "CONTCAR",
+    "file_path": "/home/dotempo/Documents/DION-JACOBSON/BULKS/MAPbI3/MAPbI3_n2_CC(C)(CC[NH3+])C(C)(C)CC[NH3+]/CONTCAR",
+    "timestamp": "2025-08-06 13:16:09.471884"
+  },
+  "analysis_parameters": {
+    "halogen_symbol": "I",
+    "central_metal": "Pb",
+    "total_spacer_molecules": 4,
+    "analyzed_molecules": 2
+  },
+  "penetration_analysis": {
+    "molecule_0": {
+      "formula": "C10H26N2",
+      "n1_position": [
+        8.046051396564343,
+        3.6821459130056446,
+        4.24517315183339
+      ],
+      "n2_position": [
+        0.3418814794714042,
+        5.35368814281907,
+        12.908413229406804
+      ],
+      "molecular_vector": [
+        -7.704169917092939,
+        1.6715422298134257,
+        8.663240077573414
+      ],
+      "molecular_vector_length": 11.713241062112726,
+      "low_plane_intersection": [
+        7.387742327141996,
+        3.824976538712281,
+        4.985433241502039
+      ],
+      "high_plane_intersection": [
+        0.9932219445083357,
+        5.212369466697974,
+        12.175989245826955
+      ],
+      "penetration_segments": {
+        "n1_to_low_plane": 1.0008778241522298,
+        "low_plane_to_high_plane": 9.722080318114799,
+        "high_plane_to_n2": 0.9902829198456978,
+        "total_calculated": 11.713241062112726,
+        "molecular_length": 11.713241062112726,
+        "length_difference": 0.0
+      },
+      "penetration_parameters": {
+        "t_low_plane": 1.0008778241522294,
+        "t_high_plane": 10.722958142267027
+      }
+    },
+    "molecule_2": {
+      "formula": "C10H26N2",
+      "n1_position": [
+        4.878811416066315,
+        0.3651251550072174,
+        4.373497238176345
+      ],
+      "n2_position": [
+        4.712408478585012,
+        8.19290304098607,
+        13.003888312561422
+      ],
+      "molecular_vector": [
+        -0.16640293748130297,
+        7.827777885978853,
+        8.630391074385077
+      ],
+      "molecular_vector_length": 11.652701260508122,
+      "low_plane_intersection": [
+        4.8645155733411345,
+        1.0376173792396,
+        5.114942763860516
+      ],
+      "high_plane_intersection": [
+        4.727876874020969,
+        7.46525264275461,
+        12.201629025999633
+      ],
+      "penetration_segments": {
+        "n1_to_low_plane": 1.0010952154162547,
+        "low_plane_to_high_plane": 9.568400461567485,
+        "high_plane_to_n2": 1.0832055835243821,
+        "total_calculated": 11.652701260508122,
+        "molecular_length": 11.652701260508122,
+        "length_difference": 0.0
+      },
+      "penetration_parameters": {
+        "t_low_plane": 1.0010952154162547,
+        "t_high_plane": 10.56949567698374
+      }
+    },
+    "comparative_analysis": {
+      "molecule_1": {
+        "id": "molecule_0",
+        "segments": {
+          "n1_to_low_plane": 1.0008778241522298,
+          "low_plane_to_high_plane": 9.722080318114799,
+          "high_plane_to_n2": 0.9902829198456978,
+          "total_calculated": 11.713241062112726,
+          "molecular_length": 11.713241062112726,
+          "length_difference": 0.0
+        }
+      },
+      "molecule_2": {
+        "id": "molecule_2",
+        "segments": {
+          "n1_to_low_plane": 1.0010952154162547,
+          "low_plane_to_high_plane": 9.568400461567485,
+          "high_plane_to_n2": 1.0832055835243821,
+          "total_calculated": 11.652701260508122,
+          "molecular_length": 11.652701260508122,
+          "length_difference": 0.0
+        }
+      },
+      "penetration_comparison": {
+        "n1_to_low_diff": 0.00021739126402486875,
+        "low_to_high_diff": 0.15367985654731342,
+        "high_to_n2_diff": 0.09292266367868429
+      }
+    },
+    "plane_reference": {
+      "plane_analysis": {
+        "low_plane": {
+          "normal_vector": [
+            0.01938179126465839,
+            0.028889880506661487,
+            0.9993946772780432
+          ],
+          "center_position": [
+            2.1933712264420353,
+            2.140942493224384,
+            5.134851446504836
+          ],
+          "angle_vs_z_axis_degrees": 2.644677467299267
+        },
+        "high_plane": {
+          "normal_vector": [
+            -0.0103226747942492,
+            0.005732048428005957,
+            0.9999302905732534
+          ],
+          "center_position": [
+            6.04670775709388,
+            6.784322949545682,
+            12.21914723147581
+          ],
+          "angle_vs_z_axis_degrees": 0.4878737763753389
+        }
+      },
+      "vector_analysis_results": {
+        "angle_between_planes_degrees": 2.1583824219038807,
+        "distance_between_plane_centers_angstrom": 9.305720350921797,
+        "angle_between_low_plane_and_z": 2.644677467299267,
+        "angle_between_high_plane_and_z": 0.4878737763753389
+      }
+    }
+  }
+}

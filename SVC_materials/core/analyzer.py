@@ -21,6 +21,7 @@ from .geometry import GeometryCalculator
 from .angular_analysis import AngularAnalyzer
 from .connectivity import ConnectivityAnalyzer
 from .layers_analysis import LayersAnalyzer
+from .vector_analysis import VectorAnalyzer
 
 # Use matplotlib without x server
 import matplotlib
@@ -33,11 +34,13 @@ class q2D_analyzer:
     
     Creates a unified ontology:
     Experiment -> Cell Properties -> Octahedra (with atomic indices and properties)
+    -> Vector Analysis (if salt structure available)
     
     Uses modular components for:
     - Geometry calculations (GeometryCalculator)
     - Angular analysis (AngularAnalyzer) 
     - Connectivity analysis (ConnectivityAnalyzer)
+    - Vector analysis (VectorAnalyzer)
     """
     
     def __init__(self, file_path=None, b='Pb', x='Cl', cutoff_ref_ligand=3.5):
@@ -65,6 +68,7 @@ class q2D_analyzer:
         self.angular_analyzer = AngularAnalyzer(self.geometry_calc)
         self.connectivity_analyzer = ConnectivityAnalyzer(self.geometry_calc)
         self.layers_analyzer = LayersAnalyzer()
+        self.vector_analyzer = VectorAnalyzer()
 
         # Initialize analysis first to get connectivity data
         self.all_octahedra = self.find_all_octahedra()
@@ -84,9 +88,28 @@ class q2D_analyzer:
         if self.spacer is not None and len(self.spacer) > 0:
             self.spacer_molecules = self.analyze_spacer_molecules()
             self.molecule_ontology = self._create_molecule_ontology()
+            
+            # Create and store salt structure for vector analysis
+            if self.spacer_molecules:
+                spacer_mols, _ = self.separate_molecules_by_size()
+                self.salt_structure = self.create_salt_structure(spacer_mols)
+                
+                # Perform vector analysis using original structure and connectivity analysis
+                # Pass the analyzer instance to access connectivity analysis
+                self.vector_analysis = self.vector_analyzer.analyze_salt_structure_vectors(
+                    self.salt_structure, x_symbol=self.x, analyzer=self
+                )
+            else:
+                self.salt_structure = None
+                self.vector_analysis = {'error': 'No spacer molecules found for salt structure'}
         else:
             self.spacer_molecules = None
             self.molecule_ontology = None
+            self.salt_structure = None
+            self.vector_analysis = {'error': 'No spacer structure available'}
+        
+        # Update ontology with vector analysis
+        self._update_ontology_with_vector_analysis()
 
     def find_all_octahedra(self):
         """
@@ -430,6 +453,7 @@ class q2D_analyzer:
         """
         Create the unified ontology structure:
         Experiment -> Cell Properties -> Octahedra (with atomic indices and properties)
+        Note: Vector analysis is added later via _update_ontology_with_vector_analysis()
         
         Returns:
             dict: Complete unified ontology
@@ -466,6 +490,37 @@ class q2D_analyzer:
         }
         
         return unified_ontology
+
+    def _update_ontology_with_vector_analysis(self):
+        """
+        Update the unified ontology with vector analysis and penetration depth results.
+        This is called after vector analysis is completed.
+        """
+        if hasattr(self, 'ontology') and hasattr(self, 'vector_analysis'):
+            self.ontology['vector_analysis'] = self.vector_analysis
+            
+            # Also add salt structure information to the ontology
+            if hasattr(self, 'salt_structure') and self.salt_structure is not None:
+                salt_info = {
+                    'total_atoms': len(self.salt_structure),
+                    'composition': {},
+                    'cell_parameters': {
+                        'a': float(self.salt_structure.get_cell()[0][0]),
+                        'b': float(self.salt_structure.get_cell()[1][1]), 
+                        'c': float(self.salt_structure.get_cell()[2][2])
+                    }
+                }
+                
+                # Get salt composition
+                for symbol in self.salt_structure.get_chemical_symbols():
+                    salt_info['composition'][symbol] = salt_info['composition'].get(symbol, 0) + 1
+                
+                self.ontology['salt_structure_info'] = salt_info
+                
+                # Add penetration depth analysis to ontology
+                penetration_results = self.get_penetration_depth_analysis()
+                if 'error' not in penetration_results:
+                    self.ontology['penetration_analysis'] = penetration_results
 
     def get_ontology(self):
         """
@@ -978,6 +1033,31 @@ class q2D_analyzer:
         summary_file = os.path.join(output_dir, f"{self.experiment_name}_molecule_summary.txt")
         self._create_molecule_summary_report(summary_file)
         
+        # 7. Export vector analysis if available
+        if hasattr(self, 'vector_analysis') and 'error' not in self.vector_analysis:
+            vector_file = os.path.join(output_dir, f"{self.experiment_name}_vector_analysis.json")
+            self.export_vector_analysis_json(vector_file)
+            
+            # Add vector summary to the text report
+            vector_summary_file = os.path.join(output_dir, f"{self.experiment_name}_vector_summary.txt")
+            with open(vector_summary_file, 'w') as f:
+                f.write(self.get_vector_summary())
+            print(f"Vector analysis summary saved to: {vector_summary_file}")
+        
+        # 8. Export penetration depth analysis
+        penetration_results = self.get_penetration_depth_analysis()
+        if 'error' not in penetration_results:
+            penetration_file = os.path.join(output_dir, f"{self.experiment_name}_penetration_analysis.json")
+            self.export_penetration_analysis_json(penetration_file)
+            
+            # Add penetration summary to the text report
+            penetration_summary_file = os.path.join(output_dir, f"{self.experiment_name}_penetration_summary.txt")
+            with open(penetration_summary_file, 'w') as f:
+                f.write(self.get_penetration_summary())
+            print(f"Penetration depth analysis summary saved to: {penetration_summary_file}")
+        else:
+            print(f"Penetration depth analysis skipped: {penetration_results['error']}")
+        
         print(f"Complete molecule analysis report created in: {output_dir}")
     
     def _create_molecule_summary_report(self, output_file):
@@ -1069,6 +1149,96 @@ class q2D_analyzer:
         
         print(f"Molecule summary report saved to: {output_file}")
 
+    def get_vector_analysis(self):
+        """
+        Get the vector analysis results for the salt structure.
+        
+        Returns:
+            dict: Vector analysis results including angle between planes,
+                  angles vs z-axis, and distance between plane centers
+        """
+        return getattr(self, 'vector_analysis', {'error': 'Vector analysis not available'})
+    
+    def get_vector_summary(self):
+        """
+        Get the key vector analysis values.
+        
+        Returns:
+            dict: Key vector analysis values
+        """
+        if hasattr(self, 'vector_analysis'):
+            return self.vector_analyzer.get_vector_summary(self.vector_analysis)
+        else:
+            return {'error': 'Vector analysis not available'}
+    
+    def create_vector_plot(self, output_filename=None):
+        """
+        Create an interactive vector analysis plot.
+        
+        Parameters:
+            output_filename (str, optional): Output HTML filename
+            
+        Returns:
+            str: Path to created HTML file or error message
+        """
+        if output_filename is None:
+            output_filename = f"{self.experiment_name}_vector_plot.html"
+        
+        if hasattr(self, 'vector_analysis'):
+            return self.vector_analyzer.create_interactive_plot(
+                self.salt_structure, self.vector_analysis, output_filename, analyzer=self
+            )
+        else:
+            return "Error: Vector analysis not available"
+    
+    def get_salt_structure(self):
+        """
+        Get the salt structure (spacer molecules + terminal halogens).
+        
+        Returns:
+            ase.Atoms: Salt structure or None if not available
+        """
+        return getattr(self, 'salt_structure', None)
+    
+    def export_vector_analysis_json(self, filename=None):
+        """
+        Export the vector analysis results to JSON format.
+        
+        Parameters:
+            filename (str, optional): Output filename
+        """
+        if filename is None:
+            filename = f"{self.experiment_name}_vector_analysis.json"
+        
+        import json
+        
+        if not hasattr(self, 'vector_analysis'):
+            print("Error: No vector analysis available.")
+            return
+        
+        # Create comprehensive vector analysis export
+        comprehensive_analysis = {
+            "experiment": {
+                "name": str(self.experiment_name),
+                "file_path": str(self.file_path),
+                "timestamp": str(pd.Timestamp.now())
+            },
+            "salt_structure_info": {
+                "total_atoms": len(self.salt_structure) if self.salt_structure is not None else 0,
+                "halogen_symbol": str(self.x)
+            },
+            "vector_analysis": self.vector_analysis
+        }
+        
+        # Ensure all data is JSON serializable
+        serializable_analysis = self._make_json_serializable(comprehensive_analysis)
+        
+        with open(filename, 'w') as f:
+            json.dump(serializable_analysis, f, indent=2)
+        
+        print(f"Vector analysis exported to {filename}")
+        return serializable_analysis
+
     def separate_molecules_by_size(self):
         """
         Separate molecules into largest (spacer) and smaller (A-sites) groups.
@@ -1101,15 +1271,6 @@ class q2D_analyzer:
                 spacer_molecules[mol_id] = mol_data
             else:  # Remaining smaller molecules
                 a_site_molecules[mol_id] = mol_data
-        
-        print(f"Molecule separation by size:")
-        print(f"  - Spacer molecules (2 largest): {len(spacer_molecules)} molecules")
-        for mol_id, mol_data in spacer_molecules.items():
-            print(f"    • Molecule {mol_id}: {mol_data['formula']} ({len(mol_data['symbols'])} atoms)")
-        
-        print(f"  - A-site molecules (remaining): {len(a_site_molecules)} molecules")
-        for mol_id, mol_data in a_site_molecules.items():
-            print(f"    • Molecule {mol_id}: {mol_data['formula']} ({len(mol_data['symbols'])} atoms)")
         
         return spacer_molecules, a_site_molecules
     
@@ -1350,4 +1511,313 @@ class q2D_analyzer:
             print(f"  Contains {len(salt_structure)} atoms (spacer molecules + 4 terminal halogens)")
         else:
             print("Error: Failed to create salt structure.")
+
+    def get_penetration_depth_analysis(self):
+        """
+        Perform penetration depth analysis for the spacer molecules.
+        This method reuses the already calculated spacer molecules and vector analysis.
+        
+        Returns:
+            dict: Penetration depth analysis results
+        """
+        if not hasattr(self, 'spacer_molecules') or not self.spacer_molecules:
+            return {'error': 'No spacer molecule analysis available. Run analyze_spacer_molecules() first.'}
+        
+        if not hasattr(self, 'salt_structure') or self.salt_structure is None:
+            return {'error': 'No salt structure available for penetration depth analysis.'}
+        
+        # Get the 2 largest spacer molecules (already calculated)
+        spacer_molecules, _ = self.separate_molecules_by_size()
+        
+        if len(spacer_molecules) < 2:
+            return {'error': f'Need 2 spacer molecules for penetration analysis, found {len(spacer_molecules)}'}
+        
+        # Perform penetration depth analysis using vector analyzer
+        penetration_results = self.vector_analyzer.get_penetration_depth(
+            self.salt_structure, 
+            spacer_molecules, 
+            x_symbol=self.x,
+            analyzer=self
+        )
+        
+        return penetration_results
+    
+    def get_penetration_summary(self):
+        """
+        Get a formatted summary of the penetration depth analysis.
+        
+        Returns:
+            str: Formatted penetration depth summary
+        """
+        penetration_results = self.get_penetration_depth_analysis()
+        
+        if 'error' in penetration_results:
+            return f"Penetration Analysis Error: {penetration_results['error']}"
+        
+        summary_lines = []
+        summary_lines.append("=" * 60)
+        summary_lines.append("PENETRATION DEPTH ANALYSIS SUMMARY")
+        summary_lines.append("=" * 60)
+        
+        # Process individual molecules
+        molecule_count = 0
+        for key, mol_data in penetration_results.items():
+            if key.startswith('molecule_') and 'error' not in mol_data:
+                molecule_count += 1
+                mol_id = key.split('_')[1]
+                
+                summary_lines.append(f"\nMolecule {mol_id} ({mol_data['formula']}):")
+                summary_lines.append("-" * 30)
+                
+                segments = mol_data['penetration_segments']
+                summary_lines.append(f"  N1-N2 straight distance: {segments['n1_n2_straight_distance']:.3f} Å")
+                summary_lines.append(f"  Penetration segments:")
+                summary_lines.append(f"    N1 → Low plane:      {segments['n1_to_low_plane']:.3f} Å")
+                summary_lines.append(f"    Low → High plane:    {segments['low_plane_to_high_plane']:.3f} Å")
+                summary_lines.append(f"    High plane → N2:     {segments['high_plane_to_n2']:.3f} Å")
+                summary_lines.append(f"    Total calculated:    {segments['total_calculated']:.3f} Å")
+                summary_lines.append(f"    Length difference:   {segments['length_difference']:.6f} Å")
+                
+                # Show N1 and N2 positions
+                n1_pos = mol_data['n1_position']
+                n2_pos = mol_data['n2_position']
+                summary_lines.append(f"  N1 position: ({n1_pos[0]:.3f}, {n1_pos[1]:.3f}, {n1_pos[2]:.3f})")
+                summary_lines.append(f"  N2 position: ({n2_pos[0]:.3f}, {n2_pos[1]:.3f}, {n2_pos[2]:.3f})")
+        
+        # Add comparative analysis if available
+        if 'comparative_analysis' in penetration_results:
+            comp_data = penetration_results['comparative_analysis']
+            summary_lines.append(f"\nCOMPARATIVE ANALYSIS:")
+            summary_lines.append("-" * 30)
+            
+            comp = comp_data['penetration_comparison']
+            summary_lines.append(f"  Segment differences between molecules:")
+            summary_lines.append(f"    N1 → Low plane difference:   {comp['n1_to_low_diff']:.3f} Å")
+            summary_lines.append(f"    Low → High plane difference: {comp['low_to_high_diff']:.3f} Å")
+            summary_lines.append(f"    High plane → N2 difference:  {comp['high_to_n2_diff']:.3f} Å")
+        
+        # Add plane information
+        if 'plane_reference' in penetration_results:
+            plane_ref = penetration_results['plane_reference']['vector_analysis_results']
+            summary_lines.append(f"\nPLANE INFORMATION:")
+            summary_lines.append("-" * 30)
+            summary_lines.append(f"  Angle between planes: {plane_ref['angle_between_planes_degrees']:.2f}°")
+            summary_lines.append(f"  Distance between plane centers: {plane_ref['distance_between_plane_centers_angstrom']:.3f} Å")
+        
+        summary_lines.append("\n" + "=" * 60)
+        
+        return "\n".join(summary_lines)
+    
+    def export_penetration_analysis_json(self, filename=None):
+        """
+        Export the penetration depth analysis to JSON format.
+        
+        Parameters:
+            filename (str, optional): Output filename
+        """
+        if filename is None:
+            filename = f"{self.experiment_name}_penetration_analysis.json"
+        
+        import json
+        
+        penetration_results = self.get_penetration_depth_analysis()
+        
+        if 'error' in penetration_results:
+            print(f"Error: {penetration_results['error']}")
+            return
+        
+        # Create comprehensive export with metadata
+        comprehensive_analysis = {
+            "experiment": {
+                "name": str(self.experiment_name),
+                "file_path": str(self.file_path),
+                "timestamp": str(pd.Timestamp.now())
+            },
+            "analysis_parameters": {
+                "halogen_symbol": str(self.x),
+                "central_metal": str(self.b),
+                "total_spacer_molecules": len(self.spacer_molecules.get('molecules', {})) if self.spacer_molecules else 0,
+                "analyzed_molecules": 2  # We analyze the 2 largest
+            },
+            "penetration_analysis": penetration_results
+        }
+        
+        # Ensure all data is JSON serializable
+        serializable_analysis = self._make_json_serializable(comprehensive_analysis)
+        
+        with open(filename, 'w') as f:
+            json.dump(serializable_analysis, f, indent=2)
+        
+        print(f"Penetration depth analysis exported to {filename}")
+        return serializable_analysis
+
+    def print_ontology_summary(self):
+        """
+        Print a comprehensive summary of the ontology structure including penetration depth analysis.
+        """
+        print(f"\n=== UNIFIED ONTOLOGY SUMMARY ===")
+        print(f"Experiment: {self.ontology['experiment']['name']}")
+        print(f"\nCell Properties:")
+        cell_props = self.ontology['cell_properties']
+        lattice = cell_props['lattice_parameters']
+        print(f"  A={lattice['A']:.3f}, B={lattice['B']:.3f}, C={lattice['C']:.3f}")
+        print(f"  α={lattice['Alpha']:.1f}°, β={lattice['Beta']:.1f}°, γ={lattice['Gamma']:.1f}°")
+        print(f"  Volume: {cell_props['structure_info']['cell_volume']:.3f}")
+        print(f"  Composition: {cell_props['composition']['metal_B']}-{cell_props['composition']['halogen_X']}")
+        
+        print(f"\nOctahedra Analysis:")
+        for oct_key, oct_data in self.ontology['octahedra'].items():
+            central = oct_data['central_atom']
+            distortion = oct_data['distortion_parameters']
+            ligands = oct_data['ligand_atoms']
+            bond_analysis = oct_data['bond_distance_analysis']
+            geometric = oct_data['geometric_properties']
+            detailed = oct_data['detailed_atom_info']
+            angular_data = oct_data.get('angular_analysis', {})
+            
+            print(f"  {oct_key}: Central atom {central['symbol']} (index {central['global_index']})")
+            print(f"    Distortion: ζ={distortion['zeta']:.4f}, δ={distortion['delta']:.4f}, σ={distortion['sigma']:.4f}")
+            print(f"    Theta: mean={distortion['theta_mean']:.2f}°, min={distortion['theta_min']:.2f}°, max={distortion['theta_max']:.2f}°")
+            print(f"    Bond distances: mean={bond_analysis['mean_bond_distance']:.3f}Å, variance={bond_analysis['bond_distance_variance']:.6f}")
+            print(f"    Volume: {geometric['octahedral_volume']:.3f}Å³, Is octahedral: {geometric['is_octahedral']}")
+            print(f"    Ligand indices: {ligands['all_ligand_global_indices']}")
+            print(f"    Ligand symbols: {detailed['all_ligand_symbols']}")
+            
+            # Add angular analysis information
+            if angular_data:
+                if 'axial_central_axial' in angular_data:
+                    aca = angular_data['axial_central_axial']
+                    print(f"    Axial-Central-Axial angle: {aca['angle_degrees']:.2f}° (deviation from 180°: {aca['deviation_from_180']:.2f}°)")
+                    print(f"    Is linear: {aca['is_linear']}")
+                
+                if 'central_axial_central' in angular_data:
+                    cac_angles = angular_data['central_axial_central']
+                    if cac_angles:
+                        print(f"    Central-Axial-Central bridges: {len(cac_angles)}")
+                        for i, cac in enumerate(cac_angles):
+                            print(f"      Bridge {i+1}: {cac['angle_degrees']:.2f}° to {cac['connected_octahedron']} via atom {cac['axial_atom_global_index']}")
+                
+                if 'central_equatorial_central' in angular_data:
+                    cec_angles = angular_data['central_equatorial_central']
+                    if cec_angles:
+                        print(f"    Central-Equatorial-Central bridges: {len(cec_angles)}")
+                        for i, cec in enumerate(cec_angles):
+                            print(f"      Bridge {i+1}: {cec['angle_degrees']:.2f}° to {cec['connected_octahedron']} via atom {cec['equatorial_atom_global_index']}")
+                
+                if 'summary' in angular_data:
+                    summary = angular_data['summary']
+                    print(f"    Angular summary: {summary['total_axial_bridges']} axial + {summary['total_equatorial_bridges']} equatorial bridges")
+                    if summary['average_central_axial_central_angle'] > 0:
+                        print(f"    Average C-A-C angle: {summary['average_central_axial_central_angle']:.2f}°")
+                    if summary['average_central_equatorial_central_angle'] > 0:
+                        print(f"    Average C-E-C angle: {summary['average_central_equatorial_central_angle']:.2f}°")
+            
+            if ligands['axial_global_indices'] and ligands['equatorial_global_indices']:
+                print(f"    Axial: {ligands['axial_global_indices']} ({detailed['axial_atom_symbols']})")
+                print(f"    Equatorial: {ligands['equatorial_global_indices']} ({detailed['equatorial_atom_symbols']})")
+            
+            # Show connectivity information
+            connectivity = self.ontology.get('connectivity_analysis', {})
+            connections = connectivity.get('octahedra_connections', {}).get(oct_key, [])
+            if connections:
+                shared_info = []
+                for conn in connections:
+                    shared_info.append(f"{conn['connected_octahedron']} (atom {conn['shared_atom_index']}:{conn['atom_symbol']})")
+                print(f"    Connected to: {', '.join(shared_info)}")
+            print()
+        
+        # Show overall connectivity summary using connectivity analyzer
+        connectivity = self.ontology.get('connectivity_analysis', {})
+        if connectivity:
+            print(self.connectivity_analyzer.get_connectivity_summary(connectivity))
+        
+        # Show layer analysis summary
+        layers_analysis = self.ontology.get('layers_analysis', {})
+        if layers_analysis:
+            print(self.layers_analyzer.get_layer_summary())
+        
+        # Show molecule analysis summary
+        if hasattr(self, 'spacer_molecules') and self.spacer_molecules:
+            print("\n=== MOLECULE ANALYSIS ===")
+            molecules = self.spacer_molecules.get('molecules', {})
+            print(f"Total molecules identified: {len(molecules)}")
+            
+            # Show molecule distribution
+            distribution = self._get_molecule_distribution()
+            if distribution:
+                print("Molecule distribution:")
+                for formula, count in sorted(distribution.items()):
+                    print(f"  {formula}: {count} molecules")
+        
+        # Show vector analysis summary
+        vector_analysis = self.ontology.get('vector_analysis', {})
+        if vector_analysis and 'error' not in vector_analysis:
+            print("\n=== VECTOR ANALYSIS ===")
+            results = vector_analysis['vector_analysis_results']
+            print(f"Angle between planes: {results['angle_between_planes_degrees']:.2f}°")
+            print(f"Distance between plane centers: {results['distance_between_plane_centers_angstrom']:.3f} Å")
+        
+        # Show penetration depth analysis summary
+        penetration_analysis = self.ontology.get('penetration_analysis', {})
+        if penetration_analysis and 'error' not in penetration_analysis:
+            print("\n=== PENETRATION DEPTH ANALYSIS ===")
+            molecule_count = 0
+            for key, mol_data in penetration_analysis.items():
+                if key.startswith('molecule_') and 'error' not in mol_data:
+                    molecule_count += 1
+                    mol_id = key.split('_')[1]
+                    segments = mol_data['penetration_segments']
+                    print(f"Molecule {mol_id} ({mol_data['formula']}):")
+                    print(f"  N1 → Low plane: {segments['n1_to_low_plane']:.3f} Å")
+                    print(f"  Low → High plane: {segments['low_plane_to_high_plane']:.3f} Å") 
+                    print(f"  High plane → N2: {segments['high_plane_to_n2']:.3f} Å")
+                    print(f"  Total length: {segments['molecular_length']:.3f} Å")
+                    print()
+            
+            if 'comparative_analysis' in penetration_analysis:
+                comp = penetration_analysis['comparative_analysis']['penetration_comparison']
+                print(f"Segment differences between molecules:")
+                print(f"  ΔN1-Low: {comp['n1_to_low_diff']:.3f} Å")
+                print(f"  ΔLow-High: {comp['low_to_high_diff']:.3f} Å") 
+                print(f"  ΔHigh-N2: {comp['high_to_n2_diff']:.3f} Å")
+        
+        print(f"\n=== END SUMMARY ===")
+
+    def get_penetration_depth_values(self):
+        """
+        Get just the penetration depth segment values for easy access.
+        
+        Returns:
+            dict: Simple dictionary with penetration depth values for each molecule
+        """
+        penetration_results = self.get_penetration_depth_analysis()
+        
+        if 'error' in penetration_results:
+            return {'error': penetration_results['error']}
+        
+        simple_results = {}
+        
+        for key, mol_data in penetration_results.items():
+            if key.startswith('molecule_') and 'error' not in mol_data:
+                mol_id = key.split('_')[1]
+                segments = mol_data['penetration_segments']
+                
+                simple_results[f'molecule_{mol_id}'] = {
+                    'formula': mol_data['formula'],
+                    'n1_to_low_plane': segments['n1_to_low_plane'],
+                    'low_plane_to_high_plane': segments['low_plane_to_high_plane'],
+                    'high_plane_to_n2': segments['high_plane_to_n2'],
+                    'total_length': segments['molecular_length']
+                }
+        
+        # Add comparison if available
+        if 'comparative_analysis' in penetration_results:
+            comp = penetration_results['comparative_analysis']['penetration_comparison']
+            simple_results['differences'] = {
+                'n1_to_low_diff': comp['n1_to_low_diff'],
+                'low_to_high_diff': comp['low_to_high_diff'],
+                'high_to_n2_diff': comp['high_to_n2_diff']
+            }
+        
+        return simple_results
 
