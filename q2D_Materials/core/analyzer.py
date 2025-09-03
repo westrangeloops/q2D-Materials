@@ -22,6 +22,8 @@ from .angular_analysis import AngularAnalyzer
 from .connectivity import ConnectivityAnalyzer
 from .layers_analysis import LayersAnalyzer
 from .vector_analysis import VectorAnalyzer
+from .distortion import DistortionAnalyzer
+from .plotting import PlottingAnalyzer
 
 # Use matplotlib without x server
 import matplotlib
@@ -69,6 +71,8 @@ class q2D_analyzer:
         self.connectivity_analyzer = ConnectivityAnalyzer(self.geometry_calc)
         self.layers_analyzer = LayersAnalyzer()
         self.vector_analyzer = VectorAnalyzer()
+        self.distortion_analyzer = DistortionAnalyzer(self.geometry_calc)
+        self.plotting_analyzer = PlottingAnalyzer()
 
         # Initialize analysis first to get connectivity data
         self.all_octahedra = self.find_all_octahedra()
@@ -475,6 +479,11 @@ class q2D_analyzer:
         # Analyze layers using layers analyzer with connectivity information
         layers_analysis = self.layers_analyzer.identify_layers(octahedra_data, connectivity_analysis)
         
+        # Perform distortion analysis
+        distortion_analysis = self._perform_distortion_analysis(octahedra_data)
+        
+        # Perform enhanced angular analysis (cis/trans angles)
+        octahedra_data = self.angular_analyzer.calculate_cis_trans_angles(octahedra_data)
         
         # Create unified structure
         unified_ontology = {
@@ -487,9 +496,76 @@ class q2D_analyzer:
             "octahedra": octahedra_data,
             "connectivity_analysis": connectivity_analysis,
             "layers_analysis": layers_analysis,
+            "distortion_analysis": distortion_analysis,
         }
         
         return unified_ontology
+
+    def _perform_distortion_analysis(self, octahedra_data):
+        """
+        Perform comprehensive distortion analysis using the distortion analyzer.
+        
+        Parameters:
+        octahedra_data: Dictionary of octahedra data
+        
+        Returns:
+        dict: Distortion analysis results
+        """
+        try:
+            # Compute delta distortion
+            delta_results = self.distortion_analyzer.compute_delta(octahedra_data, return_type="both")
+            
+            # Compute sigma distortion
+            sigma_results = self.distortion_analyzer.compute_sigma(octahedra_data, return_type="both")
+            
+            # Compute lambda distortion
+            lambda_results = self.distortion_analyzer.compute_lambda(octahedra_data, return_type="both")
+            
+            # Compute tolerance factors
+            goldschmidt_tolerance = self.distortion_analyzer.compute_goldschmidt_tolerance(
+                A_site="MA", B_site=self.b, X_site=self.x
+            )
+            octahedral_tolerance = self.distortion_analyzer.compute_octahedral_tolerance(
+                B_site=self.b, X_site=self.x
+            )
+            
+            # Get comprehensive summary
+            distortion_summary = self.distortion_analyzer.get_distortion_summary()
+            
+            return {
+                "delta_analysis": {
+                    "overall_delta": delta_results[0] if delta_results else None,
+                    "octahedra_delta": delta_results[1].tolist() if delta_results and delta_results[1] is not None else None,
+                    "description": "Bond length variation within octahedra"
+                },
+                "sigma_analysis": {
+                    "overall_sigma": sigma_results[0] if sigma_results else None,
+                    "octahedra_sigma": sigma_results[1].tolist() if sigma_results and sigma_results[1] is not None else None,
+                    "description": "Angular deviation from 90° in cis angles"
+                },
+                "lambda_analysis": {
+                    "lambda_3": lambda_results[2] if lambda_results and len(lambda_results) > 2 else None,
+                    "lambda_2": lambda_results[3] if lambda_results and len(lambda_results) > 3 else None,
+                    "octahedra_lambda_3": lambda_results[0].tolist() if lambda_results and lambda_results[0] is not None else None,
+                    "octahedra_lambda_2": lambda_results[1].tolist() if lambda_results and lambda_results[1] is not None else None,
+                    "description": "Displacement of B-cation from natural center"
+                },
+                "tolerance_factors": {
+                    "goldschmidt_tolerance": goldschmidt_tolerance,
+                    "octahedral_tolerance": octahedral_tolerance,
+                    "description": "Structural stability indicators"
+                },
+                "comprehensive_summary": distortion_summary
+            }
+            
+        except Exception as e:
+            return {
+                "error": f"Distortion analysis failed: {str(e)}",
+                "delta_analysis": {"error": "Analysis failed"},
+                "sigma_analysis": {"error": "Analysis failed"},
+                "lambda_analysis": {"error": "Analysis failed"},
+                "tolerance_factors": {"error": "Analysis failed"}
+            }
 
     def _update_ontology_with_vector_analysis(self):
         """
@@ -1781,6 +1857,35 @@ class q2D_analyzer:
                 print(f"  ΔLow-High: {comp['low_to_high_diff']:.3f} Å") 
                 print(f"  ΔHigh-N2: {comp['high_to_n2_diff']:.3f} Å")
         
+        # Show distortion analysis summary
+        distortion_analysis = self.ontology.get('distortion_analysis', {})
+        if distortion_analysis and 'error' not in distortion_analysis:
+            print("\n=== DISTORTION ANALYSIS ===")
+            
+            # Delta distortion
+            delta_analysis = distortion_analysis.get('delta_analysis', {})
+            if 'overall_delta' in delta_analysis and delta_analysis['overall_delta'] is not None:
+                print(f"Delta distortion (bond length variation): {delta_analysis['overall_delta']:.6f}")
+            
+            # Sigma distortion
+            sigma_analysis = distortion_analysis.get('sigma_analysis', {})
+            if 'overall_sigma' in sigma_analysis and sigma_analysis['overall_sigma'] is not None:
+                print(f"Sigma distortion (angular deviation): {sigma_analysis['overall_sigma']:.2f}°")
+            
+            # Lambda distortion
+            lambda_analysis = distortion_analysis.get('lambda_analysis', {})
+            if 'lambda_3' in lambda_analysis and lambda_analysis['lambda_3'] is not None:
+                print(f"Lambda-3 distortion: {lambda_analysis['lambda_3']:.6f}")
+            if 'lambda_2' in lambda_analysis and lambda_analysis['lambda_2'] is not None:
+                print(f"Lambda-2 distortion: {lambda_analysis['lambda_2']:.6f}")
+            
+            # Tolerance factors
+            tolerance_factors = distortion_analysis.get('tolerance_factors', {})
+            if 'goldschmidt_tolerance' in tolerance_factors and tolerance_factors['goldschmidt_tolerance'] is not None:
+                print(f"Goldschmidt tolerance factor: {tolerance_factors['goldschmidt_tolerance']:.4f}")
+            if 'octahedral_tolerance' in tolerance_factors and tolerance_factors['octahedral_tolerance'] is not None:
+                print(f"Octahedral tolerance factor: {tolerance_factors['octahedral_tolerance']:.4f}")
+        
         print(f"\n=== END SUMMARY ===")
 
     def get_penetration_depth_values(self):
@@ -1820,4 +1925,94 @@ class q2D_analyzer:
             }
         
         return simple_results
+
+    def create_angle_distribution_plot(self, smearing=1, gridpoints=300, show=True, save=False, filename=None):
+        """
+        Create angle distribution plot with Gaussian smearing.
+        
+        Parameters:
+        smearing: Standard deviation for Gaussian kernel
+        gridpoints: Number of grid points for smooth curves
+        show: Whether to display the plot
+        save: Whether to save the plot
+        filename: Output filename
+        
+        Returns:
+        matplotlib.figure.Figure: The created figure
+        """
+        octahedra_data = self.ontology.get('octahedra', {})
+        return self.plotting_analyzer.plot_angle_distributions(
+            octahedra_data, smearing=smearing, gridpoints=gridpoints,
+            show=show, save=save, filename=filename
+        )
+    
+    def create_distance_distribution_plot(self, smearing=0.02, gridpoints=300, show=True, save=False, filename=None):
+        """
+        Create bond distance distribution plot.
+        
+        Parameters:
+        smearing: Standard deviation for Gaussian kernel
+        gridpoints: Number of grid points for smooth curves
+        show: Whether to display the plot
+        save: Whether to save the plot
+        filename: Output filename
+        
+        Returns:
+        matplotlib.figure.Figure: The created figure
+        """
+        octahedra_data = self.ontology.get('octahedra', {})
+        return self.plotting_analyzer.plot_distance_distributions(
+            octahedra_data, smearing=smearing, gridpoints=gridpoints,
+            show=show, save=save, filename=filename
+        )
+    
+    def create_octahedral_distortion_plot(self, show=True, save=False, filename=None):
+        """
+        Create octahedral distortion summary plot.
+        
+        Parameters:
+        show: Whether to display the plot
+        save: Whether to save the plot
+        filename: Output filename
+        
+        Returns:
+        matplotlib.figure.Figure: The created figure
+        """
+        octahedra_data = self.ontology.get('octahedra', {})
+        return self.plotting_analyzer.plot_octahedral_distortion_summary(
+            octahedra_data, show=show, save=save, filename=filename
+        )
+    
+    def create_distortion_plot(self, show=True, save=False, filename=None):
+        """
+        Create distortion comparison plot.
+        
+        Parameters:
+        show: Whether to display the plot
+        save: Whether to save the plot
+        filename: Output filename
+        
+        Returns:
+        matplotlib.figure.Figure: The created figure
+        """
+        distortion_data = self.ontology.get('distortion_analysis', {})
+        return self.plotting_analyzer.plot_enhanced_distortion_comparison(
+            distortion_data, show=show, save=save, filename=filename
+        )
+    
+    def create_comprehensive_analysis_plot(self, show=True, save=False, filename=None):
+        """
+        Create comprehensive analysis plot combining all analysis results.
+        
+        Parameters:
+        show: Whether to display the plot
+        save: Whether to save the plot
+        filename: Output filename
+        
+        Returns:
+        matplotlib.figure.Figure: The created figure
+        """
+        return self.plotting_analyzer.create_comprehensive_analysis_plot(
+            self.ontology, show=show, save=save, filename=filename
+        )
 

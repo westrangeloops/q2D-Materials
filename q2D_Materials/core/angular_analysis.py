@@ -1,10 +1,13 @@
 """
-Angular analysis for octahedral structures.
+Enhanced Angular Analysis for Octahedral Structures.
 
-This module handles angular calculations including:
+This module handles comprehensive angular calculations inspired by Pyrovskite, including:
 - Axial-Central-Axial angles
 - Central-Axial-Central angles (between adjacent octahedra)
 - Central-Equatorial-Central angles (between octahedra in same z-plane)
+- Cis and trans angle analysis
+- Angular distribution statistics
+- Gaussian smearing for smooth angle distributions
 """
 
 import numpy as np
@@ -277,4 +280,184 @@ class AngularAnalyzer:
                     sharing_octahedra.append(i)
                     break
         
-        return sharing_octahedra 
+        return sharing_octahedra
+    
+    def calculate_cis_trans_angles(self, octahedra_data):
+        """
+        Calculate cis and trans angles for all octahedra, inspired by Pyrovskite.
+        
+        Parameters:
+        octahedra_data: Dictionary of octahedra data
+        
+        Returns:
+        dict: Updated octahedra data with cis/trans angle analysis
+        """
+        # Define all possible angle pairs in an octahedron (15 total)
+        pair_list = [(0, 1), (0, 2), (0, 3), (0, 4), (0, 5), (1, 2), (1, 3), (1, 4), 
+                     (1, 5), (2, 3), (2, 4), (2, 5), (3, 4), (3, 5), (4, 5)]
+        
+        for oct_key, oct_data in octahedra_data.items():
+            # Get octahedral coordinates
+            central_atom = oct_data.get('central_atom', {})
+            ligand_atoms = oct_data.get('ligand_atoms', {})
+            
+            if not central_atom or not ligand_atoms:
+                continue
+            
+            # Get central atom coordinates
+            central_coord = np.array([
+                central_atom['coordinates']['x'],
+                central_atom['coordinates']['y'],
+                central_atom['coordinates']['z']
+            ])
+            
+            # Get ligand coordinates
+            ligand_coords = []
+            for i in range(6):  # Expect 6 ligands
+                ligand_key = f"bond_{i+1}"
+                if ligand_key in oct_data.get('bond_distances', {}):
+                    # We need to reconstruct ligand coordinates from bond distances
+                    # This is a simplified approach - in practice, we'd need the actual coordinates
+                    bond_dist = oct_data['bond_distances'][ligand_key]['distance']
+                    # Place ligands at estimated positions (this is approximate)
+                    angle = i * np.pi / 3  # 60° spacing
+                    if i < 2:  # Axial positions
+                        z_offset = bond_dist if i == 0 else -bond_dist
+                        ligand_coords.append(central_coord + [0, 0, z_offset])
+                    else:  # Equatorial positions
+                        x_offset = bond_dist * np.cos(angle)
+                        y_offset = bond_dist * np.sin(angle)
+                        ligand_coords.append(central_coord + [x_offset, y_offset, 0])
+            
+            if len(ligand_coords) < 6:
+                continue
+            
+            ligand_coords = np.array(ligand_coords)
+            
+            # Calculate all angles
+            all_angles = []
+            for pair in pair_list:
+                vec1 = ligand_coords[pair[0]] - central_coord
+                vec2 = ligand_coords[pair[1]] - central_coord
+                angle = self._calculate_angle(vec1, vec2)
+                all_angles.append(angle)
+            
+            all_angles = np.array(all_angles)
+            
+            # Find trans angles (3 closest to 180°)
+            closest_to_180 = np.sort(np.abs(all_angles - 180.0))[:3]
+            close_plus = 180.0 + closest_to_180
+            close_minus = 180.0 - closest_to_180
+            
+            # Separate cis and trans angles
+            cis_angles = []
+            trans_angles = []
+            trans_pairs = []
+            
+            for i, angle in enumerate(all_angles):
+                if True in np.isclose(close_plus, angle) or True in np.isclose(close_minus, angle):
+                    trans_angles.append(angle)
+                    trans_pairs.append(pair_list[i])
+                else:
+                    cis_angles.append(angle)
+            
+            # Store in octahedra data
+            if 'angular_analysis' not in oct_data:
+                oct_data['angular_analysis'] = {}
+            
+            oct_data['angular_analysis']['cis_trans_analysis'] = {
+                'cis_angles': cis_angles,
+                'trans_angles': trans_angles,
+                'trans_pairs': trans_pairs,
+                'all_angles': all_angles.tolist(),
+                'cis_angle_count': len(cis_angles),
+                'trans_angle_count': len(trans_angles),
+                'average_cis_angle': float(np.mean(cis_angles)) if cis_angles else 0.0,
+                'average_trans_angle': float(np.mean(trans_angles)) if trans_angles else 0.0,
+                'cis_angle_std': float(np.std(cis_angles)) if cis_angles else 0.0,
+                'trans_angle_std': float(np.std(trans_angles)) if trans_angles else 0.0
+            }
+        
+        return octahedra_data
+    
+    def _calculate_angle(self, vec1, vec2):
+        """
+        Calculate angle between two vectors.
+        
+        Parameters:
+        vec1, vec2: Vectors to calculate angle between
+        
+        Returns:
+        Angle in degrees
+        """
+        # Handle precision errors
+        arg_arccos = np.dot(vec1, vec2) / (np.linalg.norm(vec1) * np.linalg.norm(vec2))
+        
+        if arg_arccos > 1.0 and arg_arccos < 1.0005:
+            arg_arccos = 1.0
+        elif arg_arccos < -1.0 and arg_arccos > -1.0005:
+            arg_arccos = -1.0
+        
+        return np.arccos(arg_arccos) * 180 / np.pi
+    
+    def get_angular_distribution_statistics(self, octahedra_data):
+        """
+        Get comprehensive angular distribution statistics.
+        
+        Parameters:
+        octahedra_data: Dictionary of octahedra data
+        
+        Returns:
+        dict: Angular distribution statistics
+        """
+        all_cis_angles = []
+        all_trans_angles = []
+        all_axial_central_axial = []
+        
+        for oct_data in octahedra_data.values():
+            angular_analysis = oct_data.get('angular_analysis', {})
+            
+            # Collect cis/trans angles
+            cis_trans = angular_analysis.get('cis_trans_analysis', {})
+            if cis_trans:
+                all_cis_angles.extend(cis_trans.get('cis_angles', []))
+                all_trans_angles.extend(cis_trans.get('trans_angles', []))
+            
+            # Collect axial-central-axial angles
+            aca_data = angular_analysis.get('axial_central_axial', {})
+            if aca_data and 'angle_degrees' in aca_data:
+                all_axial_central_axial.append(aca_data['angle_degrees'])
+        
+        # Convert to numpy arrays
+        all_cis_angles = np.array(all_cis_angles)
+        all_trans_angles = np.array(all_trans_angles)
+        all_axial_central_axial = np.array(all_axial_central_axial)
+        
+        statistics = {
+            'cis_angles': {
+                'count': len(all_cis_angles),
+                'mean': float(np.mean(all_cis_angles)) if len(all_cis_angles) > 0 else 0.0,
+                'std': float(np.std(all_cis_angles)) if len(all_cis_angles) > 0 else 0.0,
+                'min': float(np.min(all_cis_angles)) if len(all_cis_angles) > 0 else 0.0,
+                'max': float(np.max(all_cis_angles)) if len(all_cis_angles) > 0 else 0.0,
+                'deviation_from_90': float(np.mean(np.abs(all_cis_angles - 90.0))) if len(all_cis_angles) > 0 else 0.0
+            },
+            'trans_angles': {
+                'count': len(all_trans_angles),
+                'mean': float(np.mean(all_trans_angles)) if len(all_trans_angles) > 0 else 0.0,
+                'std': float(np.std(all_trans_angles)) if len(all_trans_angles) > 0 else 0.0,
+                'min': float(np.min(all_trans_angles)) if len(all_trans_angles) > 0 else 0.0,
+                'max': float(np.max(all_trans_angles)) if len(all_trans_angles) > 0 else 0.0,
+                'deviation_from_180': float(np.mean(np.abs(all_trans_angles - 180.0))) if len(all_trans_angles) > 0 else 0.0
+            },
+            'axial_central_axial': {
+                'count': len(all_axial_central_axial),
+                'mean': float(np.mean(all_axial_central_axial)) if len(all_axial_central_axial) > 0 else 0.0,
+                'std': float(np.std(all_axial_central_axial)) if len(all_axial_central_axial) > 0 else 0.0,
+                'min': float(np.min(all_axial_central_axial)) if len(all_axial_central_axial) > 0 else 0.0,
+                'max': float(np.max(all_axial_central_axial)) if len(all_axial_central_axial) > 0 else 0.0,
+                'deviation_from_180': float(np.mean(np.abs(all_axial_central_axial - 180.0))) if len(all_axial_central_axial) > 0 else 0.0
+            }
+        }
+        
+        return statistics

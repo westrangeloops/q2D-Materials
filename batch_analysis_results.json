@@ -1,0 +1,907 @@
+{
+  "experiment_summary": {
+    "n1_layers_only": {
+      "total_atoms": 10,
+      "octahedra_count": 2,
+      "cell_volume": 738.948794537719,
+      "composition": {
+        "B_site": "Pb",
+        "X_site": "Cl"
+      }
+    },
+    "n2_layers_only": {
+      "total_atoms": 120,
+      "octahedra_count": 8,
+      "cell_volume": 2435.1700701311306,
+      "composition": {
+        "B_site": "Pb",
+        "X_site": "Cl"
+      }
+    },
+    "n3_layers_only": {
+      "total_atoms": 168,
+      "octahedra_count": 12,
+      "cell_volume": 3273.2651758045413,
+      "composition": {
+        "B_site": "Pb",
+        "X_site": "Cl"
+      }
+    }
+  },
+  "distortion_statistics": {
+    "n1_layers_only": {
+      "delta": 3.6083728733563185e-05,
+      "sigma": 8.18181818181818,
+      "lambda_3": 2.151749522255222e-50,
+      "lambda_2": 3.863797771819786e-16,
+      "goldschmidt_tolerance": 0.938094996374153,
+      "octahedral_tolerance": 0.6574585635359116
+    },
+    "n2_layers_only": {
+      "delta": 0.0003906927829697129,
+      "sigma": 8.18181818181818,
+      "lambda_3": 3.5408656513691746e-47,
+      "lambda_2": 7.855677253738628e-16,
+      "goldschmidt_tolerance": 0.938094996374153,
+      "octahedral_tolerance": 0.6574585635359116
+    },
+    "n3_layers_only": {
+      "delta": 0.0003189472268481082,
+      "sigma": 8.18181818181818,
+      "lambda_3": 1.025815803176669e-46,
+      "lambda_2": 9.558591198187407e-16,
+      "goldschmidt_tolerance": 0.938094996374153,
+      "octahedral_tolerance": 0.6574585635359116
+    }
+  },
+  "angular_statistics": {
+    "n1_layers_only": {
+      "cis_angles": {
+        "count": 22,
+        "mean": 81.81818181818181,
+        "std": 13.360853142453696,
+        "min": 59.99999999999997,
+        "max": 90.0,
+        "deviation_from_90": 8.18181818181818
+      },
+      "trans_angles": {
+        "count": 8,
+        "mean": 149.9999998490727,
+        "std": 29.99999984907271,
+        "min": 120.00000000000001,
+        "max": 180.0,
+        "deviation_from_180": 30.000000150927274
+      },
+      "axial_central_axial": {
+        "count": 2,
+        "mean": 179.98837945374447,
+        "std": 0.0021112177872879556,
+        "min": 179.9862682359572,
+        "max": 179.99049067153177,
+        "deviation_from_180": 0.011620546255514341
+      }
+    },
+    "n2_layers_only": {
+      "cis_angles": {
+        "count": 88,
+        "mean": 81.81818181818181,
+        "std": 13.360853142453696,
+        "min": 59.99999999999997,
+        "max": 90.0,
+        "deviation_from_90": 8.18181818181818
+      },
+      "trans_angles": {
+        "count": 32,
+        "mean": 149.9999999622682,
+        "std": 29.99999996226818,
+        "min": 119.99999999999997,
+        "max": 180.0,
+        "deviation_from_180": 30.00000003773182
+      },
+      "axial_central_axial": {
+        "count": 8,
+        "mean": 169.0075331904387,
+        "std": 5.314342075785401,
+        "min": 163.69319111465182,
+        "max": 174.3218752662257,
+        "deviation_from_180": 10.992466809561304
+      }
+    },
+    "n3_layers_only": {
+      "cis_angles": {
+        "count": 132,
+        "mean": 81.81818181818181,
+        "std": 13.360853142453694,
+        "min": 59.99999999999996,
+        "max": 90.0,
+        "deviation_from_90": 8.181818181818178
+      },
+      "trans_angles": {
+        "count": 48,
+        "mean": 149.99999997484545,
+        "std": 29.999999974845455,
+        "min": 119.99999999999997,
+        "max": 180.0,
+        "deviation_from_180": 30.00000002515455
+      },
+      "axial_central_axial": {
+        "count": 12,
+        "mean": 168.73299729410874,
+        "std": 4.178409312116504,
+        "min": 162.98900001005438,
+        "max": 172.8065076074772,
+        "deviation_from_180": 11.267002705891267
+      }
+    }
+  },
+  "tolerance_factors": {},
+  "connectivity_statistics": {
+    "n1_layers_only": {
+      "total_shared_atoms": 0,
+      "average_connectivity": 0,
+      "terminal_axial_atoms": 0,
+      "sharing_types": {
+        "corner_sharing": [],
+        "edge_sharing": [],
+        "face_sharing": [
+          {
+            "octahedron_1": "octahedron_1",
+            "octahedron_2": "octahedron_2",
+            "shared_atoms": [
+              6,
+              7,
+              8,
+              9
+            ],
+            "num_shared_atoms": 4,
+            "shared_atom_symbols": [
+              "Br",
+              "Br",
+              "Br",
+              "Br"
+            ]
+          }
+        ],
+        "summary": {
+          "total_corner_sharing_pairs": 0,
+          "total_edge_sharing_pairs": 0,
+          "total_face_sharing_pairs": 1,
+          "total_connected_pairs": 1
+        }
+      }
+    },
+    "n2_layers_only": {
+      "total_shared_atoms": 0,
+      "average_connectivity": 0,
+      "terminal_axial_atoms": 0,
+      "sharing_types": {
+        "corner_sharing": [
+          {
+            "octahedron_1": "octahedron_1",
+            "octahedron_2": "octahedron_5",
+            "shared_atoms": [
+              101
+            ],
+            "num_shared_atoms": 1,
+            "shared_atom_symbols": [
+              "Br"
+            ]
+          },
+          {
+            "octahedron_1": "octahedron_2",
+            "octahedron_2": "octahedron_6",
+            "shared_atoms": [
+              107
+            ],
+            "num_shared_atoms": 1,
+            "shared_atom_symbols": [
+              "Br"
+            ]
+          },
+          {
+            "octahedron_1": "octahedron_3",
+            "octahedron_2": "octahedron_7",
+            "shared_atoms": [
+              103
+            ],
+            "num_shared_atoms": 1,
+            "shared_atom_symbols": [
+              "Br"
+            ]
+          },
+          {
+            "octahedron_1": "octahedron_4",
+            "octahedron_2": "octahedron_8",
+            "shared_atoms": [
+              102
+            ],
+            "num_shared_atoms": 1,
+            "shared_atom_symbols": [
+              "Br"
+            ]
+          }
+        ],
+        "edge_sharing": [
+          {
+            "octahedron_1": "octahedron_1",
+            "octahedron_2": "octahedron_3",
+            "shared_atoms": [
+              94,
+              112
+            ],
+            "num_shared_atoms": 2,
+            "shared_atom_symbols": [
+              "Br",
+              "Br"
+            ]
+          },
+          {
+            "octahedron_1": "octahedron_1",
+            "octahedron_2": "octahedron_2",
+            "shared_atoms": [
+              118,
+              119
+            ],
+            "num_shared_atoms": 2,
+            "shared_atom_symbols": [
+              "Br",
+              "Br"
+            ]
+          },
+          {
+            "octahedron_1": "octahedron_2",
+            "octahedron_2": "octahedron_4",
+            "shared_atoms": [
+              93,
+              95
+            ],
+            "num_shared_atoms": 2,
+            "shared_atom_symbols": [
+              "Br",
+              "Br"
+            ]
+          },
+          {
+            "octahedron_1": "octahedron_3",
+            "octahedron_2": "octahedron_4",
+            "shared_atoms": [
+              113,
+              115
+            ],
+            "num_shared_atoms": 2,
+            "shared_atom_symbols": [
+              "Br",
+              "Br"
+            ]
+          },
+          {
+            "octahedron_1": "octahedron_5",
+            "octahedron_2": "octahedron_7",
+            "shared_atoms": [
+              105,
+              117
+            ],
+            "num_shared_atoms": 2,
+            "shared_atom_symbols": [
+              "Br",
+              "Br"
+            ]
+          },
+          {
+            "octahedron_1": "octahedron_5",
+            "octahedron_2": "octahedron_6",
+            "shared_atoms": [
+              108,
+              109
+            ],
+            "num_shared_atoms": 2,
+            "shared_atom_symbols": [
+              "Br",
+              "Br"
+            ]
+          },
+          {
+            "octahedron_1": "octahedron_6",
+            "octahedron_2": "octahedron_8",
+            "shared_atoms": [
+              104,
+              106
+            ],
+            "num_shared_atoms": 2,
+            "shared_atom_symbols": [
+              "Br",
+              "Br"
+            ]
+          },
+          {
+            "octahedron_1": "octahedron_7",
+            "octahedron_2": "octahedron_8",
+            "shared_atoms": [
+              110,
+              111
+            ],
+            "num_shared_atoms": 2,
+            "shared_atom_symbols": [
+              "Br",
+              "Br"
+            ]
+          }
+        ],
+        "face_sharing": [],
+        "summary": {
+          "total_corner_sharing_pairs": 4,
+          "total_edge_sharing_pairs": 8,
+          "total_face_sharing_pairs": 0,
+          "total_connected_pairs": 12
+        }
+      }
+    },
+    "n3_layers_only": {
+      "total_shared_atoms": 0,
+      "average_connectivity": 0,
+      "terminal_axial_atoms": 0,
+      "sharing_types": {
+        "corner_sharing": [
+          {
+            "octahedron_1": "octahedron_1",
+            "octahedron_2": "octahedron_9",
+            "shared_atoms": [
+              136
+            ],
+            "num_shared_atoms": 1,
+            "shared_atom_symbols": [
+              "Br"
+            ]
+          },
+          {
+            "octahedron_1": "octahedron_10",
+            "octahedron_2": "octahedron_2",
+            "shared_atoms": [
+              139
+            ],
+            "num_shared_atoms": 1,
+            "shared_atom_symbols": [
+              "Br"
+            ]
+          },
+          {
+            "octahedron_1": "octahedron_11",
+            "octahedron_2": "octahedron_3",
+            "shared_atoms": [
+              144
+            ],
+            "num_shared_atoms": 1,
+            "shared_atom_symbols": [
+              "Br"
+            ]
+          },
+          {
+            "octahedron_1": "octahedron_12",
+            "octahedron_2": "octahedron_4",
+            "shared_atoms": [
+              142
+            ],
+            "num_shared_atoms": 1,
+            "shared_atom_symbols": [
+              "Br"
+            ]
+          },
+          {
+            "octahedron_1": "octahedron_5",
+            "octahedron_2": "octahedron_9",
+            "shared_atoms": [
+              154
+            ],
+            "num_shared_atoms": 1,
+            "shared_atom_symbols": [
+              "Br"
+            ]
+          },
+          {
+            "octahedron_1": "octahedron_10",
+            "octahedron_2": "octahedron_6",
+            "shared_atoms": [
+              140
+            ],
+            "num_shared_atoms": 1,
+            "shared_atom_symbols": [
+              "Br"
+            ]
+          },
+          {
+            "octahedron_1": "octahedron_11",
+            "octahedron_2": "octahedron_7",
+            "shared_atoms": [
+              143
+            ],
+            "num_shared_atoms": 1,
+            "shared_atom_symbols": [
+              "Br"
+            ]
+          },
+          {
+            "octahedron_1": "octahedron_12",
+            "octahedron_2": "octahedron_8",
+            "shared_atoms": [
+              141
+            ],
+            "num_shared_atoms": 1,
+            "shared_atom_symbols": [
+              "Br"
+            ]
+          }
+        ],
+        "edge_sharing": [
+          {
+            "octahedron_1": "octahedron_1",
+            "octahedron_2": "octahedron_3",
+            "shared_atoms": [
+              129,
+              135
+            ],
+            "num_shared_atoms": 2,
+            "shared_atom_symbols": [
+              "Br",
+              "Br"
+            ]
+          },
+          {
+            "octahedron_1": "octahedron_1",
+            "octahedron_2": "octahedron_2",
+            "shared_atoms": [
+              162,
+              163
+            ],
+            "num_shared_atoms": 2,
+            "shared_atom_symbols": [
+              "Br",
+              "Br"
+            ]
+          },
+          {
+            "octahedron_1": "octahedron_2",
+            "octahedron_2": "octahedron_4",
+            "shared_atoms": [
+              128,
+              130
+            ],
+            "num_shared_atoms": 2,
+            "shared_atom_symbols": [
+              "Br",
+              "Br"
+            ]
+          },
+          {
+            "octahedron_1": "octahedron_3",
+            "octahedron_2": "octahedron_4",
+            "shared_atoms": [
+              161,
+              167
+            ],
+            "num_shared_atoms": 2,
+            "shared_atom_symbols": [
+              "Br",
+              "Br"
+            ]
+          },
+          {
+            "octahedron_1": "octahedron_5",
+            "octahedron_2": "octahedron_7",
+            "shared_atoms": [
+              134,
+              155
+            ],
+            "num_shared_atoms": 2,
+            "shared_atom_symbols": [
+              "Br",
+              "Br"
+            ]
+          },
+          {
+            "octahedron_1": "octahedron_5",
+            "octahedron_2": "octahedron_6",
+            "shared_atoms": [
+              145,
+              147
+            ],
+            "num_shared_atoms": 2,
+            "shared_atom_symbols": [
+              "Br",
+              "Br"
+            ]
+          },
+          {
+            "octahedron_1": "octahedron_6",
+            "octahedron_2": "octahedron_8",
+            "shared_atoms": [
+              149,
+              157
+            ],
+            "num_shared_atoms": 2,
+            "shared_atom_symbols": [
+              "Br",
+              "Br"
+            ]
+          },
+          {
+            "octahedron_1": "octahedron_7",
+            "octahedron_2": "octahedron_8",
+            "shared_atoms": [
+              150,
+              159
+            ],
+            "num_shared_atoms": 2,
+            "shared_atom_symbols": [
+              "Br",
+              "Br"
+            ]
+          },
+          {
+            "octahedron_1": "octahedron_10",
+            "octahedron_2": "octahedron_9",
+            "shared_atoms": [
+              138,
+              146
+            ],
+            "num_shared_atoms": 2,
+            "shared_atom_symbols": [
+              "Br",
+              "Br"
+            ]
+          },
+          {
+            "octahedron_1": "octahedron_11",
+            "octahedron_2": "octahedron_9",
+            "shared_atoms": [
+              153,
+              164
+            ],
+            "num_shared_atoms": 2,
+            "shared_atom_symbols": [
+              "Br",
+              "Br"
+            ]
+          },
+          {
+            "octahedron_1": "octahedron_10",
+            "octahedron_2": "octahedron_12",
+            "shared_atoms": [
+              137,
+              156
+            ],
+            "num_shared_atoms": 2,
+            "shared_atom_symbols": [
+              "Br",
+              "Br"
+            ]
+          },
+          {
+            "octahedron_1": "octahedron_11",
+            "octahedron_2": "octahedron_12",
+            "shared_atoms": [
+              151,
+              158
+            ],
+            "num_shared_atoms": 2,
+            "shared_atom_symbols": [
+              "Br",
+              "Br"
+            ]
+          }
+        ],
+        "face_sharing": [],
+        "summary": {
+          "total_corner_sharing_pairs": 8,
+          "total_edge_sharing_pairs": 12,
+          "total_face_sharing_pairs": 0,
+          "total_connected_pairs": 20
+        }
+      }
+    }
+  },
+  "molecular_statistics": {
+    "n1_layers_only": {
+      "total_molecules": 8,
+      "molecule_distribution": {
+        "Br": 8
+      }
+    },
+    "n2_layers_only": {
+      "total_molecules": 34,
+      "molecule_distribution": {
+        "CH6N": 4,
+        "C6H18N2": 2,
+        "Br": 28
+      }
+    },
+    "n3_layers_only": {
+      "total_molecules": 50,
+      "molecule_distribution": {
+        "CH6N": 8,
+        "C6H18N2": 2,
+        "Br": 40
+      }
+    }
+  },
+  "comparative_analysis": {
+    "distortion_trends": {
+      "delta": {
+        "values": [
+          3.6083728733563185e-05,
+          0.0003906927829697129,
+          0.0003189472268481082
+        ],
+        "experiments": [
+          "n1_layers_only",
+          "n2_layers_only",
+          "n3_layers_only"
+        ],
+        "mean": 0.00024857457951712813,
+        "std": 0.00015308195507819118,
+        "min": 3.6083728733563185e-05,
+        "max": 0.0003906927829697129,
+        "range": 0.0003546090542361497,
+        "coefficient_of_variation": 0.6158391392054754
+      },
+      "sigma": {
+        "values": [
+          8.18181818181818,
+          8.18181818181818,
+          8.18181818181818
+        ],
+        "experiments": [
+          "n1_layers_only",
+          "n2_layers_only",
+          "n3_layers_only"
+        ],
+        "mean": 8.18181818181818,
+        "std": 0.0,
+        "min": 8.18181818181818,
+        "max": 8.18181818181818,
+        "range": 0.0,
+        "coefficient_of_variation": 0.0
+      },
+      "lambda_3": {
+        "values": [
+          2.151749522255222e-50,
+          3.5408656513691746e-47,
+          1.025815803176669e-46
+        ],
+        "experiments": [
+          "n1_layers_only",
+          "n2_layers_only",
+          "n3_layers_only"
+        ],
+        "mean": 4.60039181088604e-47,
+        "std": 4.25349761783443e-47,
+        "min": 2.151749522255222e-50,
+        "max": 1.025815803176669e-46,
+        "range": 1.0256006282244435e-46,
+        "coefficient_of_variation": 0.9245946416497082
+      },
+      "lambda_2": {
+        "values": [
+          3.863797771819786e-16,
+          7.855677253738628e-16,
+          9.558591198187407e-16
+        ],
+        "experiments": [
+          "n1_layers_only",
+          "n2_layers_only",
+          "n3_layers_only"
+        ],
+        "mean": 7.092688741248607e-16,
+        "std": 2.3866687585969096e-16,
+        "min": 3.863797771819786e-16,
+        "max": 9.558591198187407e-16,
+        "range": 5.694793426367621e-16,
+        "coefficient_of_variation": 0.33649703880516785
+      },
+      "goldschmidt_tolerance": {
+        "values": [
+          0.938094996374153,
+          0.938094996374153,
+          0.938094996374153
+        ],
+        "experiments": [
+          "n1_layers_only",
+          "n2_layers_only",
+          "n3_layers_only"
+        ],
+        "mean": 0.938094996374153,
+        "std": 0.0,
+        "min": 0.938094996374153,
+        "max": 0.938094996374153,
+        "range": 0.0,
+        "coefficient_of_variation": 0.0
+      },
+      "octahedral_tolerance": {
+        "values": [
+          0.6574585635359116,
+          0.6574585635359116,
+          0.6574585635359116
+        ],
+        "experiments": [
+          "n1_layers_only",
+          "n2_layers_only",
+          "n3_layers_only"
+        ],
+        "mean": 0.6574585635359116,
+        "std": 0.0,
+        "min": 0.6574585635359116,
+        "max": 0.6574585635359116,
+        "range": 0.0,
+        "coefficient_of_variation": 0.0
+      }
+    },
+    "angular_trends": {
+      "cis_angles": {
+        "means": [
+          81.81818181818181,
+          81.81818181818181,
+          81.81818181818181
+        ],
+        "stds": [
+          13.360853142453696,
+          13.360853142453696,
+          13.360853142453694
+        ],
+        "counts": [
+          22,
+          88,
+          132
+        ],
+        "experiments": [
+          "n1_layers_only",
+          "n2_layers_only",
+          "n3_layers_only"
+        ],
+        "mean_of_means": 81.81818181818181,
+        "std_of_means": 0.0,
+        "mean_of_stds": 13.360853142453694,
+        "total_angles": 242
+      },
+      "trans_angles": {
+        "means": [
+          149.9999998490727,
+          149.9999999622682,
+          149.99999997484545
+        ],
+        "stds": [
+          29.99999984907271,
+          29.99999996226818,
+          29.999999974845455
+        ],
+        "counts": [
+          8,
+          32,
+          48
+        ],
+        "experiments": [
+          "n1_layers_only",
+          "n2_layers_only",
+          "n3_layers_only"
+        ],
+        "mean_of_means": 149.99999992872878,
+        "std_of_means": 5.655890523866631e-08,
+        "mean_of_stds": 29.999999928728784,
+        "total_angles": 88
+      },
+      "axial_central_axial": {
+        "means": [
+          179.98837945374447,
+          169.0075331904387,
+          168.73299729410874
+        ],
+        "stds": [
+          0.0021112177872879556,
+          5.314342075785401,
+          4.178409312116504
+        ],
+        "counts": [
+          2,
+          8,
+          12
+        ],
+        "experiments": [
+          "n1_layers_only",
+          "n2_layers_only",
+          "n3_layers_only"
+        ],
+        "mean_of_means": 172.57630331276394,
+        "std_of_means": 5.242327538372165,
+        "mean_of_stds": 3.1649542018963976,
+        "total_angles": 22
+      }
+    },
+    "tolerance_trends": {
+      "goldschmidt_tolerance": {
+        "values": [
+          0.938094996374153,
+          0.938094996374153,
+          0.938094996374153
+        ],
+        "experiments": [
+          "n1_layers_only",
+          "n2_layers_only",
+          "n3_layers_only"
+        ],
+        "mean": 0.938094996374153,
+        "std": 0.0,
+        "min": 0.938094996374153,
+        "max": 0.938094996374153,
+        "stability_assessment": {
+          "stable_count": 3,
+          "marginal_count": 0,
+          "unstable_count": 0,
+          "stable_percentage": 100.0,
+          "marginal_percentage": 0.0,
+          "unstable_percentage": 0.0,
+          "overall_assessment": "stable"
+        }
+      },
+      "octahedral_tolerance": {
+        "values": [
+          0.6574585635359116,
+          0.6574585635359116,
+          0.6574585635359116
+        ],
+        "experiments": [
+          "n1_layers_only",
+          "n2_layers_only",
+          "n3_layers_only"
+        ],
+        "mean": 0.6574585635359116,
+        "std": 0.0,
+        "min": 0.6574585635359116,
+        "max": 0.6574585635359116,
+        "stability_assessment": {
+          "stable_count": 3,
+          "marginal_count": 0,
+          "unstable_count": 0,
+          "stable_percentage": 100.0,
+          "marginal_percentage": 0.0,
+          "unstable_percentage": 0.0,
+          "overall_assessment": "stable"
+        }
+      }
+    },
+    "correlations": {},
+    "statistical_summary": {
+      "total_experiments": 3,
+      "successful_analyses": 3,
+      "parameter_ranges": {
+        "delta": {
+          "min": 3.6083728733563185e-05,
+          "max": 0.0003906927829697129,
+          "range": 0.0003546090542361497,
+          "mean": 0.00024857457951712813,
+          "std": 0.00015308195507819118
+        },
+        "sigma": {
+          "min": 8.18181818181818,
+          "max": 8.18181818181818,
+          "range": 0.0,
+          "mean": 8.18181818181818,
+          "std": 0.0
+        },
+        "lambda_3": {
+          "min": 2.151749522255222e-50,
+          "max": 1.025815803176669e-46,
+          "range": 1.0256006282244435e-46,
+          "mean": 4.60039181088604e-47,
+          "std": 4.25349761783443e-47
+        },
+        "lambda_2": {
+          "min": 3.863797771819786e-16,
+          "max": 9.558591198187407e-16,
+          "range": 5.694793426367621e-16,
+          "mean": 7.092688741248607e-16,
+          "std": 2.3866687585969096e-16
+        }
+      },
+      "outliers": {},
+      "recommendations": []
+    }
+  }
+}

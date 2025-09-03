@@ -45,12 +45,14 @@ def main():
     elements = ma_df['Element'].tolist()
     positions = ma_df[['X', 'Y', 'Z']].values
     ma_a_site_atoms = Atoms(symbols=elements, positions=positions)
+
+    spacer_dir = "/home/dotempo/Documents/SVC-Materials/CamiloITM/EXPERIMENTAL/"
     
     # Load spacer files (all .xyz files except methylammonium)
-    spacer_files = [f for f in os.listdir("CamiloITM") if f.endswith('.xyz') and f != 'methylammonium.xyz']
+    spacer_files = [f for f in os.listdir(spacer_dir) if f.endswith('.xyz') and f != 'methylammonium.xyz']
     
     if not spacer_files:
-        print("Error: No spacer files found in CamiloITM/ directory")
+        print("Error: No spacer files found in {spacer_dir}/ directory")
         return
     
     print(f"Found {len(spacer_files)} spacer files: {spacer_files}")
@@ -74,7 +76,7 @@ def main():
             print(f"  Using spacer {spacer_file}")
             
             # Load spacer molecule
-            spacer_df = mol_load(f"CamiloITM/{spacer_file}")
+            spacer_df = mol_load(f"{spacer_dir}/{spacer_file}")
             spacer_elements = spacer_df['Element'].tolist()
             spacer_positions = spacer_df[['X', 'Y', 'Z']].values
             spacer_name = spacer_file.split('.')[0]
@@ -84,7 +86,7 @@ def main():
             for n in n_layers:
                 # Create folder structure: MAPbX3_spacer-name_n#/
                 folder_name = f"{name}_{spacer_name}_n{n}"
-                structure_dir = f"CamiloITM/{folder_name}"
+                structure_dir = f"{spacer_dir}/{folder_name}"
                 os.makedirs(structure_dir, exist_ok=True)
                 
                                 # Create DJ structure
