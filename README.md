@@ -10,52 +10,57 @@ Get up and running with SVC-Materials in just a few steps:
 
 ### Installation
 ```bash
-conda create -n SVC_Materials pip
-conda activate SVC_Materials
+conda create -n q2D_Materials pip
+conda activate q2D_Materials
 pip install ase pandas numpy matplotlib networkx
 ```
 
 ### Basic Usage Example
 
 ```python
-from SVC_materials.core.creator import q2D_creator
-from SVC_materials.core.analyzer import q2D_analysis
+from q2D_Materials.utils.perovskite_builder import make_dj, auto_calculate_BX_distance
+from q2D_Materials.utils.common_a_sites import get_a_site_object
+from q2D_Materials.utils.file_handlers import mol_load
+from q2D_Materials.utils.molecular_ops import align_ase_molecule_for_perovskite
+from ase import Atoms
+from ase.io import write
 
-# 1. Create a quasi-2D perovskite structure
-creator = q2D_creator(
-    B='Pb',                              # Metal center
-    X='I',                               # Halogen
-    molecule_xyz='molecule.xyz',         # Organic spacer molecule
-    perov_vasp='perovskite.vasp',       # Base perovskite structure
-    P1="6.88 -0.00 10.44",              # Position coordinates
-    P2="5.49 -0.00  9.90", 
-    P3="6.88 -0.00  4.49",
-    Q1="0.94  5.94 10.44", 
-    Q2="-0.46 5.94  9.90", 
-    Q3="0.94  5.94  4.49",
-    name='MyPerovskite',
-    vac=10                               # Vacuum spacing
+# 1. Load and prepare the spacer molecule
+spacer_df = mol_load("CamiloITM/NaphC1Cis_e.xyz")
+spacer_elements = spacer_df['Element'].tolist()
+spacer_positions = spacer_df[['X', 'Y', 'Z']].values
+Ap_spacer = Atoms(symbols=spacer_elements, positions=spacer_positions)
+
+# 2. Molecular alignment is handled automatically by the creator
+
+# 3. Get A-site cation (methylammonium)
+A_cation = get_a_site_object("MA")
+
+# 4. Calculate B-X distance and penetration
+bx_dist = auto_calculate_BX_distance('Pb', 'I')
+penetration_fraction = 0.2 / bx_dist
+
+# 5. Create Dion-Jacobson perovskite structure
+dj_structure = make_dj(
+    Ap_spacer=Ap_spacer,      # A'-site spacer (surface capping)
+    A_site_cation=A_cation,   # A-site cation (between layers)
+    B_site_cation='Pb',
+    X_site_anion='I',
+    n=2,                      # Number of inorganic layers
+    BX_dist=bx_dist,
+    penet=penetration_fraction,
+    attachment_end='top',     # For DJ structures, use only one side
+    wrap=True,               # Enable wrapping to prevent molecules from disappearing
+    output=False
 )
 
-# Save the structure
-creator.write_svc()
+# 6. Save the structure
+write("MAPbI3_DJ_n2.vasp", dj_structure, format='vasp')
 
-# 2. Analyze the structure
-analyzer = q2D_analysis(B='Pb', X='I', crystal='svc_MyPerovskite.vasp')
-
-# Get structural parameters
-structure_data = analyzer.analyze_perovskite_structure()
-print(f"Average bond length: {np.mean(structure_data['axial_lengths']):.3f} Å")
-
-# Calculate organic spacer penetration
-penetration = analyzer.calculate_n_penetration()
-
-# Isolate and save components
-analyzer.save_spacer()  # Save organic spacer only
-analyzer.save_salt()    # Save spacer + halides
+print(f"Created DJ structure with {len(dj_structure)} atoms")
 ```
 
-That's it! You've created and analyzed your first quasi-2D perovskite structure.
+That's it! You've created your first Dion-Jacobson perovskite structure with proper molecular alignment and atom grouping.
 
 ## Features Overview
 
@@ -65,32 +70,52 @@ That's it! You've created and analyzed your first quasi-2D perovskite structure.
 - **Deformation Analysis**: Quantitative comparison of molecular structures with ideal templates
 - **Visualization Tools**: Built-in visualization for structural components
 - **Multiple File Formats**: Support for VASP, XYZ, and other common formats
+- **Ontology Integration**: Advanced structural classification and systematic analysis frameworks
+- **Connectivity Analysis**: Graph-theoretical approaches for molecular connectivity validation
+- **Octahedral Distortion Analysis**: Comprehensive distortion parameter calculation using OctaDist
+- **Systematic Structure Comparison**: Ordered octahedra analysis for consistent structure comparison
 
 ## Core Functionality
 
 ### Structure Generation
 ```python
-from SVC_materials.core.creator import q2D_creator
+from q2D_Materials.utils.perovskite_builder import make_dj, make_2drp, make_monolayer
+from q2D_Materials.utils.common_a_sites import get_a_site_object
+from q2D_Materials.utils.file_handlers import mol_load
 
-# Create structures with precise molecular positioning
-creator = q2D_creator(B='Pb', X='I', molecule_xyz='spacer.xyz', 
-                     perov_vasp='base.vasp', P1=..., name='structure')
-creator.write_svc()      # Save supercell with vacuum
-creator.write_bulk()     # Save bulk structure with multiple slabs
+# Load spacer molecule
+spacer_df = mol_load("spacer.xyz")
+spacer_elements = spacer_df['Element'].tolist()
+spacer_positions = spacer_df[['X', 'Y', 'Z']].values
+Ap_spacer = Atoms(symbols=spacer_elements, positions=spacer_positions)
+
+# Get A-site cation
+A_cation = get_a_site_object("MA")
+
+# Create different perovskite types
+dj_structure = make_dj(Ap_spacer, A_cation, 'Pb', 'I', n=2)      # Dion-Jacobson
+rp_structure = make_2drp(Ap_spacer, A_cation, 'Pb', 'I', n=2)    # Ruddlesden-Popper
+mono_structure = make_monolayer(Ap_spacer, 'Pb', 'I')            # Monolayer
 ```
 
 ### Structure Analysis
 ```python
-from SVC_materials.core.analyzer import q2D_analysis
+from q2D_Materials.core.analyzer import q2D_analyzer
 
-analyzer = q2D_analysis(B='Pb', X='I', crystal='structure.vasp')
+# Initialize analyzer
+analyzer = q2D_analyzer(
+    file_path="structure.vasp",
+    b='Pb',  # Central atom
+    x='I',   # Ligand atom
+    cutoff_ref_ligand=3.5
+)
 
 # Comprehensive structural analysis
-data = analyzer.analyze_perovskite_structure()
-penetration = analyzer.calculate_n_penetration()
+distortions = analyzer.calculate_octahedral_distortions()
+summary_df = analyzer.get_distortion_summary()
 
-# Component isolation
-analyzer.show_spacer()   # Visualize organic spacer
+# Component isolation and analysis
+analyzer.save_spacer()   # Save organic spacer only
 analyzer.save_salt()     # Save spacer + coordinating halides
 ```
 
@@ -111,6 +136,150 @@ metrics = analyze_molecule_deformation(
     extracted_file='extracted.xyz',
     output_dir='analysis_results'
 )
+```
+
+### Advanced Octahedral Distortion Analysis
+```python
+from SVC_materials.core.analyzer import q2D_analyzer
+
+# Initialize analyzer with systematic ordering
+analyzer = q2D_analyzer(
+    file_path="structure.vasp",
+    b='Pb',  # Central atom
+    x='Cl',  # Ligand atom
+    cutoff_ref_ligand=3.5
+)
+
+# Calculate comprehensive distortion parameters
+distortions = analyzer.calculate_octahedral_distortions()
+
+# Get systematic summary for comparison
+summary_df = analyzer.get_distortion_summary()
+
+# Compare with another structure
+analyzer2 = q2D_analyzer("structure2.vasp", b='Pb', x='Cl')
+comparison = analyzer.compare_distortions(analyzer2)
+```
+
+### Complete Example: Batch Structure Generation
+```python
+#!/usr/bin/env python3
+"""
+Create Dion-Jacobson (DJ) Perovskite Structures
+Example from create_dion_jacobsons.py
+"""
+
+import os
+import numpy as np
+from ase import Atoms
+from ase.io import write
+from q2D_Materials.utils.file_handlers import mol_load
+from q2D_Materials.utils.perovskite_builder import make_dj, auto_calculate_BX_distance
+from q2D_Materials.utils.common_a_sites import get_a_site_object
+
+def create_dj_structures():
+    """Create DJ structures for MAPbX3 compositions."""
+    
+    # Compositions and parameters
+    compositions = {
+        'MAPbI3': {'B': 'Pb', 'X': 'I'},
+        'MAPbCl3': {'B': 'Pb', 'X': 'Cl'},
+        'MAPbBr3': {'B': 'Pb', 'X': 'Br'},
+    }
+    n_layers = [1, 2, 3, 4]
+    penetration_a = 0.2
+
+    # Load A-site cation molecule (methylammonium)
+    ma_xyz_file = "CamiloITM/methylammonium.xyz"
+    ma_df = mol_load(ma_xyz_file)
+    elements = ma_df['Element'].tolist()
+    positions = ma_df[['X', 'Y', 'Z']].values
+    ma_a_site_atoms = Atoms(symbols=elements, positions=positions)
+    
+    # Load spacer files (all .xyz files except methylammonium)
+    spacer_files = [f for f in os.listdir("CamiloITM") 
+                   if f.endswith('.xyz') and f != 'methylammonium.xyz']
+    
+    # Create structures for all combinations
+    for name, comp in compositions.items():
+        B_cation = comp['B']
+        X_anion = comp['X']
+        
+        # Calculate B-X distance and penetration
+        bx_dist = auto_calculate_BX_distance(B_cation, X_anion)
+        penetration_fraction = penetration_a / bx_dist
+        
+        # A-site cation (MA) that goes between inorganic layers
+        A_cation = get_a_site_object("MA")
+        
+        # Process each spacer
+        for spacer_idx, spacer_file in enumerate(spacer_files):
+            # Load spacer molecule
+            spacer_df = mol_load(f"CamiloITM/{spacer_file}")
+            spacer_elements = spacer_df['Element'].tolist()
+            spacer_positions = spacer_df[['X', 'Y', 'Z']].values
+            Ap_spacer = Atoms(symbols=spacer_elements, positions=spacer_positions)
+            
+            # Molecular alignment is handled automatically by make_dj
+            
+            # Process each layer thickness
+            for n in n_layers:
+                # Create folder structure
+                folder_name = f"{name}_spacer{spacer_idx + 1}_n{n}"
+                structure_dir = f"CamiloITM/{folder_name}"
+                os.makedirs(structure_dir, exist_ok=True)
+                
+                # Create DJ structure
+                dj_structure = make_dj(
+                    Ap_spacer=Ap_spacer,
+                    A_site_cation=A_cation,
+                    B_site_cation=B_cation,
+                    X_site_anion=X_anion,
+                    n=n,
+                    BX_dist=bx_dist,
+                    penet=penetration_fraction,
+                    attachment_end='top',
+                    wrap=True,
+                    output=False
+                )
+                
+                # Group atoms by element type for proper POSCAR format
+                symbols = dj_structure.get_chemical_symbols()
+                positions = dj_structure.get_positions()
+                cell = dj_structure.cell
+                
+                # Group by element type
+                element_groups = {}
+                for i, symbol in enumerate(symbols):
+                    if symbol not in element_groups:
+                        element_groups[symbol] = []
+                    element_groups[symbol].append(positions[i])
+                
+                # Create ordered lists (inorganic first, then organic)
+                element_order = ['Br', 'Cl', 'I', 'Pb', 'Sn', 'C', 'H', 'N', 'O', 'S', 'P']
+                ordered_symbols = []
+                ordered_positions = []
+                
+                for element in element_order:
+                    if element in element_groups:
+                        ordered_symbols.extend([element] * len(element_groups[element]))
+                        ordered_positions.extend(element_groups[element])
+                
+                # Add remaining elements
+                for element in element_groups:
+                    if element not in element_order:
+                        ordered_symbols.extend([element] * len(element_groups[element]))
+                        ordered_positions.extend(element_groups[element])
+                
+                # Create grouped structure and save
+                grouped_structure = Atoms(symbols=ordered_symbols, positions=ordered_positions, cell=cell)
+                poscar_path = f"{structure_dir}/POSCAR"
+                write(poscar_path, grouped_structure, format='vasp')
+                
+                print(f"Created {folder_name}: {len(dj_structure)} atoms")
+
+# Run the example
+create_dj_structures()
 ```
 
 ## Installation
@@ -390,6 +559,46 @@ The package is designed to accommodate community contributions through:
 - **Standardized interfaces**: Consistent API design for extensibility
 - **Documentation standards**: Comprehensive documentation for developers
 - **Testing frameworks**: Robust unit testing and validation procedures
+
+## Acknowledgments and Citations
+
+### Inspiration and Foundation
+
+The development of q2D-Materials was heavily inspired by the excellent work of the Pyrovskite package. The creator structure and core perovskite generation algorithms draw significant inspiration from their comprehensive approach to perovskite structure construction and analysis.
+
+🟩 **If you use this code for your research, please cite the original Pyrovskite work:**
+> Stanton, R., & Trivedi, D. (2023). Pyrovskite: A software package for the high throughput construction, analysis, and featurization of two- and three-dimensional perovskite systems. *Journal of Applied Physics*, 133(24), 244701. https://doi.org/10.1063/5.0159407
+
+**Pyrovskite Repository:** https://github.com/r2stanton/pyrovskite
+
+### Octahedral Distortion Analysis
+
+The octahedral distortion analysis capabilities in q2D-Materials are built upon the OctaDist library, which provides comprehensive tools for calculating distortion parameters in coordination complexes.
+
+🟩 **Please cite OctaDist when using distortion analysis features:**
+> Ketkaew, R.; Tantirungrotechai, Y.; Harding, P.; Chastanet, G.; Guionneau, P.; Marchivie, M.; Harding, D. J. OctaDist: A Tool for Calculating Distortion Parameters in Spin Crossover and Coordination Complexes. *Dalton Trans.*, 2021, 50, 1086-1096. https://doi.org/10.1039/D0DT03988H
+
+**OctaDist Repository:** https://github.com/OctaDist/OctaDist
+
+### Development Philosophy
+
+q2D-Materials began as a custom version of Pyrovskite, developed as an alternative implementation with our desired design principles and specific research needs. While inspired by the excellent foundation provided by Pyrovskite, q2D-Materials has evolved into a specialized framework with unique features including:
+
+- **Advanced Ontology Integration**: Comprehensive structural classification and analysis through ontological frameworks
+- **Enhanced Connectivity Analysis**: Sophisticated graph-theoretical approaches for molecular connectivity and validation
+- **Custom Perovskite Generation**: Specialized algorithms for Dion-Jacobson, Ruddlesden-Popper, and monolayer perovskite structures
+- **Molecular Transformation Engine**: Advanced molecular alignment and positioning algorithms
+- **Comprehensive Analysis Suite**: Integrated structural, energetic, and distortion analysis capabilities
+
+### Key Differentiators
+
+While building upon the solid foundation of Pyrovskite, q2D-Materials introduces several unique capabilities:
+
+1. **Ontology-Driven Analysis**: Integration of structural ontologies for systematic classification and comparison
+2. **Advanced Molecular Handling**: Sophisticated algorithms for molecular isolation, validation, and deformation analysis
+3. **Specialized 2D Structures**: Focused implementation for quasi-2D perovskite systems with custom spacer handling
+4. **Comprehensive Distortion Metrics**: Extended octahedral distortion analysis with systematic ordering and comparison capabilities
+5. **Research-Grade Validation**: Enhanced validation protocols and quality assurance for scientific applications
 
 ## Contributing
 We welcome contributions to SVC-Materials! If you would like to contribute:
