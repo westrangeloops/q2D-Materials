@@ -24,6 +24,7 @@ from .layers_analysis import LayersAnalyzer
 from .vector_analysis import VectorAnalyzer
 from .distortion import DistortionAnalyzer
 from .plotting import PlottingAnalyzer
+from .batch_analysis import BatchAnalyzer
 
 # Use matplotlib without x server
 import matplotlib
