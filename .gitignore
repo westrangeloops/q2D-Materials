@@ -7,4 +7,6 @@ Examples/
 correlation_plots/
 batch_analysis_plots/
 final.csv
-__pycache__/
+Graphs/DOS_END_RESULTS/
+__pycache__
+.cursorindexingignore
