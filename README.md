@@ -1,4 +1,4 @@
-# SVC-Materials: Quasi-2D Perovskite Structure Generation and Analysis
+# q2D-Materials:  Yet another Quasi-2D Perovskite Structure Generation and Analysis.
 
 A Python package for creating and analyzing quasi-2D perovskite structures.
 
