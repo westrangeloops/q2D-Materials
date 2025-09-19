@@ -1,0 +1,16 @@
+{
+  "total_experiments": 3,
+  "successful_analyses": 0,
+  "failed_analyses": 3,
+  "results": {
+    "n1_analysis": {
+      "error": "No POSCAR found"
+    },
+    "n2_analysis": {
+      "error": "No POSCAR found"
+    },
+    "n3_analysis": {
+      "error": "No POSCAR found"
+    }
+  }
+}

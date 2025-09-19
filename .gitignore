@@ -3,3 +3,8 @@
 .report/
 .Graphs/
 CamiloITM/
+Examples/
+correlation_plots/
+batch_analysis_plots/
+final.csv
+__pycache__/
