@@ -21,13 +21,10 @@ from ase import Atoms
 from ase.io import write
 
 # 1. Load spacer molecule
-spacer_df = mol_load("spacer.xyz")
-spacer_elements = spacer_df['Element'].tolist()
-spacer_positions = spacer_df[['X', 'Y', 'Z']].values
-Ap_spacer = Atoms(symbols=spacer_elements, positions=spacer_positions)
+spacer_df = mol_load("spacer.xyz") # The xyz file of the spacer (mol2 also works)
 
 # 2. Get A-site cation (methylammonium)
-A_cation = get_a_site_object("MA")
+A_cation = get_a_site_object("MA") # There are some common molecules to pick up
 
 # 3. Calculate B-X distance and penetration
 bx_dist = auto_calculate_BX_distance('Pb', 'I')
@@ -35,15 +32,13 @@ penetration_fraction = 0.2 / bx_dist
 
 # 4. Create Dion-Jacobson perovskite structure
 dj_structure = make_dj(
-    Ap_spacer=Ap_spacer,      # Spacer molecule
+    spacer=Ap_spacer,      # Spacer molecule
     A_site_cation=A_cation,   # A-site cation
-    B_site_cation='Pb',       # Metal cation
+    B_site_cation='Pb',       # Divalent Metal cation
     X_site_anion='I',         # Halide anion
     n=2,                      # Number of inorganic layers
-    BX_dist=bx_dist,
-    penet=penetration_fraction,
-    attachment_end='top',
-    wrap=True
+    BX_dist=bx_dist, # Bond length distance
+    penet=penetration_fraction, # Penetration of the molecule
 )
 
 # 5. Save structure
