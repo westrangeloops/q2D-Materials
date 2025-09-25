@@ -6,7 +6,7 @@ including shared atom detection and network topology.
 """
 
 import numpy as np
-from .geometry import GeometryCalculator
+# from ..utils.geometry import GeometryCalculator  # Removed - using functions instead
 
 
 class MoleculeIdentifier:

@@ -14,13 +14,6 @@ Legacy support:
 - The original q2D_analyzer from analyzer.py is still available for backward compatibility
 """
 
-# Import the refactored modular components
-from .geometry import GeometryCalculator
-from .angular_analysis import AngularAnalyzer
-from .connectivity import ConnectivityAnalyzer
-from .layers_analysis import LayersAnalyzer
-from .vector_analysis import VectorAnalyzer
-
 # Import the refactored main analyzer
 from .analyzer import q2D_analyzer
 
@@ -32,11 +25,4 @@ except ImportError:
 
 __all__ = [
     'q2D_analyzer',
-    'GeometryCalculator', 
-    'AngularAnalyzer',
-    'ConnectivityAnalyzer',
-    'LayersAnalyzer',
-    'VectorAnalyzer',
-    'ASiteIdentifier',
-    'q2D_analyzer_legacy'
 ] 
