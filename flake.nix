@@ -37,6 +37,7 @@
             pythonPackages.seaborn
             pythonPackages.pymatgen
             pythonPackages.rmsd
+            pythonPackages.pyvis
             # Note: pyprocar not available in nixpkgs, install via pip
             # Add more packages as needed
           ];

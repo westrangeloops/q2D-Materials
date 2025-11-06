@@ -13,7 +13,19 @@ References:
 import tempfile
 import os
 from ase.io import read
-from .smiles_to_xyz import smiles_to_xyz, RDKIT_AVAILABLE
+
+# Check if RDKit is available
+try:
+    from rdkit import Chem
+    RDKIT_AVAILABLE = True
+except ImportError:
+    RDKIT_AVAILABLE = False
+
+# Import SMILES conversion function
+try:
+    from .smiles_to_3D import smiles_to_ase_atoms
+except ImportError:
+    smiles_to_ase_atoms = None
 
 # Ionic radii data for A-site cations
 ionic_radii = {
@@ -159,17 +171,11 @@ def create_a_site_molecule(a_cation):
     
     smiles = A_cation_smiles[a_cation]
     
-    # Create temporary XYZ file
-    with tempfile.NamedTemporaryFile(mode='w+', delete=False, suffix='.xyz') as tmp_file:
-        try:
-            smiles_to_xyz(smiles, tmp_file.name)
-            # Read the XYZ file as ASE Atoms object
-            molecule = read(tmp_file.name)
-            return molecule
-        finally:
-            # Clean up temporary file
-            if os.path.exists(tmp_file.name):
-                os.remove(tmp_file.name)
+    # Convert SMILES directly to ASE Atoms
+    if smiles_to_ase_atoms is None:
+        raise ValueError("smiles_to_ase_atoms function is not available.")
+    molecule = smiles_to_ase_atoms(smiles)
+    return molecule
 
 
 def is_molecular_a_cation(a_cation):
