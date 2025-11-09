@@ -207,4 +207,52 @@ def get_molecular_info(smiles: str) -> dict:
         'num_atoms': mol_with_h.GetNumAtoms(),
         'num_heavy_atoms': mol.GetNumHeavyAtoms(),
         'smiles_canonical': Chem.MolToSmiles(mol)
-    } 
+    }
+
+
+def smiles_to_ase_atoms(smiles: str):
+    """
+    Convert a SMILES string directly to an ASE Atoms object.
+    
+    This function uses the robust smiles_to_xyz() function internally
+    to generate 3D coordinates, then converts them to an ASE Atoms object.
+    
+    Parameters
+    ----------
+    smiles : str
+        SMILES string representing the molecule
+        
+    Returns
+    -------
+    ase.Atoms
+        ASE Atoms object with 3D coordinates
+        
+    Raises
+    ------
+    ImportError
+        If RDKit is not available
+    ValueError
+        If SMILES string is invalid
+    RuntimeError
+        If 3D coordinate generation fails
+    """
+    if not RDKIT_AVAILABLE:
+        raise ImportError("RDKit is required for SMILES conversion. Please install rdkit-pypi.")
+    
+    from ase import Atoms
+    import tempfile
+    import os
+    
+    # Create temporary XYZ file
+    with tempfile.NamedTemporaryFile(mode='w+', delete=False, suffix='.xyz') as tmp_file:
+        try:
+            # Use the robust smiles_to_xyz function
+            smiles_to_xyz(smiles, tmp_file.name, optimize_geometry=True)
+            # Read back as ASE Atoms object
+            from ase.io import read
+            atoms = read(tmp_file.name)
+            return atoms
+        finally:
+            # Clean up temporary file
+            if os.path.exists(tmp_file.name):
+                os.remove(tmp_file.name) 

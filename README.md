@@ -1,106 +1,167 @@
-# SVC-Materials: Quasi-2D Perovskite Structure Generation and Analysis
+# q2D-Materials: Quasi-2D Perovskite Structure Generation
 
-A Python package for creating and analyzing quasi-2D perovskite structures.
+A Python package for creating bulk and quasi-2D perovskite structures with support for mixed compositions and molecular spacers.
 
 ## Quick Start
 
 ### Installation
+
 ```bash
-conda create -n q2D_Materials pip
-conda activate q2D_Materials
-pip install ase pandas numpy matplotlib networkx
+# Using Nix (recommended)
+nix develop
+
+# Or using pip
+pip install ase numpy
 ```
 
-### Create a Structure
+### Basic Usage
 
 ```python
-from q2D_Materials.utils.perovskite_builder import make_dj, auto_calculate_BX_distance
-from q2D_Materials.utils.common_a_sites import get_a_site_object
-from q2D_Materials.utils.file_handlers import mol_load
-from ase import Atoms
+from q2D_Materials.core.creator import q2D_creator
 from ase.io import write
 
-# 1. Load spacer molecule
-spacer_df = mol_load("spacer.xyz")
-spacer_elements = spacer_df['Element'].tolist()
-spacer_positions = spacer_df[['X', 'Y', 'Z']].values
-Ap_spacer = Atoms(symbols=spacer_elements, positions=spacer_positions)
+# Initialize creator with composition
+q2d = q2D_creator(B='Pb', X='I', A='MA', name='MAPbI3')
 
-# 2. Get A-site cation (methylammonium)
-A_cation = get_a_site_object("MA")
+# Create bulk perovskite
+bulk = q2d.create_perovskite('bulk')
+bulk.write('MAPbI3_bulk.vasp', format='vasp')
 
-# 3. Calculate B-X distance and penetration
-bx_dist = auto_calculate_BX_distance('Pb', 'I')
-penetration_fraction = 0.2 / bx_dist
-
-# 4. Create Dion-Jacobson perovskite structure
-dj_structure = make_dj(
-    Ap_spacer=Ap_spacer,      # Spacer molecule
-    A_site_cation=A_cation,   # A-site cation
-    B_site_cation='Pb',       # Metal cation
-    X_site_anion='I',         # Halide anion
-    n=2,                      # Number of inorganic layers
-    BX_dist=bx_dist,
-    penet=penetration_fraction,
-    attachment_end='top',
-    wrap=True
+# Create 2D structures (RP, DJ, or monolayer)
+dj = q2d.create_perovskite('DJ', 
+    spacer_molecule='[NH3+]CCCCC[NH3+]',  # SMILES string or XYZ file path
+    n=2  # Number of inorganic layers
 )
-
-# 5. Save structure
-write("MAPbI3_DJ_n2.vasp", dj_structure, format='vasp')
-```
-
-### Analyze a Structure
-
-```python
-from q2D_Materials.core.analyzer import q2D_analyzer
-
-# Initialize analyzer
-analyzer = q2D_analyzer(
-    file_path="structure.vasp",
-    b='Pb',  # Central atom
-    x='I',   # Ligand atom
-    cutoff_ref_ligand=3.5
-)
-
-# Calculate octahedral distortions
-distortions = analyzer.calculate_octahedral_distortions()
-
-# Get summary DataFrame
-summary_df = analyzer.get_distortion_summary()
-
-# Save spacer and salt components
-analyzer.save_spacer()   # Organic spacer only
-analyzer.save_salt()     # Spacer + coordinating halides
+dj.write('MAPbI3_DJ_n2.vasp', format='vasp')
 ```
 
 ## Structure Types
 
-- **Dion-Jacobson**: `make_dj()` - Alternating organic/inorganic layers
-- **Ruddlesden-Popper**: `make_2drp()` - Organic spacer between inorganic slabs
-- **Monolayer**: `make_monolayer()` - Single inorganic layer
+### Bulk Perovskites
 
-## Analysis Features
+```python
+# Simple bulk
+bulk = q2d.create_perovskite('bulk')
 
-- **Octahedral Distortion**: Calculate distortion parameters (ζ, Δ, Σ, θ)
-- **Structural Analysis**: Bond lengths, angles, and geometric properties
-- **Component Isolation**: Extract organic spacers and inorganic components
-- **Systematic Ordering**: Consistent octahedra ordering for comparison
+# Double perovskite
+double = q2d.create_perovskite('bulk', Bp='Sn')
 
-## File Formats
+# Mixed composition (triple-cation perovskite)
+mixed = q2d.create_perovskite('bulk',
+    A_ions=['Cs', 'MA', 'FA'],
+    A_coefficients=[0.05, 0.79, 0.18]
+)
 
-- **Input**: VASP (POSCAR/CONTCAR), XYZ
-- **Output**: VASP, XYZ, CSV (analysis results)
+# Mixed halides
+mixed_halides = q2d.create_perovskite('bulk',
+    X_ions=['Br', 'I'],
+    X_coefficients=[0.5, 2.5]
+)
+```
+
+### 2D Perovskites
+
+#### Ruddlesden-Popper (RP)
+```python
+rp = q2d.create_perovskite('RP',
+    spacer_molecule='[NH3+]CCCCC=O',  # SMILES or XYZ file
+    n=2,  # Layer thickness
+    spacer_distance=2.0  # Vacuum gap between spacers (Å)
+)
+```
+
+#### Dion-Jacobson (DJ)
+```python
+dj = q2d.create_perovskite('DJ',
+    spacer_molecule='[NH3+]CCCCC[NH3+]',
+    n=2,
+    attachment_end='top'  # 'top', 'bottom', or 'both'
+)
+```
+
+#### Monolayer
+```python
+monolayer = q2d.create_perovskite('monolayer',
+    spacer_molecule='CN1C=NC2=C1C(=O)N(C(=O)N2C)CC[NH3+]',
+    n=1,
+    vacuum=12,  # Vacuum thickness (Å)
+    attachment_end='both'
+)
+```
+
+## Spacer Molecules
+
+Spacer molecules can be provided as:
+- **SMILES strings**: `'[NH3+]CCCCC[NH3+]'`
+- **XYZ file paths**: `'spacer.xyz'`
+- **ASE Atoms objects**: Direct molecular structure
+
+```python
+# Using SMILES (requires RDKit)
+dj = q2d.create_perovskite('DJ', spacer_molecule='[NH3+]CCCCC[NH3+]', n=2)
+
+# Using XYZ file
+from ase.io import read
+spacer = read('spacer.xyz')
+dj = q2d.create_perovskite('DJ', spacer_molecule=spacer, n=2)
+```
+
+## Advanced Parameters
+
+### Bulk Perovskites
+- `BX_dist` (float): B-X bond distance in Angstrom (auto-calculated if None)
+- `Bp` (str): Second B-site cation for double perovskites
+- `A_ions` (list): List of A-site cations for mixed compositions
+- `A_coefficients` (list): Coefficients for A-site ions (must sum to 1.0)
+- `B_ions` (list): List of B-site cations for mixed compositions
+- `B_coefficients` (list): Coefficients for B-site ions (must sum to 1.0)
+- `X_ions` (list): List of X-site anions for mixed compositions
+- `X_coefficients` (list): Coefficients for X-site ions (must sum to 3.0)
+- `supercell_size` (tuple): Supercell size for mixed compositions (auto-calculated)
+- `seed` (int): Random seed for reproducible mixed distributions
+
+### 2D Perovskites
+- `n` (int): Number of inorganic octahedral layers (default: 1)
+- `penet` (float): Spacer penetration into inorganic layer (fraction of BX bond, default: 0.3)
+- `spacer_distance` (float): Vacuum gap between opposing spacers for RP (Å, default: 2.0)
+- `vacuum` (float): Vacuum thickness for monolayer (Å, default: 12)
+- `attachment_end` (str): Where to attach spacer - 'top', 'bottom', or 'both'
+- `Ap_Rx`, `Ap_Ry`, `Ap_Rz` (float): Rotation angles in degrees (applied as Rx→Ry→Rz)
+- `wrap` (bool): Wrap atoms to unit cell (default: False)
+- `BX_dist` (float): B-X bond distance (auto-calculated if None)
+- `Bp` (str): Second B-site cation for double perovskites
 
 ## Examples
 
-See the `Examples/` folder for detailed usage examples and batch processing scripts.
+### Triple-Cation Perovskite
+```python
+q2d = q2D_creator(B='Pb', X='I', A='Cs')
+mixed = q2d.create_perovskite('bulk',
+    A_ions=['Cs', 'MA', 'FA'],
+    A_coefficients=[0.05, 0.79, 0.18]
+)
+```
 
-## Citation
+### Mixed Halides
+```python
+q2d = q2D_creator(B='Pb', X='I', A='MA')
+mixed = q2d.create_perovskite('bulk',
+    X_ions=['Br', 'I'],
+    X_coefficients=[0.5, 2.5]
+)
+```
 
-If you use this code, please cite:
-
-> Stanton, R., & Trivedi, D. (2023). Pyrovskite: A software package for the high throughput construction, analysis, and featurization of two- and three-dimensional perovskite systems. *Journal of Applied Physics*, 133(24), 244701.
+### Complex Mixed Composition
+```python
+super_mixed = q2d.create_perovskite('bulk',
+    A_ions=['Cs', 'MA', 'FA'],
+    A_coefficients=[0.05, 0.79, 0.18],
+    B_ions=['Pb'],
+    B_coefficients=[1.0],
+    X_ions=['Br', 'I'],
+    X_coefficients=[0.5, 2.5]
+)
+```
 
 ## License
 
