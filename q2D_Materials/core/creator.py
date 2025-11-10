@@ -1,4 +1,4 @@
-from ase.io import read, write
+from ase.io import read
 from ase.visualize import view
 from ase import Atoms
 from ..utils.molecule_builder import smiles_to_ase_atoms
@@ -118,15 +118,6 @@ class q2D_creator:
         """Visualize an ASE structure."""
         return view(structure)
     
-    def write_structure(self, structure, filename=None, file_format='vasp'):
-        """Write structure to file."""
-        if filename is None:
-            filename = f"{self.name}_{self.B}{self.X}3.{file_format}"
-        elif not filename.endswith(f'.{file_format}'):
-            filename += f'.{file_format}'
-        
-        write(filename, structure)
-    
     def create_perovskite(self, structure_type="bulk", **kwargs):
         """
         Create perovskite structures of various types.
@@ -161,7 +152,9 @@ class q2D_creator:
         Returns
         -------
         ase.Atoms
-            The created perovskite structure. Use write_structure() to save to file.
+            The created perovskite structure. Use ASE's write functions to save to file.
+            Example: from ase.io import write; write('structure.vasp', structure)
+            For VASP with sorting: from ase.io.vasp import write_vasp; write_vasp('POSCAR', structure, sort=True, direct=True)
         """
         # Normalize structure type
         structure_type = structure_type.upper()

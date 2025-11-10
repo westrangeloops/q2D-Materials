@@ -533,6 +533,9 @@ def align_ase_molecule_for_perovskite(ase_atoms, attachment_end='top'):
     symbols = ase_atoms.get_chemical_symbols()
     positions = ase_atoms.get_positions()
     
+    # Store original number of atoms for validation
+    num_atoms_original = len(ase_atoms)
+    
     df = pd.DataFrame({
         'Element': symbols,
         'X': positions[:, 0],
@@ -540,12 +543,30 @@ def align_ase_molecule_for_perovskite(ase_atoms, attachment_end='top'):
         'Z': positions[:, 2]
     })
     
+    # Validate DataFrame has all atoms
+    if len(df) != num_atoms_original:
+        raise ValueError(f"DataFrame conversion lost atoms: {num_atoms_original} -> {len(df)}")
+    
     # Align the molecule with attachment direction awareness
     aligned_df = align_molecule_for_perovskite_2d(df, attachment_end=attachment_end)
     
-    # Convert back to ASE Atoms
-    aligned_atoms = ase_atoms.copy()
-    aligned_atoms.set_positions(aligned_df[['X', 'Y', 'Z']].values)
+    # Validate aligned DataFrame has all atoms
+    if len(aligned_df) != num_atoms_original:
+        raise ValueError(f"Alignment lost atoms: {num_atoms_original} -> {len(aligned_df)}")
+    
+    # Reconstruct Atoms object from aligned DataFrame to ensure all atoms are preserved
+    # This is safer than just updating positions, as it ensures symbols and positions match
+    aligned_symbols = aligned_df['Element'].tolist()
+    aligned_positions = aligned_df[['X', 'Y', 'Z']].values
+    
+    # Create new Atoms object with aligned positions
+    aligned_atoms = Atoms(aligned_symbols, positions=aligned_positions)
+    
+    # Preserve any additional properties from original atoms (like tags, momenta, etc.)
+    if hasattr(ase_atoms, 'tags') and ase_atoms.tags is not None:
+        aligned_atoms.set_tags(ase_atoms.get_tags())
+    if hasattr(ase_atoms, 'momenta') and ase_atoms.get_momenta() is not None:
+        aligned_atoms.set_momenta(ase_atoms.get_momenta())
     
     return aligned_atoms
 

@@ -2,7 +2,7 @@
 
 # q2D-Materials: Quasi-2D Perovskite Structure Generation
 
-A Python package for creating bulk and quasi-2D perovskite structures with support for mixed compositions and molecular spacers.
+Another Python package for creating bulk and quasi-2D perovskite structures with support for mixed compositions and molecular spacers.
 
 ## Quick Start
 
@@ -16,6 +16,10 @@ nix develop
 pip install ase numpy rdkit
 ```
 
+![Nix Logo](https://nixos.org/_astro/nixos-logo-default-gradient-black-regular-horizontal-none.BPpok6mb_JppMK.svg)
+
+**Why Nix?** For computational chemistry and materials science, reproducibility is critical—your results should be independent of your system's Python version or library installations. Nix ensures that everyone working with q2D-Materials uses identical environments with the exact same versions of ASE, RDKit, NumPy, and all dependencies, eliminating the classic "works on my machine" problem. This is especially valuable when sharing structures with collaborators or reproducing published results, as molecular structure generation is sensitive to numerical precision and library versions.
+
 ### Basic Usage
 
 ```python
@@ -28,6 +32,8 @@ q2d = q2D_creator(B='Pb', X='I', A='MA', name='MAPbI3')
 ## Examples
 
 ### Bulk Perovskite with All Parameters
+
+![Bulk Perovskite Structure](Logos/BULK.png)
 
 ```python
 from q2D_Materials.core.creator import q2D_creator
@@ -55,10 +61,13 @@ bulk = q2d.create_perovskite(
 )
 
 # Save structure
-q2d.write_structure(bulk, 'MAPbI3_bulk_complete.vasp')
+from ase.io import write
+write('MAPbI3_bulk_complete.vasp', bulk)
 ```
 
 ### Ruddlesden-Popper (RP) Structure with All Parameters
+
+![RP Perovskite Structure](Logos/RP.png)
 
 ```python
 from q2D_Materials.core.creator import q2D_creator
@@ -96,7 +105,8 @@ rp = q2d.create_perovskite(
 )
 
 # Save structure
-q2d.write_structure(rp, 'MAPbI3_RP_complete.vasp')
+from ase.io import write
+write('MAPbI3_RP_complete.vasp', rp)
 ```
 
 ## Supported Structure Types

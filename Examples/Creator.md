@@ -58,7 +58,8 @@ q2d = q2D_creator(B='Pb', X='I', A='MA', name='MAPbI3')
 
 # Create single unit cell
 bulk = q2d.create_perovskite('bulk', supercell_size=(1, 1, 1))
-q2d.write_structure(bulk, 'MAPbI3_unit_cell.vasp')
+from ase.io import write
+write('MAPbI3_unit_cell.vasp', bulk)
 ```
 
 ### Bulk with Custom B-X Distance
@@ -81,11 +82,13 @@ Create larger bulk structures:
 ```python
 # 2×2×2 supercell
 bulk_supercell = q2d.create_perovskite('bulk', supercell_size=(2, 2, 2))
-q2d.write_structure(bulk_supercell, 'MAPbI3_2x2x2.vasp')
+from ase.io import write
+write('MAPbI3_2x2x2.vasp', bulk_supercell)
 
 # 3×3×3 supercell
 bulk_large = q2d.create_perovskite('bulk', supercell_size=(3, 3, 3))
-q2d.write_structure(bulk_large, 'MAPbI3_3x3x3.vasp')
+from ase.io import write
+write('MAPbI3_3x3x3.vasp', bulk_large)
 ```
 
 ### Rectangular Supercells
@@ -93,7 +96,8 @@ q2d.write_structure(bulk_large, 'MAPbI3_3x3x3.vasp')
 ```python
 # Non-cubic supercell
 bulk_rect = q2d.create_perovskite('bulk', supercell_size=(2, 3, 1))
-q2d.write_structure(bulk_rect, 'MAPbI3_2x3x1.vasp')
+from ase.io import write
+write('MAPbI3_2x3x1.vasp', bulk_rect)
 ```
 
 ## Double Perovskites
@@ -107,7 +111,8 @@ double = q2d.create_perovskite(
     supercell_size=(2, 2, 2),  # Required for double perovskite
     Bp='Sn'  # Second B-site cation
 )
-q2d.write_structure(double, 'MAPbSnI3_double.vasp')
+from ase.io import write
+write('MAPbSnI3_double.vasp', double)
 ```
 
 The double perovskite creates an alternating pattern of B and Bp cations.
@@ -159,7 +164,8 @@ mixed_all = q2d.create_perovskite(
     X_ions=['Br', 'I', 'I'],
     BX_dist=3.18
 )
-q2d.write_structure(mixed_all, 'mixed_perovskite.vasp')
+from ase.io import write
+write('mixed_perovskite.vasp', mixed_all)
 ```
 
 ## 2D Perovskites - Ruddlesden-Popper (RP)
@@ -174,7 +180,8 @@ rp = q2d.create_perovskite(
     spacer_molecule='[NH3+]CCCCC=O',  # SMILES string
     supercell=[1, 1, 2]  # [nx, ny, n_layers]
 )
-q2d.write_structure(rp, 'MAPbI3_RP_n2.vasp')
+from ase.io import write
+write('MAPbI3_RP_n2.vasp', rp)
 ```
 
 ### RP with All Parameters
@@ -228,7 +235,8 @@ dj = q2d.create_perovskite(
     spacer_molecule='[NH3+]CCCCC[NH3+]',  # Divalent spacer
     supercell=[1, 1, 2]
 )
-q2d.write_structure(dj, 'MAPbI3_DJ_n2.vasp')
+from ase.io import write
+write('MAPbI3_DJ_n2.vasp', dj)
 ```
 
 ### DJ with All Parameters
@@ -294,7 +302,8 @@ monolayer = q2d.create_perovskite(
     spacer_molecule='CN1C=NC2=C1C(=O)N(C(=O)N2C)CC[NH3+]',  # Caffeine-based
     supercell=[1, 1, 1]
 )
-q2d.write_structure(monolayer, 'MAPbI3_monolayer.vasp')
+from ase.io import write
+write('MAPbI3_monolayer.vasp', monolayer)
 ```
 
 ### Monolayer with All Parameters
@@ -508,7 +517,8 @@ complex_bulk = q2d.create_perovskite(
     X_ions=['Br', 'I', 'Cl', 'I'],  # Cycles for 81 X-sites
     BX_dist=3.18
 )
-q2d.write_structure(complex_bulk, 'complex_bulk.vasp')
+from ase.io import write
+write('complex_bulk.vasp', complex_bulk)
 ```
 
 ### Example 2: DJ with Mixed Spacers
@@ -525,7 +535,8 @@ dj_mixed_spacers = q2d.create_perovskite(
     penet=0.3,
     Ap_Rx=10.0  # Rotate spacers
 )
-q2d.write_structure(dj_mixed_spacers, 'DJ_mixed_spacers.vasp')
+from ase.io import write
+write('DJ_mixed_spacers.vasp', dj_mixed_spacers)
 ```
 
 ### Example 3: RP with All Features
@@ -542,7 +553,8 @@ rp_complete = q2d.create_perovskite(
     penet=0.25,  # Less penetration
     BX_dist=3.18
 )
-q2d.write_structure(rp_complete, 'RP_complete.vasp')
+from ase.io import write
+write('RP_complete.vasp', rp_complete)
 ```
 
 ## Visualization
@@ -560,16 +572,21 @@ view(bulk)
 
 ## Saving Structures
 
-The `q2D_creator` class provides a convenient method to save structures:
+Use ASE's write functions to save structures in any supported format:
 
 ```python
-# Save as VASP format
-q2d.write_structure(bulk, 'structure.vasp')
-
-# Or use ASE directly for other formats
 from ase.io import write
+
+# Save as VASP format
+write('structure.vasp', bulk)
+
+# Other formats
 write('structure.xyz', bulk)  # XYZ format
 write('structure.cif', bulk)  # CIF format
+
+# For VASP with sorting and direct (fractional) coordinates
+from ase.io.vasp import write_vasp
+write_vasp('POSCAR', bulk, sort=True, direct=True)
 ```
 
 ## Troubleshooting
