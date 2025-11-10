@@ -118,7 +118,7 @@ write('MAPbI3_RP_complete.vasp', rp)
 - **Bulk**: 3D perovskite structures with optional supercells and mixed compositions
 - **RP (Ruddlesden-Popper)**: 2D layered structures with organic spacers
 - **DJ (Dion-Jacobson)**: 2D layered structures with divalent organic spacers
-- **Monolayer**: Single-layer 2D structures with vacuum
+- **Monolayer**: Single-layer 2D structures with vacuum support adsorbates and rotations.
 
 ## Documentation
 
