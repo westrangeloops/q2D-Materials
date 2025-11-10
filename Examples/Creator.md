@@ -196,15 +196,13 @@ rp = q2d.create_perovskite(
     
     # RP-specific parameters
     spacer_distance=2.0,  # Vacuum gap between opposing spacers (Å)
-    attachment_end='both',  # RP always uses 'both'
     
     # Optional parameters
     penet=0.3,  # Spacer penetration into layer (fraction of BX bond)
     A_ions=['MA'],  # Pattern-based A-sites
     B_ions=['Pb'],  # Pattern-based B-sites
     X_ions=['I'],  # Pattern-based X-sites
-    BX_dist=None,  # Auto-calculated if None
-    wrap=False  # Wrap atoms to cell
+    BX_dist=None  # Auto-calculated if None
 )
 ```
 
@@ -254,9 +252,6 @@ dj = q2d.create_perovskite(
     B_ions=['Pb', 'Sn'],
     X_ions=['Br', 'I'],
     
-    # Spacer attachment
-    attachment_end='top',  # 'top', 'bottom', or 'both' (default: 'top')
-    
     # Spacer penetration
     penet=0.3,  # Fraction of BX bond that spacer penetrates into layer
     
@@ -269,10 +264,7 @@ dj = q2d.create_perovskite(
     Bp='Sn',  # Second B-site cation
     
     # B-X bond distance
-    BX_dist=None,  # Auto-calculated if None
-    
-    # Atom wrapping
-    wrap=False  # Whether to wrap atoms to unit cell
+    BX_dist=None  # Auto-calculated if None
 )
 ```
 
@@ -318,12 +310,9 @@ monolayer = q2d.create_perovskite(
     
     # Monolayer-specific parameters
     vacuum=12,  # Vacuum thickness in Angstrom
-    attachment_end='both',  # Default: 'both'
-    
     # Optional parameters
     penet=0.3,
     BX_dist=None,
-    wrap=False
 )
 ```
 
@@ -410,7 +399,6 @@ mixed_spacers = q2d.create_perovskite(
 | `A_ions` | str/list | A-site cation(s) pattern. | Uses `A` from initialization |
 | `B_ions` | str/list | B-site cation(s) pattern. | Uses `B` from initialization |
 | `X_ions` | str/list | X-site anion(s) pattern. | Uses `X` from initialization |
-| `attachment_end` | str | `'top'`, `'bottom'`, or `'both'`. DJ default: `'top'`, RP: `'both'`, Monolayer: `'both'`. | Structure-dependent |
 | `penet` | float | Spacer penetration into inorganic layer (fraction of BX bond). | `0.3` |
 | `spacer_distance` | float | Vacuum gap between opposing spacers for RP (Å). | `2.0` |
 | `vacuum` | float | Vacuum thickness for monolayer (Å). | `12` |

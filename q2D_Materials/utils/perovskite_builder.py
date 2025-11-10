@@ -72,8 +72,8 @@ def auto_calculate_BX_distance(B, X):
 def create_perovskite(A, B, X, structure_type='bulk', supercell_size=(1, 1, 1), 
                      BX_dist=None, Ap=None, n_layers=1, double=False, Bp=None,
                      penet=PENET, vacuum=12, spacer_distance=SPACER_DISTANCE,
-                     attachment_end='both', Ap_Rx=None, Ap_Ry=None, Ap_Rz=None,
-                     wrap=False):
+                     attachment_end=None, Ap_Rx=None, Ap_Ry=None, Ap_Rz=None,
+                     wrap=None):
     """
     Unified function to create bulk or 2D perovskite structures.
     
@@ -111,11 +111,16 @@ def create_perovskite(A, B, X, structure_type='bulk', supercell_size=(1, 1, 1),
     spacer_distance : float, optional
         Vacuum gap between opposing spacers for RP phase (default: 2.0).
     attachment_end : str, optional
-        Where to attach spacer for 2D: 'top', 'bottom', or 'both' (default: 'both').
+        Where to attach spacer for 2D. Automatically set based on structure_type:
+        - RP: 'both' (always)
+        - DJ: 'top' (always)
+        - Monolayer: 'both' (always)
+        Users should not need to specify this.
     Ap_Rx, Ap_Ry, Ap_Rz : float, optional
         Rotation angles in degrees for spacers (applied as Rx->Ry->Rz).
     wrap : bool, optional
-        Whether to wrap atoms to unit cell (default: False).
+        Whether to wrap atoms to unit cell. Automatically set to True for all 2D structures.
+        Users should not need to specify this.
         
     Returns
     -------
@@ -754,8 +759,8 @@ def _create_unified_core(structure_type, lattice_vectors, A_ions, B_ions, X_ions
 
 def create_2d_perovskite(Ap, A, B, X, supercell, structure_type='monolayer', BX_dist=None, 
                          penet=PENET, vacuum=12, spacer_distance=SPACER_DISTANCE, 
-                         attachment_end='both', Ap_Rx=None, Ap_Ry=None, Ap_Rz=None, 
-                         wrap=False, double=False, Bp=None):
+                         attachment_end=None, Ap_Rx=None, Ap_Ry=None, Ap_Rz=None, 
+                         wrap=None, double=False, Bp=None):
     """
     Create 2D perovskite structures using explicit patterns (RP, DJ, or monolayer).
     
@@ -786,13 +791,17 @@ def create_2d_perovskite(Ap, A, B, X, supercell, structure_type='monolayer', BX_
         Amount of vacuum to add to unit cell (in Angstrom, for monolayer only).
     spacer_distance : float
         Vacuum gap between opposing spacers for RP phase (in Angstroms, default: 2.0).
-    attachment_end : str
-        Where to attach spacer: 'top', 'bottom', or 'both' (default: 'both').
-        For RP: always 'both'. For DJ: default 'top'.
+    attachment_end : str, optional
+        Where to attach spacer. Automatically set based on structure_type:
+        - RP: 'both' (always)
+        - DJ: 'top' (always)
+        - Monolayer: 'both' (always)
+        Users should not need to specify this.
     Ap_Rx, Ap_Ry, Ap_Rz : float, optional
         Rotation angles in degrees (applied as Rx->Ry->Rz). Applied to all spacers.
-    wrap : bool
-        Whether to wrap atoms to unit cell.
+    wrap : bool, optional
+        Whether to wrap atoms to unit cell. Automatically set to True for all 2D structures.
+        Users should not need to specify this.
     double : bool
         Whether to create double perovskite.
     Bp : str, optional
@@ -913,15 +922,18 @@ def create_2d_perovskite(Ap, A, B, X, supercell, structure_type='monolayer', BX_
     lattice_vector_sizes[0] = lv1_sqrt
     lattice_vector_sizes[1] = lv1_sqrt
     
-    # Set structure-specific defaults
+    # Set structure-specific defaults (automatic based on structure_type)
+    # Override any user-provided values - these are fixed for each structure type
     if structure_type == 'rp':
-        attachment_end = 'both'
+        attachment_end = 'both'  # RP always uses 'both'
         vacuum = spacer_distance
+        wrap = True  # Always wrap for 2D structures
     elif structure_type == 'dj':
-        if attachment_end == 'both':  # Only override if not explicitly set
-            attachment_end = 'top'
+        attachment_end = 'top'  # DJ always uses 'top'
+        wrap = True  # Always wrap for 2D structures
     elif structure_type == 'monolayer':
-        pass  # Use defaults
+        attachment_end = 'both'  # Monolayer always uses 'both'
+        wrap = True  # Always wrap for 2D structures
     
     # Create the base 2D layer using unified core
     layer = _create_unified_core(

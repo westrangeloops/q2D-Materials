@@ -135,10 +135,7 @@ class q2D_creator:
             - penet (float): Penetration depth (default: 0.3)
             - spacer_distance (float): For RP - vacuum gap between spacers in Å (default: 2.0)
             - vacuum (float): For monolayer only (default: 12)
-            - attachment_end (str): For DJ and monolayer - 'top', 'bottom', 'both'
-              (DJ default: 'top', monolayer default: 'both')
             - Ap_Rx, Ap_Ry, Ap_Rz (float): Rotation angles in degrees
-            - wrap (bool): Wrap atoms to cell (default: False)
             
             For pattern-based mixed compositions (all structures):
             - A_ions (str/list): A-site cation(s). If list, assigned sequentially to positions.
@@ -281,6 +278,7 @@ class q2D_creator:
             X_ions = kwargs.get('X_ions', self.X)
             
             # Prepare 2D-specific parameters
+            # attachment_end and wrap are automatically set based on structure_type
             create_kwargs.update({
                 'A': A_ions,
                 'B': B_ions,
@@ -288,20 +286,21 @@ class q2D_creator:
                 'Ap': spacer,
                 'supercell_size': supercell,
                 'penet': kwargs.get('penet', 0.3),
-                'wrap': kwargs.get('wrap', False),
+                'wrap': True,  # Always wrap for 2D structures
                 'Ap_Rx': kwargs.get('Ap_Rx'),
                 'Ap_Ry': kwargs.get('Ap_Ry'),
                 'Ap_Rz': kwargs.get('Ap_Rz')
             })
             
-            # Structure-specific parameters
+            # Structure-specific parameters with automatic attachment_end
             if structure_type == 'rp':
                 create_kwargs['spacer_distance'] = kwargs.get('spacer_distance', 2.0)
+                create_kwargs['attachment_end'] = 'both'  # RP always uses 'both'
             elif structure_type == 'dj':
-                create_kwargs['attachment_end'] = kwargs.get('attachment_end', 'top')
+                create_kwargs['attachment_end'] = 'top'  # DJ always uses 'top'
             elif structure_type == 'monolayer':
                 create_kwargs['vacuum'] = kwargs.get('vacuum', 12)
-                create_kwargs['attachment_end'] = kwargs.get('attachment_end', 'both')
+                create_kwargs['attachment_end'] = 'both'  # Monolayer always uses 'both'
             
             return create_perovskite(structure_type=structure_type, **create_kwargs)
     

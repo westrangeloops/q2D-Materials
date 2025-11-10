@@ -96,16 +96,12 @@ rp = q2d.create_perovskite(
     
     # RP-specific parameters
     spacer_distance=2.0,  # Vacuum gap between opposing spacers (Å)
-    attachment_end='both',  # RP always uses 'both'
     
     # Spacer penetration
     penet=0.3,  # Fraction of BX bond that spacer penetrates into layer
     
     # B-X bond distance
-    BX_dist=None,  # Auto-calculated if None
-    
-    # Atom wrapping
-    wrap=False  # Whether to wrap atoms to unit cell
+    BX_dist=None  # Auto-calculated if None
 )
 
 # Save structure
