@@ -23,7 +23,7 @@ except ImportError:
 
 # Import SMILES conversion function
 try:
-    from .smiles_handler import smiles_to_ase_atoms
+    from .molecule_builder import smiles_to_ase_atoms
 except ImportError:
     smiles_to_ase_atoms = None
 

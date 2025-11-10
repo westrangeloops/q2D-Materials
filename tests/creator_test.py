@@ -9,108 +9,163 @@ from ase.io import write
 
 q2d = q2D_creator(B='Pb', X='I', A='MA', name='MAPbI3')
 
-# Bulk - simple bulk perovskite
-bulk = q2d.create_perovskite('bulk')
+print("="*60)
+print("Testing Pattern-Based Perovskite Creation")
+print("="*60)
 
-# DJ - Dion-Jacobson structure
-dj = q2d.create_perovskite('DJ', spacer_molecule='[NH3+]CCCCC[NH3+]', n=2)
+# ===================================================================
+# BULK PEROVSKITE TESTS
+# ===================================================================
+print("\n" + "="*60)
+print("BULK PEROVSKITE TESTS")
+print("="*60)
 
-# RP - Ruddlesden-Popper structure
-rp = q2d.create_perovskite('RP', spacer_molecule='[NH3+]CCCCC=O', n=2)
+# Bulk - simple bulk perovskite (single unit cell)
+print("\n1. Simple bulk perovskite...")
+bulk = q2d.create_perovskite('bulk', supercell_size=(1, 1, 1))
+bulk.write('MAPbI3_bulk_simple.vasp', format='vasp', sort=True)
+print("✓ Wrote MAPbI3_bulk_simple.vasp")
 
-# DJ Big Molecules test
-q2d_fa = q2D_creator(B='Pb', X='I', A='FA', name='FAPbI3')
-dj_big = q2d_fa.create_perovskite('DJ', spacer_molecule='[NH3+]CN1C=NC2=C1C(=O)N(C(=O)N2C)CC[NH3+]', n=2)
-
-# RP Big Molecules test
-rp_big = q2d_fa.create_perovskite('RP', spacer_molecule='CN1C=NC2=C1C(=O)N(C(=O)N2C)CC[NH3+]', n=2)
-
-# Monolayer - monolayer structure
-monolayer = q2d.create_perovskite('monolayer', spacer_molecule='CN1C=NC2=C1C(=O)N(C(=O)N2C)CC[NH3+]', n=1, vacuum=10, attachment_end='top')
-
-# N != 1 tests:
-dj_n2 = q2d.create_perovskite('DJ', spacer_molecule='[NH3+]CCCCC[NH3+]', n=2)
-rp_n2 = q2d.create_perovskite('RP', spacer_molecule='[NH3+]CCCCC=O', n=2)
-rp_big_n2 = q2d.create_perovskite('RP', spacer_molecule='CN1C=NC2=C1C(=O)N(C(=O)N2C)CC[NH3+]', n=2)
-monolayer_n2 = q2d.create_perovskite('monolayer', spacer_molecule='CN1C=NC2=C1C(=O)N(C(=O)N2C)CC[NH3+]', n=2, vacuum=10, attachment_end='top')
-
-bulk.write('MAPbI3_bulk_n1_A_Cs.vasp', format='vasp', sort=True)
-dj.write('MAPbI3_DJ_n1_A_Cs.vasp', format='vasp', sort=True)
-dj_big.write('MAPbI3_DJ_big_n1_A_Cs.vasp', format='vasp', sort=True)
-rp.write('MAPbI3_RP_n1_A_Cs.vasp', format='vasp', sort=True)
-rp_big.write('MAPbI3_RP_big_n1_A_Cs.vasp', format='vasp', sort=True)
-monolayer.write('MAPbI3_monolayer_n1_A_Cs.vasp', format='vasp', sort=True)
-dj_n2.write('MAPbI3_DJ_n2_A_Cs.vasp', format='vasp', sort=True)
-rp_n2.write('MAPbI3_RP_n2_A_Cs.vasp', format='vasp', sort=True)
-rp_big_n2.write('MAPbI3_RP_big_n2_A_Cs.vasp', format='vasp', sort=True)
-monolayer_n2.write('MAPbI3_monolayer_n2_A_Cs.vasp', format='vasp', sort=True)
-
-# Triple-cation perovskite (Cs₀.₀₅MA₀.₇₉FA₀.₁₈PbI₃)
+# Triple-cation perovskite with explicit pattern
+print("\n2. Mixed A-site perovskite (pattern-based)...")
 mixed = q2d.create_perovskite('bulk',
-    A_ions=['Cs', 'MA', 'FA'],
-    A_coefficients=[0.05, 0.79, 0.18]
+    A_ions=['Cs', 'MA', 'FA', 'Cs', 'MA', 'FA', 'Cs', 'MA'],  # Explicit pattern
+    supercell_size=(2, 2, 2)  # 2x2x2 = 8 A-site positions
 )
+mixed.write('MAPbI3_mixed_A_pattern.vasp', format='vasp', sort=True)
+print("✓ Wrote MAPbI3_mixed_A_pattern.vasp")
 
-mixed.write('MAPbI3_mixed_n1_A_Cs.vasp', format='vasp', sort=True)
-
-# Mixed halides
-mixed = q2d.create_perovskite('bulk',
-    X_ions=['Br', 'I'],
-    X_coefficients=[0.5, 2.5]
+# Mixed halides with pattern
+print("\n3. Mixed X-site (halides) perovskite...")
+mixed_X = q2d.create_perovskite('bulk',
+    X_ions=['Br', 'I', 'I', 'Br', 'I', 'I'],  # Pattern: 1 Br, 2 I repeating
+    supercell_size=(1, 1, 2)  # 1x1x2 = 2 unit cells = 6 X-site positions
 )
-mixed.write('MAPbI3_mixed_n1_X_Cs.vasp', format='vasp', sort=True)
+mixed_X.write('MAPbI3_mixed_X_pattern.vasp', format='vasp', sort=True)
+print("✓ Wrote MAPbI3_mixed_X_pattern.vasp")
 
-# SuperMix
+# Full mixed composition
+print("\n4. Super-mixed perovskite (A, B, X all mixed)...")
 superMix = q2d.create_perovskite('bulk',
-    A_ions=['Cs', 'MA', 'FA'],
-    A_coefficients=[0.05, 0.79, 0.18],
-    B_ions=['Pb'],
-    B_coefficients=[1.0],
-    X_ions=['Br', 'I'],
-    X_coefficients=[0.5, 2.5]
+    A_ions=['Cs', 'MA', 'FA', 'MA', 'MA', 'FA', 'Cs', 'MA'],  # Pattern
+    B_ions=['Pb', 'Sn', 'Pb', 'Pb', 'Sn', 'Pb', 'Pb', 'Sn'],  # Pattern
+    X_ions=['Br'] * 12 + ['I'] * 12,  # Half Br, half I
+    supercell_size=(2, 2, 2)
 )
-superMix.write('MAPbI3_superMix_n1_A_Cs.vasp', format='vasp', sort=True)
+superMix.write('MAPbI3_superMix_pattern.vasp', format='vasp', sort=True)
+print("✓ Wrote MAPbI3_superMix_pattern.vasp")
 
+# ===================================================================
+# 2D PEROVSKITE TESTS
+# ===================================================================
+print("\n" + "="*60)
+print("2D PEROVSKITE TESTS")
+print("="*60)
 
-# Mixed spacers - Pattern-based (deterministic) - no Ap_coefficients needed
-mixed_spacers_alt = q2d.create_perovskite('DJ',
-    spacer_molecule=['[NH3+]CCCCC[NH3+]', '[NH3+]CCCCC=O'],
-    spacer_pattern='alternating',  # Equal weights automatically
-    n=2
+# Simple DJ structure (n=1)
+print("\n5. Dion-Jacobson (DJ) structure, n=1...")
+dj_n1 = q2d.create_perovskite('DJ',
+    spacer_molecule='[NH3+]CCCCC[NH3+]',  # SMILES string
+    supercell=[1, 1, 1]  # [nx, ny, n_layers]
 )
-mixed_spacers_alt.write('MAPbI3_mixed_spacers_alternating_n1_A_Cs.vasp', format='vasp', sort=True)
+dj_n1.write('MAPbI3_DJ_n1.vasp', format='vasp', sort=True)
+print("✓ Wrote MAPbI3_DJ_n1.vasp")
 
-# Mixed spacers - Pattern-based (checkerboard pattern)
-mixed_spacers_check = q2d.create_perovskite('DJ',
-    spacer_molecule=['[NH3+]CCCCC[NH3+]', '[NH3+]CCCCC=O'],
-    spacer_pattern='checkerboard',
-    n=2
+# DJ structure with n=2
+print("\n6. Dion-Jacobson (DJ) structure, n=2...")
+dj_n2 = q2d.create_perovskite('DJ',
+    spacer_molecule='[NH3+]CCCCC[NH3+]',
+    supercell=[1, 1, 2]  # 2 layers
 )
-mixed_spacers_check.write('MAPbI3_mixed_spacers_checkerboard_n1_A_Cs.vasp', format='vasp', sort=True)
+dj_n2.write('MAPbI3_DJ_n2.vasp', format='vasp', sort=True)
+print("✓ Wrote MAPbI3_DJ_n2.vasp")
 
-# Mixed spacers - Pattern-based (random pattern)
-mixed_spacers_rand = q2d.create_perovskite('DJ',
-    spacer_molecule=['[NH3+]CCCCC[NH3+]', '[NH3+]CCCCC=O'],
-    spacer_pattern='random',
-    n=2,
-    seed=42
+# RP structure with n=2
+print("\n7. Ruddlesden-Popper (RP) structure, n=2...")
+rp_n2 = q2d.create_perovskite('RP',
+    spacer_molecule='[NH3+]CCCCC=O',  # Different spacer for RP
+    supercell=[1, 1, 2],
+    spacer_distance=2.0
 )
-mixed_spacers_rand.write('MAPbI3_mixed_spacers_random_pattern_n1_A_Cs.vasp', format='vasp', sort=True)
+rp_n2.write('MAPbI3_RP_n2.vasp', format='vasp', sort=True)
+print("✓ Wrote MAPbI3_RP_n2.vasp")
 
-# Mixed spacers - Probability-based (random) - requires Ap_coefficients
-mixed_spacers_prob = q2d.create_perovskite('DJ',
-    spacer_molecule=['[NH3+]CCCCC[NH3+]', '[NH3+]CCCCC=O'],
-    Ap_coefficients=[0.7, 0.3],  # 70/30 random distribution
-    n=2,
-    seed=42
+# Monolayer structure
+print("\n8. Monolayer structure, n=1...")
+monolayer = q2d.create_perovskite('monolayer',
+    spacer_molecule='CN1C=NC2=C1C(=O)N(C(=O)N2C)CC[NH3+]',  # Caffeine-based spacer
+    supercell=[1, 1, 1],
+    vacuum=12
 )
-mixed_spacers_prob.write('MAPbI3_mixed_spacers_probability_n1_A_Cs.vasp', format='vasp', sort=True)
+monolayer.write('MAPbI3_monolayer.vasp', format='vasp', sort=True)
+print("✓ Wrote MAPbI3_monolayer.vasp")
 
-# This will error with a helpful message - demonstrating mutually exclusive parameters
-# Uncomment to test the error message:
-#dj_error = q2d.create_perovskite('DJ',
-#     spacer_molecule=['[NH3+]CCCCC[NH3+]', '[NH3+]CCCCC=O'],
-#     Ap_coefficients=[0.5, 0.5],
-#     spacer_pattern='alternating',  # ERROR: mutually exclusive!
-#     n=2
-# )
+# ===================================================================
+# 2D WITH PATTERN-BASED MIXING
+# ===================================================================
+print("\n" + "="*60)
+print("2D PEROVSKITE WITH PATTERN-BASED MIXING")
+print("="*60)
+
+# DJ with mixed A-site cations
+print("\n9. DJ structure with mixed A-site cations (pattern-based)...")
+# For supercell=[1, 1, 2] (n_layers=2): 
+#   Total A-sites = 2 * (2-1) * 1 * 1 = 2
+#   Spacers occupy = 1 * 1 = 1 position
+#   Available A-sites = 2 - 1 = 1
+dj_mixed_A = q2d.create_perovskite('DJ',
+    spacer_molecule='[NH3+]CCCCC[NH3+]',
+    supercell=[1, 1, 2],
+    A_ions=['Cs']  # Correct: 1 A-site (spacers occupy the other position)
+)
+dj_mixed_A.write('MAPbI3_DJ_mixed_A.vasp', format='vasp', sort=True)
+print("✓ Wrote MAPbI3_DJ_mixed_A.vasp")
+
+# DJ with larger supercell to show more A-sites
+print("\n10. DJ structure with larger supercell (2x2, n=2)...")
+# For supercell=[2, 2, 2] with n_layers=2: 
+#   A-sites = (n_layers - 1) × nx × ny = (2-1) × 2 × 2 = 4
+#   Spacers (DJ uses 'top' attachment) = 1 z-level × 1 base position × 2×2 = 4
+dj_large = q2d.create_perovskite('DJ',
+    spacer_molecule='[NH3+]CCCCC[NH3+]',
+    supercell=[2, 2, 2],
+    A_ions=['Cs', 'MA', 'FA', 'MA']  # Correct: 4 A-sites
+)
+dj_large.write('MAPbI3_DJ_2x2_n2.vasp', format='vasp', sort=True)
+print("✓ Wrote MAPbI3_DJ_2x2_n2.vasp")
+
+# RP with mixed halides
+print("\n11. RP structure with mixed halides (pattern-based)...")
+# For supercell=[1, 1, 2] (n_layers=2): Expected X-sites = (2 + 8*2) * 1 * 1 = 18
+# Using a shorter pattern to demonstrate cycling
+rp_mixed_X = q2d.create_perovskite('RP',
+    spacer_molecule='[NH3+]CCCCC=O',
+    supercell=[1, 1, 2],
+    X_ions=['Br', 'I']  # Pattern will cycle to fill 18 positions
+)
+rp_mixed_X.write('MAPbI3_RP_mixed_X.vasp', format='vasp', sort=True)
+print("✓ Wrote MAPbI3_RP_mixed_X.vasp")
+
+# ===================================================================
+# SUMMARY
+# ===================================================================
+print("\n" + "="*60)
+print("ALL TESTS COMPLETED SUCCESSFULLY!")
+print("="*60)
+print("\nGenerated files:")
+print("  Bulk:")
+print("    - MAPbI3_bulk_simple.vasp")
+print("    - MAPbI3_mixed_A_pattern.vasp")
+print("    - MAPbI3_mixed_X_pattern.vasp")
+print("    - MAPbI3_superMix_pattern.vasp")
+print("  2D:")
+print("    - MAPbI3_DJ_n1.vasp")
+print("    - MAPbI3_DJ_n2.vasp")
+print("    - MAPbI3_RP_n2.vasp")
+print("    - MAPbI3_monolayer.vasp")
+print("    - MAPbI3_DJ_mixed_A.vasp")
+print("    - MAPbI3_DJ_2x2_n2.vasp")
+print("    - MAPbI3_RP_mixed_X.vasp")
+print("\nNote: Pattern validation will warn if pattern length doesn't match")
+print("expected position count. Patterns will cycle if shorter than expected.")
+print("="*60)

@@ -1,9 +1,9 @@
 from ase.io import read, write
 from ase.visualize import view
 from ase import Atoms
-from ..utils.smiles_handler import smiles_to_ase_atoms
+from ..utils.molecule_builder import smiles_to_ase_atoms
 from ..utils.perovskite_builder import (
-    create_bulk_perovskite, create_2d_perovskite, auto_calculate_BX_distance
+    create_perovskite, create_bulk_perovskite, create_2d_perovskite, auto_calculate_BX_distance
 )
 
 class q2D_creator:
@@ -126,7 +126,6 @@ class q2D_creator:
             filename += f'.{file_format}'
         
         write(filename, structure)
-        print(f"Structure written to {filename}")
     
     def create_perovskite(self, structure_type="bulk", **kwargs):
         """
@@ -138,8 +137,8 @@ class q2D_creator:
             'bulk', 'RP', 'DJ', or 'monolayer'
         **kwargs : dict
             Structure-specific parameters:
-            - spacer_molecule (str/Atoms): Required for 2D. XYZ path, SMILES, or Atoms
-            - n (int): Layer thickness for 2D (default: 1)
+            - spacer_molecule (str/Atoms/list): Required for 2D. XYZ path, SMILES, Atoms, or list for patterns
+            - supercell (list): Required for 2D. [nx, ny, n_layers] where n_layers is the layer thickness
             - Bp (str): Second B cation for double perovskites
             - BX_dist (float): B-X distance (auto-calculated if None)
             - penet (float): Penetration depth (default: 0.3)
@@ -150,26 +149,14 @@ class q2D_creator:
             - Ap_Rx, Ap_Ry, Ap_Rz (float): Rotation angles in degrees
             - wrap (bool): Wrap atoms to cell (default: False)
             
-            For mixed spacer compositions (2D structures):
-            - Ap_coefficients (list): Coefficients for spacer molecules (must sum to 1.0).
-              Mutually exclusive with spacer_pattern.
-              Required if spacer_molecule is a list and spacer_pattern is None.
-              Used for probability-based (random) selection.
-            - spacer_pattern (str): Pattern for spacer assignment ('alternating', 'checkerboard', 'random').
-              Mutually exclusive with Ap_coefficients.
-              Only used for DJ/RP structures. For monolayer, always uses probability-based.
-              If provided, uses deterministic pattern-based selection (equal weights for all spacers).
-            - seed (int): Random seed for reproducible mixed spacer distributions
+            For pattern-based mixed compositions (all structures):
+            - A_ions (str/list): A-site cation(s). If list, assigned sequentially to positions.
+            - B_ions (str/list): B-site cation(s). If list, assigned sequentially to positions.
+            - X_ions (str/list): X-site anion(s). If list, assigned sequentially to positions.
+            - supercell_size (tuple): For bulk only. (nx, ny, nz) supercell size.
             
-            For mixed bulk compositions:
-            - A_ions (list): List of A-site cations (if list, requires A_coefficients)
-            - A_coefficients (list): Coefficients for A-site ions (must sum to 1.0)
-            - B_ions (list): List of B-site cations (if list, requires B_coefficients)
-            - B_coefficients (list): Coefficients for B-site ions (must sum to 1.0)
-            - X_ions (list): List of X-site anions (if list, requires X_coefficients)
-            - X_coefficients (list): Coefficients for X-site ions (must sum to 3.0)
-            - supercell_size (tuple): Supercell size for mixed (auto-calculated if None)
-            - seed (int): Random seed for mixed compositions
+            Note: For pattern-based assignment, provide lists of ions that will be cycled through
+            to fill positions. The supercell must be large enough to accommodate your patterns.
             
         Returns
         -------
@@ -199,7 +186,7 @@ class q2D_creator:
     
     def _create_structure(self, structure_type, **kwargs):
         """
-        Unified method to create perovskite structures.
+        Unified method to create perovskite structures using the unified pipeline.
         
         Parameters
         ----------
@@ -215,12 +202,21 @@ class q2D_creator:
         """
         BX_dist = kwargs.get('BX_dist') or self.optimal_BX_dist
         Bp = kwargs.get('Bp')
+        double = (Bp is not None)
+        
+        # Prepare common parameters
+        create_kwargs = {
+            'BX_dist': BX_dist,
+            'double': double,
+            'Bp': Bp
+        }
         
         if structure_type == 'bulk':
-            # Check if mixed composition is requested
+            # Check if pattern-based mixed composition is requested
             A_ions = kwargs.get('A_ions')
             B_ions = kwargs.get('B_ions')
             X_ions = kwargs.get('X_ions')
+            supercell_size = kwargs.get('supercell_size')
             
             # Detect if mixed (any list provided)
             is_mixed = (A_ions is not None and isinstance(A_ions, list)) or \
@@ -228,129 +224,91 @@ class q2D_creator:
                       (X_ions is not None and isinstance(X_ions, list))
             
             if is_mixed:
-                # Mixed bulk perovskite
-                from q2D_Materials.utils.common_a_sites import get_a_site_object
+                # Pattern-based mixed bulk perovskite
+                # Require supercell_size for mixed compositions
+                if supercell_size is None:
+                    raise ValueError(
+                        "supercell_size is required for mixed bulk perovskites.\n"
+                        "Example: supercell_size=(2, 2, 2) for 2x2x2 supercell.\n"
+                        "The supercell must be large enough to accommodate your ion patterns."
+                    )
                 
                 # Use defaults from constructor if not specified
                 if A_ions is None:
-                    A_ions = [self.A]
+                    A_ions = self.A
                 if B_ions is None:
-                    B_ions = [self.B]
+                    B_ions = self.B
                 if X_ions is None:
-                    X_ions = [self.X]
-                
-                # Get coefficients (required for lists)
-                A_coefficients = kwargs.get('A_coefficients')
-                B_coefficients = kwargs.get('B_coefficients')
-                X_coefficients = kwargs.get('X_coefficients')
-                
-                # Set defaults for coefficients if not provided
-                if A_coefficients is None:
-                    A_coefficients = [1.0] if len(A_ions) == 1 else [1.0/len(A_ions)] * len(A_ions)
-                if B_coefficients is None:
-                    B_coefficients = [1.0] if len(B_ions) == 1 else [1.0/len(B_ions)] * len(B_ions)
-                if X_coefficients is None:
-                    if len(X_ions) == 1:
-                        X_coefficients = [3.0]
-                    else:
-                        X_coefficients = [3.0/len(X_ions)] * len(X_ions)
-                
-                # Convert A-site cations: strings to Atoms objects if molecular
-                processed_A_ions = []
-                for a_ion in A_ions:
-                    if isinstance(a_ion, Atoms):
-                        processed_A_ions.append(a_ion)
-                    elif isinstance(a_ion, str):
-                        processed_A_ions.append(get_a_site_object(a_ion))
-                    else:
-                        processed_A_ions.append(a_ion)
-                A_ions = processed_A_ions
+                    X_ions = self.X
                 
                 # Calculate BX_dist for mixed if needed
                 if BX_dist is None or BX_dist == self.optimal_BX_dist:
-                    if len(B_ions) == 1 and len(X_ions) == 1:
-                        BX_dist = self.optimal_BX_dist
-                    else:
+                    # Use first ion for BX distance calculation
+                    B_first = B_ions[0] if isinstance(B_ions, list) else B_ions
+                    X_first = X_ions[0] if isinstance(X_ions, list) else X_ions
+                    try:
                         from q2D_Materials.utils.common_a_sites import calculate_BX_distance
-                        BX_dists = []
-                        for B_ion in set(B_ions):
-                            for X_ion in set(X_ions):
-                                try:
-                                    dist = calculate_BX_distance(B_ion, X_ion)
-                                    BX_dists.append(dist)
-                                except:
-                                    pass
-                        if BX_dists:
-                            import numpy as np
-                            BX_dist = float(np.mean(BX_dists))
-                        else:
-                            BX_dist = self.optimal_BX_dist
+                        BX_dist = calculate_BX_distance(B_first, X_first)
+                        create_kwargs['BX_dist'] = BX_dist
+                    except:
+                        pass
                 
-                return create_bulk_perovskite(
-                    A_ions, B_ions, X_ions,
-                    BX_dist=BX_dist,
-                    A_coefficients=A_coefficients,
-                    B_coefficients=B_coefficients,
-                    X_coefficients=X_coefficients,
-                    double=(Bp is not None),
-                    Bp=Bp,
-                    supercell_size=kwargs.get('supercell_size'),
-                    seed=kwargs.get('seed')
-                )
+                create_kwargs.update({
+                    'A': A_ions,
+                    'B': B_ions,
+                    'X': X_ions,
+                    'supercell_size': supercell_size
+                })
             else:
-                # Single bulk perovskite
-                return create_bulk_perovskite(
-                    self.A_cation, self.B, self.X, 
-                    BX_dist=BX_dist, double=(Bp is not None), Bp=Bp
-                )
+                # Single bulk perovskite (uniform composition)
+                if supercell_size is None:
+                    supercell_size = (1, 1, 1)  # Default to single unit cell
+                
+                create_kwargs.update({
+                    'A': self.A_cation,
+                    'B': self.B,
+                    'X': self.X,
+                    'supercell_size': supercell_size
+                })
+            
+            return create_perovskite(structure_type='bulk', **create_kwargs)
         else:
             # 2D structures require spacer molecule
             if 'spacer_molecule' not in kwargs:
                 raise ValueError(f"spacer_molecule is required for {structure_type} structures")
             
             spacer = self._load_spacer_molecule(kwargs['spacer_molecule'])
-            n = kwargs.get('n', 1)
-            penet = kwargs.get('penet', 0.3)
-            wrap = kwargs.get('wrap', False)
-            Ap_Rx = kwargs.get('Ap_Rx')
-            Ap_Ry = kwargs.get('Ap_Ry')
-            Ap_Rz = kwargs.get('Ap_Rz')
+            supercell = kwargs.get('supercell')
+            if supercell is None:
+                raise ValueError(f"supercell is required for {structure_type} structures (e.g., supercell=[1, 1, 1])")
             
-            # Handle double perovskite
-            double = (Bp is not None)
+            # Get A/B/X ion patterns (pattern-based only)
+            A_ions = kwargs.get('A_ions', self.A_cation)
+            B_ions = kwargs.get('B_ions', self.B)
+            X_ions = kwargs.get('X_ions', self.X)
             
-            # Get mixed spacer parameters
-            Ap_coefficients = kwargs.get('Ap_coefficients')
-            spacer_pattern = kwargs.get('spacer_pattern')
-            seed = kwargs.get('seed')
+            # Prepare 2D-specific parameters
+            create_kwargs.update({
+                'A': A_ions,
+                'B': B_ions,
+                'X': X_ions,
+                'Ap': spacer,
+                'supercell_size': supercell,
+                'penet': kwargs.get('penet', 0.3),
+                'wrap': kwargs.get('wrap', False),
+                'Ap_Rx': kwargs.get('Ap_Rx'),
+                'Ap_Ry': kwargs.get('Ap_Ry'),
+                'Ap_Rz': kwargs.get('Ap_Rz')
+            })
             
             # Structure-specific parameters
             if structure_type == 'rp':
-                spacer_distance = kwargs.get('spacer_distance', 2.0)
-                return create_2d_perovskite(
-                    spacer, self.A_cation, self.B, self.X, n,
-                    structure_type='rp', BX_dist=BX_dist, penet=penet,
-                    spacer_distance=spacer_distance, Ap_Rx=Ap_Rx, Ap_Ry=Ap_Ry,
-                    Ap_Rz=Ap_Rz, wrap=wrap, double=double, Bp=Bp,
-                    Ap_coefficients=Ap_coefficients, spacer_pattern=spacer_pattern, seed=seed
-                )
+                create_kwargs['spacer_distance'] = kwargs.get('spacer_distance', 2.0)
             elif structure_type == 'dj':
-                attachment_end = kwargs.get('attachment_end', 'top')
-                return create_2d_perovskite(
-                    spacer, self.A_cation, self.B, self.X, n,
-                    structure_type='dj', BX_dist=BX_dist, penet=penet,
-                    attachment_end=attachment_end, Ap_Rx=Ap_Rx, Ap_Ry=Ap_Ry,
-                    Ap_Rz=Ap_Rz, wrap=wrap, double=double, Bp=Bp,
-                    Ap_coefficients=Ap_coefficients, spacer_pattern=spacer_pattern, seed=seed
-                )
+                create_kwargs['attachment_end'] = kwargs.get('attachment_end', 'top')
             elif structure_type == 'monolayer':
-                vacuum = kwargs.get('vacuum', 12)
-                attachment_end = kwargs.get('attachment_end', 'both')
-                return create_2d_perovskite(
-                    spacer, self.A_cation, self.B, self.X, n,
-                    structure_type='monolayer', BX_dist=BX_dist, penet=penet,
-                    vacuum=vacuum, attachment_end=attachment_end, Ap_Rx=Ap_Rx,
-                    Ap_Ry=Ap_Ry, Ap_Rz=Ap_Rz, wrap=wrap, double=double, Bp=Bp,
-                    Ap_coefficients=Ap_coefficients, spacer_pattern=spacer_pattern, seed=seed
-                )
+                create_kwargs['vacuum'] = kwargs.get('vacuum', 12)
+                create_kwargs['attachment_end'] = kwargs.get('attachment_end', 'both')
+            
+            return create_perovskite(structure_type=structure_type, **create_kwargs)
     

@@ -1,12 +1,5 @@
 """
-Advanced Perovskite Structure Builder
-
-This module provides comprehensive functionality for creating various types of 
-perovskite structures including bulk, 2D variants (Ruddlesden-Popper, Dion-Jacobson, 
-monolayer), and double perovskites with sophisticated molecular orientation capabilities.
-
-Integrated from excellent ASE-based perovskite generation code to enhance 
-the SVC-Materials package functionality.
+Module for creating perovskite structures.
 """
 
 from ase.build import add_adsorbate, molecule, bulk
@@ -73,300 +66,389 @@ def auto_calculate_BX_distance(B, X):
         return calculate_BX_distance(B, X)
     except ValueError:
         # Fallback to default values if ions not in database
-        print(f"Warning: Ionic data not available for {B}-{X}, using default distance 2.0 Å")
         return 2.0
 
 
-def create_bulk_perovskite(A, B, X, BX_dist=None, A_coefficients=None, B_coefficients=None, 
-                          X_coefficients=None, double=False, Bp=None, supercell_size=None, 
-                          seed=None):
+def create_perovskite(A, B, X, structure_type='bulk', supercell_size=(1, 1, 1), 
+                     BX_dist=None, Ap=None, n_layers=1, double=False, Bp=None,
+                     penet=PENET, vacuum=12, spacer_distance=SPACER_DISTANCE,
+                     attachment_end='both', Ap_Rx=None, Ap_Ry=None, Ap_Rz=None,
+                     wrap=False):
     """
-    Unified function to create bulk perovskite structures (single, double, or mixed).
+    Unified function to create bulk or 2D perovskite structures.
     
-    This function consolidates the logic for creating single, double, and mixed bulk perovskites.
-    If lists are passed for A, B, or X, the corresponding coefficient lists are required.
+    This is the main entry point for creating perovskite structures. It handles
+    both bulk and 2D structures (RP, DJ, monolayer) using a unified pipeline.
+    
+    Parameters
+    ----------
+    A : str/Atoms or list[str/Atoms]
+        A-site cation(s). Single value or list pattern.
+    B : str or list[str]
+        B-site cation(s). Single value or list pattern.
+    X : str or list[str]
+        X-site anion(s). Single value or list pattern.
+    structure_type : str
+        'bulk', 'rp', 'dj', or 'monolayer' (default: 'bulk').
+    supercell_size : tuple[int, int, int]
+        For bulk: (nx, ny, nz). For 2D: interpreted as [nx, ny, n_layers] where
+        n_layers is the number of octahedral layers.
+    BX_dist : float, optional
+        B-X bond distance in Angstrom (auto-calculated if None).
+    Ap : Atoms or list[Atoms], optional
+        Spacer molecule(s) for 2D structures. Required for 2D, ignored for bulk.
+    n_layers : int, optional
+        Number of octahedral layers for 2D structures (default: 1).
+        Overridden by supercell_size[2] if supercell_size is provided as [nx, ny, n_layers].
+    double : bool, optional
+        Whether to create double perovskite (default: False).
+    Bp : str, optional
+        Second B-site cation for double perovskite.
+    penet : float, optional
+        Penetration of spacer into inorganic layer for 2D (default: 0.3).
+    vacuum : float, optional
+        Vacuum for monolayer structures in Angstrom (default: 12).
+    spacer_distance : float, optional
+        Vacuum gap between opposing spacers for RP phase (default: 2.0).
+    attachment_end : str, optional
+        Where to attach spacer for 2D: 'top', 'bottom', or 'both' (default: 'both').
+    Ap_Rx, Ap_Ry, Ap_Rz : float, optional
+        Rotation angles in degrees for spacers (applied as Rx->Ry->Rz).
+    wrap : bool, optional
+        Whether to wrap atoms to unit cell (default: False).
+        
+    Returns
+    -------
+    Atoms
+        The created perovskite structure.
+    """
+    # Normalize structure_type
+    structure_type = structure_type.lower()
+    
+    if structure_type == 'bulk':
+        # Use bulk creation logic
+        return create_bulk_perovskite(A, B, X, supercell_size, BX_dist, double, Bp)
+    elif structure_type in ['rp', 'dj', 'monolayer']:
+        # Use 2D creation logic
+        # Extract n_layers from supercell_size if it's a 3-element tuple/list
+        if isinstance(supercell_size, (list, tuple)) and len(supercell_size) == 3:
+            nx, ny, n_layers = supercell_size[0], supercell_size[1], supercell_size[2]
+            supercell_2d = (nx, ny, n_layers)
+        else:
+            raise ValueError("For 2D structures, supercell_size must be [nx, ny, n_layers]")
+        
+        if Ap is None:
+            raise ValueError(f"Ap (spacer molecule) is required for {structure_type} structures")
+        
+        return create_2d_perovskite(
+            Ap=Ap, A=A, B=B, X=X, supercell=supercell_2d,
+            structure_type=structure_type, BX_dist=BX_dist,
+            penet=penet, vacuum=vacuum, spacer_distance=spacer_distance,
+            attachment_end=attachment_end, Ap_Rx=Ap_Rx, Ap_Ry=Ap_Ry, Ap_Rz=Ap_Rz,
+            wrap=wrap, double=double, Bp=Bp
+        )
+    else:
+        raise ValueError(f"Unknown structure_type: {structure_type}. "
+                        f"Use 'bulk', 'rp', 'dj', or 'monolayer'")
+
+
+def create_bulk_perovskite(A, B, X, supercell_size, BX_dist=None, double=False, Bp=None):
+    """
+    Create bulk perovskite structures using explicit ion patterns.
 
     Parameters
     ----------
     A : str/Atoms or list[str/Atoms]
-        The A cation(s). If single value: atomic symbol or Atoms object.
-        If list: list of A-site cations (requires A_coefficients).
+        A-site cation(s). Single value for uniform sites, or list pattern for mixed.
+        Example: 'Cs' or ['Cs', 'MA', 'FA', 'Cs', ...] for pattern-based assignment.
     B : str or list[str]
-        The B cation(s). If single value: atomic symbol.
-        If list: list of B-site cations (requires B_coefficients).
+        B-site cation(s). Single value or list pattern.
     X : str or list[str]
-        The X anion(s). If single value: atomic symbol.
-        If list: list of X-site anions (requires X_coefficients).
+        X-site anion(s). Single value or list pattern.
+    supercell_size : tuple[int, int, int]
+        Supercell dimensions (nx, ny, nz). Required for all structures.
     BX_dist : float, optional
         The desired BX bond distance (in Angstrom). If not provided,
         will be calculated automatically from ionic radii data.
-    A_coefficients : list[float], optional
-        Coefficients for A-site ions (must sum to 1.0). Required if A is a list.
-    B_coefficients : list[float], optional
-        Coefficients for B-site ions (must sum to 1.0). Required if B is a list.
-    X_coefficients : list[float], optional
-        Coefficients for X-site ions (must sum to 3.0). Required if X is a list.
-    double : bool
+    double : bool, optional
         Whether to create double perovskite (default: False).
     Bp : str, optional
         The atomic symbol of the B' cation (required if double=True).
-    supercell_size : tuple[int, int, int], optional
-        Supercell size for mixed compositions (auto-calculated if None).
-    seed : int, optional
-        Random seed for reproducible distributions in mixed compositions.
 
     Returns
     -------
     Atoms
         The bulk perovskite structure as an ASE Atoms object.
+        
+    Notes
+    -----
+    Pattern mode: If lists are provided, ions are assigned sequentially to positions.
+    The list will cycle if shorter than the number of positions.
+    For random patterns, generate the pattern externally and pass as a list.
     """
-    # Detect if mixed composition (any of A, B, X is a list)
-    is_mixed = isinstance(A, list) or isinstance(B, list) or isinstance(X, list)
-    
-    if is_mixed:
-        # Mixed composition - validate and convert inputs
-        # Convert single values to lists if needed
-        A_ions = A if isinstance(A, list) else [A]
-        B_ions = B if isinstance(B, list) else [B]
-        X_ions = X if isinstance(X, list) else [X]
-        
-        # Require coefficients for any list that was passed
-        if isinstance(A, list):
-            if A_coefficients is None:
-                raise ValueError("A_coefficients is required when A is a list")
-            if len(A_ions) != len(A_coefficients):
-                raise ValueError(f"A_ions ({len(A_ions)} ions) and A_coefficients ({len(A_coefficients)} values) must have the same length")
-        else:
-            A_coefficients = [1.0]
-        
-        if isinstance(B, list):
-            if B_coefficients is None:
-                raise ValueError("B_coefficients is required when B is a list")
-            if len(B_ions) != len(B_coefficients):
-                raise ValueError(f"B_ions ({len(B_ions)} ions) and B_coefficients ({len(B_coefficients)} values) must have the same length")
-        else:
-            B_coefficients = [1.0]
-        
-        if isinstance(X, list):
-            if X_coefficients is None:
-                raise ValueError("X_coefficients is required when X is a list")
-            if len(X_ions) != len(X_coefficients):
-                raise ValueError(f"X_ions ({len(X_ions)} ions) and X_coefficients ({len(X_coefficients)} values) must have the same length")
-        else:
-            X_coefficients = [3.0]
-        
-        # Normalize A-site ions
-        A_ions = [_normalize_a_site(A_ion) for A_ion in A_ions]
-        
-        # Normalize coefficients to handle floating point precision issues
-        A_coefficients = list(np.array(A_coefficients) / sum(A_coefficients))
-        B_coefficients = list(np.array(B_coefficients) / sum(B_coefficients))
-        X_coefficients = list(np.array(X_coefficients) / sum(X_coefficients) * 3.0)  # Scale to 3.0 for X
-        
-        # Validate coefficients sum (with tolerance for floating point)
-        if abs(sum(A_coefficients) - 1.0) > 0.01:
-            raise ValueError(f"A_coefficients must sum to 1.0, got {sum(A_coefficients)}")
-        if abs(sum(B_coefficients) - 1.0) > 0.01:
-            raise ValueError(f"B_coefficients must sum to 1.0, got {sum(B_coefficients)}")
-        if abs(sum(X_coefficients) - 3.0) > 0.01:
-            raise ValueError(f"X_coefficients must sum to 3.0, got {sum(X_coefficients)}")
-        
-        # Calculate BX_dist if not provided (use average for mixed)
-        if BX_dist is None:
-            from .common_a_sites import calculate_BX_distance
-            BX_dists = []
-            for B_ion in set(B_ions):
-                for X_ion in set(X_ions):
-                    try:
-                        dist = calculate_BX_distance(B_ion, X_ion)
-                        BX_dists.append(dist)
-                    except:
-                        pass
-            if BX_dists:
-                BX_dist = float(np.mean(BX_dists))
-            else:
-                # Fallback: use first B and X
-                BX_dist = auto_calculate_BX_distance(B_ions[0], X_ions[0])
-            print(f"Using calculated B-X distance: {BX_dist:.3f} Å")
-        
-        # Calculate supercell size if not provided
-        if supercell_size is None:
-            supercell_size = _calculate_minimal_supercell([A_coefficients, B_coefficients, X_coefficients])
-        
-        print(f"Creating mixed bulk perovskite with supercell size {supercell_size}")
-        print(f"  A-site: {len(A_ions)} ions with coefficients {A_coefficients}")
-        print(f"  B-site: {B_ions} with coefficients {B_coefficients}")
-        print(f"  X-site: {X_ions} with coefficients {X_coefficients}")
-        
-        # Calculate lattice vectors
-        lattice_vectors = _validate_and_convert_BX_dist(BX_dist)
-        
-        # Create supercell using the unified core function
-        nx, ny, nz = supercell_size
-        total_cells = nx * ny * nz
-        print(f"  Using unified core: creating {total_cells} independent unit cells")
-        
-        # Setup RNG
-        rng = np.random.default_rng(seed)
-        
-        # Create all unit cells
-        all_cells = []
-        for ix in range(nx):
-            for iy in range(ny):
-                for iz in range(nz):
-                    # Create unit cell with independent random selection
-                    cell_seed = None if seed is None else rng.integers(0, 2**31)
-                    cell = _create_perovskite_core(
-                        A_ions, A_coefficients,
-                        B_ions, B_coefficients,
-                        X_ions, X_coefficients,
-                        structure_type='bulk',
-                        lattice_vectors=lattice_vectors,
-                        seed=cell_seed
-                    )
-                    
-                    # Translate cell to its position in supercell
-                    translation = np.array([ix * lattice_vectors[0],
-                                           iy * lattice_vectors[1],
-                                           iz * lattice_vectors[2]])
-                    cell = _translate(cell, translation)
-                    all_cells.append(cell)
-        
-        # Combine all cells into supercell
-        mixed = all_cells[0]
-        for cell in all_cells[1:]:
-            mixed = _add_atoms(mixed, cell)
-        
-        # Set supercell dimensions
-        supercell_vectors = [nx * lattice_vectors[0],
-                            ny * lattice_vectors[1],
-                            nz * lattice_vectors[2]]
-        mixed.set_cell(supercell_vectors)
-        mixed.pbc = [1, 1, 1]
-        
-        print(f"  ✓ Created {len(mixed)} atoms with proper mixing")
-        
-        return mixed
-    
-    # Single or double perovskite (not mixed)
-    # Auto-calculate BX distance if not provided
-    if BX_dist is None:
-        BX_dist = auto_calculate_BX_distance(B, X)
-        print(f"Using calculated B-X distance: {BX_dist:.3f} Å")
-    
     # Validate double perovskite parameters
     if double and Bp is None:
         raise ValueError("Bp (second B-site cation) is required for double perovskites")
     
+    # Handle double perovskite by modifying B pattern
+    if double:
+        # For double perovskites, create alternating B/Bp pattern
+        if not isinstance(B, list):
+            if Bp != B:
+                B = [B, Bp]  # Simple alternating pattern
+    
+    # Calculate BX_dist if not provided
+    if BX_dist is None:
+        # For patterns, use first ion
+        B_first = B[0] if isinstance(B, list) else B
+        X_first = X[0] if isinstance(X, list) else X
+        BX_dist = auto_calculate_BX_distance(B_first, X_first)
+    
+    # Calculate lattice vectors
     lattice_vectors = _validate_and_convert_BX_dist(BX_dist)
     
-    if double:
-        # Create 2x2x2 supercell using unified core
-        all_cells = []
-        for ix in range(2):
-            for iy in range(2):
-                for iz in range(2):
-                    cell = _create_perovskite_core(
-                        A_ions=[A], A_probs=[1.0],
-                        B_ions=[B], B_probs=[1.0],  # Start with all B
-                        X_ions=[X], X_probs=[3.0],
-                        structure_type='bulk',
-                        lattice_vectors=lattice_vectors,
-                        seed=None
-                    )
-                    # Translate to position in supercell
-                    translation = np.array([ix * lattice_vectors[0],
-                                           iy * lattice_vectors[1],
-                                           iz * lattice_vectors[2]])
-                    cell = _translate(cell, translation)
-                    all_cells.append(cell)
-        
-        # Combine cells
-        double_uc = all_cells[0]
-        for cell in all_cells[1:]:
-            double_uc = _add_atoms(double_uc, cell)
-        
-        # Apply rock-salt ordering: replace B with B' at specific positions
-        # Pattern: [0, 3, 5, 6] corresponds to alternating B/B' in 2x2x2
-        B_idxs = [i for i, atom in enumerate(double_uc) if atom.symbol == B]
-        assert len(B_idxs) == 8, f"Expected 8 B-cations, found {len(B_idxs)}"
-        
-        # Rock-salt pattern indices in 2x2x2 supercell
-        for i in [0, 3, 5, 6]:
-            double_uc[B_idxs[i]].symbol = Bp
-        
-        # Set supercell dimensions
-        supercell_vectors = [2 * lattice_vectors[0],
-                            2 * lattice_vectors[1],
-                            2 * lattice_vectors[2]]
-        double_uc.set_cell(supercell_vectors)
-        double_uc.pbc = [1, 1, 1]
-        
-        return double_uc
-    else:
-        # Single bulk perovskite
-        return _create_perovskite_core(
-            A_ions=[A], A_probs=[1.0],
-            B_ions=[B], B_probs=[1.0],
-            X_ions=[X], X_probs=[3.0],
-            structure_type='bulk',
-            lattice_vectors=lattice_vectors,
-            seed=None
-        )
-
-
-
-
-def _calculate_minimal_supercell(coefficients_list):
-    """
-    Calculate minimal supercell size needed to represent fractional coefficients.
+    # Create structure using unified core
+    structure = _create_unified_core(
+        structure_type='bulk',
+        lattice_vectors=lattice_vectors,
+        A_ions=A,
+        B_ions=B,
+        X_ions=X,
+        n=1,
+        supercell_size=supercell_size
+    )
     
-    Parameters
-    ----------
-    coefficients_list : list[list[float]]
-        List of coefficient lists (e.g., [[0.05, 0.79, 0.18], [1.0], [3.0]])
+    return structure
+
+
+
+
+def _get_bulk_position_template():
+    """
+    Get position template for bulk perovskite unit cell.
+    
+    Returns the hardcoded fractional positions that define the perovskite geometry.
+    These positions are the physical foundation of the perovskite structure.
         
     Returns
     -------
-    tuple[int, int, int]
-        Supercell size (nx, ny, nz)
+    dict
+        Dictionary with keys 'A', 'B', 'X' containing lists of fractional positions.
+        Each position is [x, y, z] in fractional coordinates.
     """
-    from fractions import Fraction
-    import math
+    return {
+        'A': [[0.0, 0.0, 0.0]],
+        'B': [[0.5, 0.5, 0.5]],
+        'X': [[0.5, 0.5, 0.0], [0.5, 0.0, 0.5], [0.0, 0.5, 0.5]]
+    }
+
+
+def _get_2d_layer_position_template(n):
+    """
+    Get position template for 2D perovskite layer.
     
-    # Helper function to calculate LCM
-    def _lcm(a, b):
-        """Calculate LCM of two numbers."""
-        return abs(a * b) // math.gcd(a, b)
+    Returns the hardcoded fractional positions that define the 2D perovskite geometry.
+    These positions preserve the physical structure of the octahedral layers.
+    Based on the positions from _make_2d_layer function.
     
-    # Find LCM of denominators for all coefficient lists
-    denominators = []
-    for coeffs in coefficients_list:
-        if len(coeffs) > 1:  # Only for mixed compositions
-            for c in coeffs:
-                if c > 0:
-                    # Convert to fraction and get denominator
-                    frac = Fraction(c).limit_denominator(1000)
-                    denominators.append(frac.denominator)
+    Parameters
+    ----------
+    n : int
+        Number of octahedral layers
+        
+    Returns
+    -------
+    dict
+        Dictionary with keys 'X', 'B', 'A' containing lists of fractional positions.
+        Positions are in fractional coordinates relative to unit cell.
+        'X' includes initial X atoms and all X atoms in layers
+        'B' includes all B-site positions
+        'A' includes A-site positions between layers (if n > 1)
+    """
+    # Initial X atoms at z=0 (from _make_2d_layer)
+    positions = {
+        'X': [[0.25, 0.25, 0.0], [0.75, 0.75, 0.0]],
+        'B': [],
+        'A': []
+    }
     
-    if not denominators:
-        # No mixed compositions, use minimal 2x2x2
-        return (2, 2, 2)
+    # Base positions for each layer (8 atoms per layer)
+    # Pattern from _make_2d_layer: [X, X, B, X, X, B, X, X]
+    # Positions are: [0, 0, .5], [.5, 0, .5], [.25, .25, .5],
+    #                [0, .5, .5], [.5, .5, .5], [.75, .75, .5],
+    #                [.25, .25, 1], [.75, .75, 1]
+    base_positions = [
+        [0, 0, 0.5],        # X (index 0)
+        [0.5, 0, 0.5],      # X (index 1)
+        [0.25, 0.25, 0.5],  # B (index 2)
+        [0, 0.5, 0.5],      # X (index 3)
+        [0.5, 0.5, 0.5],    # X (index 4)
+        [0.75, 0.75, 0.5],  # B (index 5)
+        [0.25, 0.25, 1.0],  # X (index 6)
+        [0.75, 0.75, 1.0]   # X (index 7)
+    ]
     
-    # Find LCM of all denominators
-    lcm_val = denominators[0]
-    for d in denominators[1:]:
-        lcm_val = _lcm(lcm_val, d)
+    # Add positions for each layer
+    for i in range(n):
+        for j, base_pos in enumerate(base_positions):
+            pos = [base_pos[0], base_pos[1], base_pos[2] + i]
+            if j in [2, 5]:  # B-site positions (indices 2 and 5)
+                positions['B'].append(pos)
+            else:  # X-site positions
+                positions['X'].append(pos)
     
-    # Calculate supercell size (aim for ~lcm_val sites)
-    # For cubic: n³ ≈ lcm_val, so n ≈ lcm_val^(1/3)
-    n = max(2, int(np.ceil(lcm_val ** (1/3))))
+    # A-site positions between layers (if n > 1)
+    # From _make_2d_layer: positions are calculated as:
+    # z_pos = lv2 + lv2 * i (in Angstroms) where i ranges from 0 to n-2
+    # In fractional coordinates (before scaling): z = 1.0 + i
+    # There are 2 A-site positions per unit cell per A-site layer:
+    # - [0.25, 0.75, z] for spacers (will be filtered out later, added by _attach_spacer)
+    # - [0.75, 0.25, z] for A-site cations
+    # CRITICAL: We generate both positions in the template, then during supercell expansion:
+    #   - A-site positions [0.75, 0.25] are expanded to ALL unit cells (nx × ny)
+    #   - Spacer positions [0.25, 0.75] are filtered out (added separately by _attach_spacer)
+    # This ensures each unit cell gets BOTH an A-site AND a spacer at the same (x,y) but different z
+    if n > 1:
+        for i in range(n - 1):
+            z_pos = 1.0 + i  # Fractional z position (will be scaled by lv2)
+            # Generate both positions - they will be expanded to all unit cells
+            positions['A'].append([0.25, 0.75, z_pos])  # Spacer position (will be filtered during expansion)
+            positions['A'].append([0.75, 0.25, z_pos])  # A-site cation position (will be kept)
     
-    # Ensure we have enough sites (at least lcm_val)
-    while n * n * n < lcm_val:
-        n += 1
+    return positions
+
+
+def _translate_positions_to_supercell(position_template, supercell_size, lattice_vectors):
+    """
+    Translate position template to create supercell positions.
     
-    return (n, n, n)
+    Takes base unit cell positions and translates them by (ix, iy, iz) 
+    for each unit cell in the supercell.
+    
+    Parameters
+    ----------
+    position_template : dict
+        Dictionary with site types as keys and lists of fractional positions as values
+    supercell_size : tuple[int, int, int]
+        Supercell dimensions (nx, ny, nz)
+    lattice_vectors : np.ndarray
+        Lattice vector sizes [a, b, c]
+        
+    Returns
+    -------
+    dict
+        Dictionary with same structure as position_template but with all supercell positions.
+        Positions are in Angstroms (scaled by lattice vectors).
+    """
+    nx, ny, nz = supercell_size
+    lv0, lv1, lv2 = lattice_vectors[0], lattice_vectors[1], lattice_vectors[2]
+    
+    supercell_positions = {}
+    
+    for site_type, positions in position_template.items():
+        supercell_positions[site_type] = []
+        
+        for pos_frac in positions:
+            # Translate to each unit cell in supercell
+            for ix in range(nx):
+                for iy in range(ny):
+                    for iz in range(nz):
+                        # Fractional position in unit cell (ix, iy, iz)
+                        # Add integer translation, then convert to Angstroms
+                        new_pos_frac = [
+                            pos_frac[0] + ix,
+                            pos_frac[1] + iy,
+                            pos_frac[2] + iz
+                        ]
+                        # Convert to Angstroms (scale by lattice vectors)
+                        new_pos_ang = [
+                            new_pos_frac[0] * lv0,
+                            new_pos_frac[1] * lv1,
+                            new_pos_frac[2] * lv2
+                        ]
+                        supercell_positions[site_type].append(new_pos_ang)
+    
+    return supercell_positions
+
+
+def _assign_ions_to_positions(position_template, A_ions, B_ions, X_ions):
+    """
+    Assign ions to positions using explicit patterns.
+    
+    This function assigns ions to positions based on explicit patterns provided by the user.
+    If a single ion is provided, it's used for all positions of that type.
+    If a list is provided, ions are assigned sequentially, cycling if the list is shorter.
+    
+    Parameters
+    ----------
+    position_template : dict
+        Dictionary with site types ('A', 'B', 'X') and lists of positions
+    A_ions : str/Atoms or list[str/Atoms]
+        A-site ion(s). Single value or list pattern.
+    B_ions : str or list[str]
+        B-site ion(s). Single value or list pattern.
+    X_ions : str or list[str]
+        X-site ion(s). Single value or list pattern.
+        
+    Returns
+    -------
+    list[tuple]
+        List of (site_type, ion, position) tuples where ion is str or Atoms object
+    """
+    assignments = []
+    
+    # Assign A-site positions
+    A_positions = position_template.get('A', [])
+    if A_positions:
+        if isinstance(A_ions, list):
+            # Pattern mode: cycle through list
+            for i, pos in enumerate(A_positions):
+                ion = A_ions[i % len(A_ions)]
+                # Copy Atoms objects to avoid sharing references
+                if isinstance(ion, Atoms):
+                    ion = ion.copy()
+                assignments.append(('A', ion, pos))
+        else:
+            # Single ion: use for all positions
+            for pos in A_positions:
+                ion = A_ions
+                if isinstance(ion, Atoms):
+                    ion = ion.copy()
+                assignments.append(('A', ion, pos))
+    
+    # Assign B-site positions
+    B_positions = position_template.get('B', [])
+    if B_positions:
+        if isinstance(B_ions, list):
+            for i, pos in enumerate(B_positions):
+                ion = B_ions[i % len(B_ions)]
+                if isinstance(ion, Atoms):
+                    ion = ion.copy()
+                assignments.append(('B', ion, pos))
+        else:
+            for pos in B_positions:
+                ion = B_ions
+                if isinstance(ion, Atoms):
+                    ion = ion.copy()
+                assignments.append(('B', ion, pos))
+    
+    # Assign X-site positions
+    X_positions = position_template.get('X', [])
+    if X_positions:
+        if isinstance(X_ions, list):
+            for i, pos in enumerate(X_positions):
+                ion = X_ions[i % len(X_ions)]
+                if isinstance(ion, Atoms):
+                    ion = ion.copy()
+                assignments.append(('X', ion, pos))
+        else:
+            for pos in X_positions:
+                ion = X_ions
+                if isinstance(ion, Atoms):
+                    ion = ion.copy()
+                assignments.append(('X', ion, pos))
+    
+    return assignments
 
 
 def _validate_and_convert_BX_dist(BX_dist):
@@ -388,264 +470,312 @@ def _validate_and_convert_BX_dist(BX_dist):
         return 2 * np.array([BX_dist_float, BX_dist_float, BX_dist_float])
     except (TypeError, ValueError):
         # Fallback: use default cell size
-        print(f"Warning: BX_dist has unexpected type {type(BX_dist)}, using default cell size")
         return 2 * np.array([3.0, 3.0, 3.0])
 
 
-def _select_ion_by_probability(ion_list, probabilities, rng=None):
+def _create_unified_core(structure_type, lattice_vectors, A_ions, B_ions, X_ions, 
+                        n=1, supercell_size=(1, 1, 1)):
     """
-    Select an ion from a list based on probabilities.
-    
-    Parameters
-    ----------
-    ion_list : list[str/Atoms]
-        List of ions to choose from
-    probabilities : list[float]
-        Probability for each ion (must sum to 1.0)
-    rng : np.random.Generator, optional
-        Random number generator for reproducibility
-        
-    Returns
-    -------
-    str or Atoms
-        Selected ion
-    """
-    if len(ion_list) == 1:
-        return ion_list[0]
-    
-    if rng is None:
-        rng = np.random.default_rng()
-    
-    # Normalize probabilities
-    probs = np.array(probabilities) / sum(probabilities)
-    
-    # Select based on probabilities
-    idx = rng.choice(len(ion_list), p=probs)
-    return ion_list[idx]
-
-
-def _generate_spacer_pattern(num_positions, num_spacers, pattern='alternating', rng=None):
-    """
-    Generate a pattern-based assignment of spacers to positions.
-    
-    Parameters
-    ----------
-    num_positions : int
-        Number of spacer positions (2 for DJ 'top', 4 for RP 'both')
-    num_spacers : int
-        Number of different spacer types
-    pattern : str
-        Pattern type: 'alternating', 'checkerboard', or 'random'
-    rng : np.random.Generator, optional
-        Random number generator for 'random' pattern
-        
-    Returns
-    -------
-    list[int]
-        List of spacer indices for each position
-    """
-    if num_spacers == 1:
-        return [0] * num_positions
-    
-    if pattern == 'alternating':
-        # Simple alternating: [0, 1, 0, 1, ...]
-        return [i % num_spacers for i in range(num_positions)]
-    
-    elif pattern == 'checkerboard':
-        # Checkerboard pattern (for 4 positions with 2 spacers: [0, 1, 1, 0])
-        if num_positions == 4 and num_spacers == 2:
-            return [0, 1, 1, 0]  # bottom-left=0, bottom-right=1, top-left=1, top-right=0
-        elif num_positions == 2 and num_spacers == 2:
-            return [0, 1]  # top-left=0, top-right=1
-        else:
-            # Fallback to alternating for other cases
-            return [i % num_spacers for i in range(num_positions)]
-    
-    elif pattern == 'random':
-        if rng is None:
-            rng = np.random.default_rng()
-        # Random assignment with equal probability
-        return [rng.integers(0, num_spacers) for _ in range(num_positions)]
-    
-    else:
-        raise ValueError(f"Unknown pattern: {pattern}. Use 'alternating', 'checkerboard', or 'random'")
-
-
-def _create_perovskite_core(A_ions, A_probs, B_ions, B_probs, X_ions, X_probs,
-                            structure_type='bulk', n=1, lattice_vectors=None, 
-                            seed=None, double_pattern=None):
-    """
-    Core unified function for creating perovskite structures with mixed sites.
+    Unified core that creates position matrix then populates with ions using patterns.
     
     This is the fundamental building block that all perovskite creation functions
-    should use. It handles probability-based site placement during structure creation.
+    should use. It creates structures by:
+    1. Getting position template for structure_type
+    2. Expanding to supercell by translating positions
+    3. Assigning ions to each position based on explicit patterns
+    4. Creating Atoms object with all positions and symbols
     
     Parameters
     ----------
-    A_ions : list[str/Atoms]
-        List of A-site cations
-    A_probs : list[float]
-        Probabilities for each A-site ion (must sum to 1.0)
-    B_ions : list[str]
-        List of B-site cations
-    B_probs : list[float]
-        Probabilities for each B-site ion (must sum to 1.0)
-    X_ions : list[str]
-        List of X-site anions
-    X_probs : list[float]
-        Probabilities for each X-site ion (must sum to 3.0 for ABX₃)
     structure_type : str
         'bulk' or '2d_layer' - type of structure to create
+    lattice_vectors : np.ndarray
+        Lattice vector sizes [a, b, c]
+    A_ions : str/Atoms or list[str/Atoms]
+        A-site cation(s). Single value or explicit pattern.
+    B_ions : str or list[str]
+        B-site cation(s). Single value or explicit pattern.
+    X_ions : str or list[str]
+        X-site anion(s). Single value or explicit pattern.
     n : int
         For 2D layers: number of octahedral layers
-    lattice_vectors : array
-        Lattice vector sizes [a, b, c]
-    seed : int, optional
-        Random seed for reproducibility
-    double_pattern : list[int], optional
-        For double perovskites: indices where to place B' instead of B
-        E.g., [0, 3, 5, 6] for rock-salt ordering
+    supercell_size : tuple[int, int, int]
+        Supercell dimensions (nx, ny, nz)
         
     Returns
     -------
     Atoms
-        The perovskite structure with mixed sites
-        
-    Notes
-    -----
-    This function creates structures atom-by-atom with probability-based selection,
-    eliminating the need for dummy atoms and post-processing replacement.
+        The perovskite structure with all sites populated
     """
-    # Setup random number generator
-    rng = np.random.default_rng(seed)
-    
-    # Normalize all A-site ions
-    A_ions = [_normalize_a_site(A) for A in A_ions]
-    
-    # Normalize probabilities
-    A_probs = np.array(A_probs) / sum(A_probs)
-    B_probs = np.array(B_probs) / sum(B_probs)
-    X_probs = np.array(X_probs) / sum(X_probs) * 3.0  # Scale X to 3.0 total
-    
-    if structure_type == 'bulk':
-        return _create_bulk_core(A_ions, A_probs, B_ions, B_probs, X_ions, X_probs,
-                                lattice_vectors, rng, double_pattern)
-    elif structure_type == '2d_layer':
-        return _create_2d_layer_core(A_ions, A_probs, B_ions, B_probs, X_ions, X_probs,
-                                     n, lattice_vectors, rng, double_pattern)
-    else:
-        raise ValueError(f"Unknown structure_type: {structure_type}")
-
-
-def _create_bulk_core(A_ions, A_probs, B_ions, B_probs, X_ions, X_probs,
-                     lattice_vectors, rng, double_pattern=None):
-    """
-    Create a single bulk unit cell with probability-based ion placement.
-    
-    Internal function used by _create_perovskite_core.
-    """
-    # Check if we have molecular A-site cations
-    has_molecular_A = any(isinstance(A, Atoms) for A in A_ions)
-    
-    if has_molecular_A:
-        # For molecular A-sites, use aligned molecule
-        from .molecular_ops import align_ase_molecule_for_perovskite
-        A_aligned = []
+    # Normalize A-site ions (convert molecular strings to Atoms objects)
+    if isinstance(A_ions, list):
+        A_ions_normalized = []
         for A in A_ions:
             if isinstance(A, Atoms):
-                A_aligned.append(align_ase_molecule_for_perovskite(A.copy()))
+                A_ions_normalized.append(A)
+            elif isinstance(A, str):
+                A_ions_normalized.append(_normalize_a_site(A))
             else:
-                A_aligned.append(A)
-        A_ions = A_aligned
-        
-        # Select A-site ion for this unit cell
-        A_selected = _select_ion_by_probability(A_ions, A_probs, rng)
-        
-        # Select B-site ion
-        B_selected = _select_ion_by_probability(B_ions, B_probs, rng)
-        
-        # Select X-site ions (3 of them)
-        X_selected = [_select_ion_by_probability(X_ions, X_probs / 3.0, rng) for _ in range(3)]
-        
-        # Create structure without A-site first
-        perov = Atoms([B_selected] + X_selected,
-                     positions=[[0.5, 0.5, 0.5],
-                               [0.5, 0.5, 0.0],
-                               [0.5, 0.0, 0.5],
-                               [0.0, 0.5, 0.5]])
-        
-        perov.set_cell(lattice_vectors, scale_atoms=True)
-        
-        # Add molecular A-site
-        if isinstance(A_selected, Atoms):
-            r_corr = _center_of_mass_correction(A_selected)
-            x = 0 + r_corr[0]
-            y = 0 + r_corr[1]
-            z = -0.5 * lattice_vectors[2] + r_corr[2]
-            add_adsorbate(perov, A_selected, position=(x, y), height=z)
-        else:
-            # Atomic A-site
-            A_atom = Atoms([A_selected], positions=[[0.0, 0.0, 0.0]])
-            A_atom.set_cell(lattice_vectors, scale_atoms=True)
-            perov = _add_atoms(perov, A_atom)
-        
-        perov.pbc = [1, 1, 1]
-        return perov
+                A_ions_normalized.append(_normalize_a_site(A))
+        A_ions = A_ions_normalized
     else:
-        # All atomic sites - simpler case
-        A_selected = _select_ion_by_probability(A_ions, A_probs, rng)
-        B_selected = _select_ion_by_probability(B_ions, B_probs, rng)
-        X_selected = [_select_ion_by_probability(X_ions, X_probs / 3.0, rng) for _ in range(3)]
-        
-        perov = Atoms([A_selected, B_selected] + X_selected,
-                     positions=[[0.0, 0.0, 0.0],
-                               [0.5, 0.5, 0.5],
-                               [0.5, 0.5, 0.0],
-                               [0.5, 0.0, 0.5],
-                               [0.0, 0.5, 0.5]])
-        
-        perov.set_cell(lattice_vectors, scale_atoms=True)
-        perov.pbc = [1, 1, 1]
-        return perov
-
-
-def _create_2d_layer_core(A_ions, A_probs, B_ions, B_probs, X_ions, X_probs,
-                         n, lattice_vectors, rng, double_pattern=None):
-    """
-    Create a 2D layer with probability-based ion placement.
+        # Single value
+        if isinstance(A_ions, str):
+            A_ions = _normalize_a_site(A_ions)
+        # else: already Atoms object
     
-    Internal function used by _create_perovskite_core.
-    This will be implemented to replace _make_2d_layer with mixing support.
-    """
-    # TODO: Implement unified 2D layer creation with mixing
-    # For now, fall back to existing implementation
-    raise NotImplementedError("2D layer core with mixing not yet implemented. Use existing _make_2d_layer.")
+    # Get position template for one unit cell
+    if structure_type == 'bulk':
+        template = _get_bulk_position_template()
+    elif structure_type == '2d_layer':
+        template = _get_2d_layer_position_template(n)
+    else:
+        raise ValueError(f"Unknown structure_type: {structure_type}")
+    
+    # Expand to supercell
+    if supercell_size == (1, 1, 1):
+        # Single unit cell - convert fractional to Angstroms
+        supercell_template = {}
+        for site_type, positions in template.items():
+            supercell_template[site_type] = []
+            for pos_frac in positions:
+                pos_ang = [
+                    pos_frac[0] * lattice_vectors[0],
+                    pos_frac[1] * lattice_vectors[1],
+                    pos_frac[2] * lattice_vectors[2]
+                ]
+                supercell_template[site_type].append(pos_ang)
+    else:
+        # Supercell - translate positions
+        # IMPORTANT: For 2D structures, supercell_size[2] is n_layers, NOT a z-expansion
+        # We should only expand in x and y, not in z
+        if structure_type == '2d_layer':
+            # For 2D: only expand in x and y, keep z as is
+            nx, ny, n_layers = supercell_size
+            supercell_template = {}
+            for site_type, positions in template.items():
+                supercell_template[site_type] = []
+                for pos_frac in positions:
+                    # For A-site positions, we need to track which are A-sites vs spacers
+                    # A-sites are at [0.75, 0.25, z], spacers are at [0.25, 0.75, z]
+                    # Check if this is an A-site position (before expansion)
+                    # Use exact comparison for 0.25 and 0.75 since they're hardcoded
+                    x_frac = pos_frac[0]
+                    y_frac = pos_frac[1]
+                    is_a_site_pos = (abs(x_frac - 0.75) < 0.001) and (abs(y_frac - 0.25) < 0.001)
+                    is_spacer_pos = (abs(x_frac - 0.25) < 0.001) and (abs(y_frac - 0.75) < 0.001)
+                    
+                    # Expand only in x and y
+                    # CRITICAL: For EACH unit cell, we need BOTH positions [0.75, 0.25] AND [0.25, 0.75]
+                    # So for a 2x2 supercell: 4 unit cells × 2 positions = 8 A-site positions
+                    # Translation: new_x = base_x + ix, new_y = base_y + iy
+                    for ix in range(nx):
+                        for iy in range(ny):
+                            # Translate fractional coordinates by unit cell indices
+                            # new_pos_frac = [base_x + ix, base_y + iy, z]
+                            # Examples for 2x2:
+                            #   Unit cell (0,0): [0.75+0, 0.25+0] = [0.75, 0.25] and [0.25+0, 0.75+0] = [0.25, 0.75]
+                            #   Unit cell (1,0): [0.75+1, 0.25+0] = [1.75, 0.25] and [0.25+1, 0.75+0] = [1.25, 0.75]
+                            #   Unit cell (0,1): [0.75+0, 0.25+1] = [0.75, 1.25] and [0.25+0, 0.75+1] = [0.25, 1.75]
+                            #   Unit cell (1,1): [0.75+1, 0.25+1] = [1.75, 1.25] and [0.25+1, 0.75+1] = [1.25, 1.75]
+                            new_pos_frac = [
+                                pos_frac[0] + ix,  # Translate x by unit cell index
+                                pos_frac[1] + iy,  # Translate y by unit cell index
+                                pos_frac[2]  # Keep original z coordinate (don't expand in z)
+                            ]
+                            # Convert to Angstroms by scaling with lattice vectors
+                            new_pos_ang = [
+                                new_pos_frac[0] * lattice_vectors[0],
+                                new_pos_frac[1] * lattice_vectors[1],
+                                new_pos_frac[2] * lattice_vectors[2]
+                            ]
+                            
+                            # For A-site positions: add BOTH [0.75, 0.25] AND [0.25, 0.75] as A-sites
+                            # This ensures each unit cell has both positions
+                            # Spacers will also be added at [0.25, 0.75] by _attach_spacer (at different z-levels)
+                            if site_type == 'A':
+                                # Add BOTH positions - this gives us 2 positions per unit cell
+                                # For 2x2: 4 unit cells × 2 positions = 8 A-site positions
+                                supercell_template[site_type].append(new_pos_ang)
+                            else:
+                                # For X and B sites, add all positions
+                                supercell_template[site_type].append(new_pos_ang)
+        else:
+            # For bulk: expand in all dimensions
+            supercell_template = _translate_positions_to_supercell(
+                template, supercell_size, lattice_vectors
+            )
+    
+    # Note: For 2D structures, spacer positions [0.25, 0.75, z] are filtered out during
+    # supercell expansion above. Only A-site positions [0.75, 0.25, z] are kept.
+    # Spacers are added separately by _attach_spacer function.
+    
+    # Validate A-site positions were generated correctly
+    if structure_type == '2d_layer' and supercell_size:
+        nx, ny, n_layers = supercell_size
+        if 'A' in supercell_template:
+            num_A_positions = len(supercell_template['A'])
+            if n_layers > 1:
+                # Expected A-sites: (n_layers - 1) A-site layers × 2 positions per unit cell × nx × ny unit cells
+                # For n=2, 2x2 supercell: (2-1) × 2 × 2 × 2 = 8 A-sites
+                # Each unit cell has 2 positions: [0.75, 0.25] and [0.25, 0.75]
+                expected_A = (n_layers - 1) * 2 * nx * ny
+                if num_A_positions != expected_A:
+                    raise ValueError(f"A-site position generation failed: expected {expected_A}, got {num_A_positions}")
+    
+    # Assign ions to positions using patterns
+    
+    assignments = _assign_ions_to_positions(
+        supercell_template, 
+        A_ions, B_ions, X_ions
+    )
+    
+    # Separate atomic and molecular ions
+    # IMPORTANT: For A-sites, we need to handle atomic and molecular separately
+    # to avoid duplication. Only atomic A-sites go in the main structure,
+    # molecular A-sites are added separately with special positioning.
+    atomic_symbols = []
+    atomic_positions = []
+    molecular_atoms = []  # List of (Atoms, position) tuples
+    
+    for site_type, ion, pos in assignments:
+        if isinstance(ion, Atoms):
+            # Molecular ion (A-site only) - handle separately
+            # Note: ion is already a copy from _assign_ions_to_positions, but we copy again
+            # when aligning to be extra safe
+            # IMPORTANT: Also copy the position list to avoid reference issues
+            pos_copy = [pos[0], pos[1], pos[2]]
+            molecular_atoms.append((ion, pos_copy, site_type))
+        elif site_type == 'A':
+            # A-site: check if it's a molecular cation that failed to convert
+            # If it's a string that should be molecular, try to convert again
+            if isinstance(ion, str):
+                try:
+                    from .common_a_sites import is_molecular_a_cation, get_a_site_object
+                    if is_molecular_a_cation(ion):
+                        # It's a molecular cation - convert it
+                        mol_ion = get_a_site_object(ion)
+                        molecular_atoms.append((mol_ion, pos, site_type))
+                        continue
+                except (ImportError, ValueError) as e:
+                    # If conversion fails, treat as atomic
+                    pass
+            # Atomic A-site (or failed molecular conversion)
+            # For bulk structures, atomic A-sites need a z-offset to be at the correct position
+            # The z-offset is -1.0 * lattice_vectors[2] (double the molecular A-site offset)
+            # Molecular A-sites use -0.5 * lattice_vectors[2] + CoM correction
+            if structure_type == 'bulk':
+                # Apply z-offset (double the molecular offset) to match the correct A-site position
+                pos_corrected = pos.copy()
+                pos_corrected[2] = pos[2] - 1.0 * lattice_vectors[2]
+                atomic_symbols.append(ion)
+                atomic_positions.append(pos_corrected)
+            else:
+                # For 2D structures, use position directly
+                atomic_symbols.append(ion)
+                atomic_positions.append(pos)
+        else:
+            # Atomic ion (B or X sites)
+            atomic_symbols.append(ion)
+            atomic_positions.append(pos)
+    
+    # Create structure with atomic ions first
+    if atomic_symbols:
+        structure = Atoms(atomic_symbols, positions=atomic_positions)
+    else:
+        # No atomic ions (shouldn't happen, but handle gracefully)
+        structure = Atoms()
+    
+    # Set cell dimensions for supercell
+    nx, ny, nz = supercell_size
+    supercell_vectors = [
+        nx * lattice_vectors[0],
+        ny * lattice_vectors[1],
+        nz * lattice_vectors[2]
+    ]
+    structure.set_cell(supercell_vectors)
+    structure.pbc = [1, 1, 1]
+    
+    # Add molecular A-sites (if any)
+    for i, (mol, pos, site_type) in enumerate(molecular_atoms):
+        if site_type == 'A':
+            # For molecular A-sites, align molecule first
+            from .molecule_builder import align_ase_molecule_for_perovskite
+            mol_aligned = align_ase_molecule_for_perovskite(mol.copy())
+            
+            if structure_type == 'bulk':
+                # For bulk: use special z-offset as in original _create_bulk_core
+                # Original code: x = 0 + r_corr[0], y = 0 + r_corr[1], z = -0.5 * lattice_vectors[2] + r_corr[2]
+                # IMPORTANT: For bulk, add_adsorbate uses (0, 0) as base position, not the template position
+                # The template position is only used to determine which unit cell in supercell
+                # For each unit cell, we need to calculate the offset from (0, 0, 0) of that unit cell
+                from .molecule_builder import center_of_mass_correction
+                r_corr = center_of_mass_correction(mol_aligned)
+                
+                # Calculate which unit cell this position belongs to
+                # pos is in Angstroms from supercell template (already translated)
+                # We need to find which unit cell (ix, iy, iz) this position came from
+                # The position was created as: (template_pos + [ix, iy, iz]) * lattice_vectors
+                # So: pos = (template_pos[0] + ix) * lv0, etc.
+                # For bulk template: template_pos = [0, 0, 0]
+                # So: pos = [ix * lv0, iy * lv1, iz * lv2]
+                # Therefore: ix = pos[0] / lv0, etc.
+                unit_cell_size = lattice_vectors
+                # Use floor division to get the unit cell index
+                # Add small epsilon to handle floating point precision issues
+                epsilon = 1e-6
+                ix = int(np.floor((pos[0] + epsilon) / unit_cell_size[0])) if unit_cell_size[0] > 0 else 0
+                iy = int(np.floor((pos[1] + epsilon) / unit_cell_size[1])) if unit_cell_size[1] > 0 else 0
+                iz = int(np.floor((pos[2] + epsilon) / unit_cell_size[2])) if unit_cell_size[2] > 0 else 0
+                
+                # For bulk, each unit cell's A-site is at the template position
+                # The template position is [0, 0, 0] in fractional, which is the origin of each unit cell
+                # So we should place the molecule's CoM at the template position (pos), not recalculate it
+                # The pos is already the correct position in Angstroms from the supercell expansion
+                # We just need to add the CoM correction to center the molecule at that position
+                x = pos[0] + r_corr[0]
+                y = pos[1] + r_corr[1]
+                z = pos[2] - 0.5 * unit_cell_size[2] + r_corr[2]
+                
+                # Use add_adsorbate for bulk (as in original)
+                # Note: add_adsorbate position is relative to the structure, not the unit cell
+                add_adsorbate(structure, mol_aligned, 
+                             position=(x, y), 
+                             height=z)
+            else:
+                # For 2D layers: use place_atoms_at_location (as in original _make_2d_layer)
+                # This centers the molecule's CoM at the position
+                from .molecule_builder import place_atoms_at_location, add_atoms
+                mol_placed = place_atoms_at_location(mol_aligned, pos)
+                structure = add_atoms(structure, mol_placed)
+    
+    return structure
 
 
-def create_2d_perovskite(Ap, A, B, X, n, structure_type='monolayer', BX_dist=None, 
+def create_2d_perovskite(Ap, A, B, X, supercell, structure_type='monolayer', BX_dist=None, 
                          penet=PENET, vacuum=12, spacer_distance=SPACER_DISTANCE, 
                          attachment_end='both', Ap_Rx=None, Ap_Ry=None, Ap_Rz=None, 
-                         wrap=False, double=False, Bp=None, Ap_coefficients=None, 
-                         spacer_pattern=None, seed=None):
+                         wrap=False, double=False, Bp=None):
     """
-    Unified function to create 2D perovskite structures (RP, DJ, or monolayer).
+    Create 2D perovskite structures using explicit patterns (RP, DJ, or monolayer).
     
-    This function consolidates the logic for creating Ruddlesden-Popper (RP),
-    Dion-Jacobson (DJ), and monolayer 2D perovskite structures.
+    NOTE: This function is partially updated for pattern-based assignment.
+    Full refactoring to match bulk perovskite pattern API is in progress.
     
     Parameters
     ----------
     Ap : Atoms or list[Atoms]
-        The Ap spacer molecule(s) as an Atoms object or list of Atoms objects.
-        If list: requires Ap_coefficients for mixed spacer compositions.
-    A : str/Atoms
-        The A cation symbol or Atoms object.
-    B : str
-        The B-site cation symbol.
-    X : str
-        The X-site anion symbol.
-    n : int
-        Layer thickness of the inorganic 2D layers.
+        Spacer molecule(s). Single molecule or list pattern for mixed spacers.
+        For supercell[0] x supercell[1] = 4 positions, provide list of 4 spacers.
+    A : str/Atoms or list[str/Atoms]
+        A-site cation(s). Single value or list pattern.
+    B : str or list[str]
+        B-site cation(s). Single value or list pattern.
+    X : str or list[str]
+        X-site anion(s). Single value or list pattern.
+    supercell : tuple[int, int, int]
+        Supercell dimensions [nx, ny, n_layers] where n_layers is the number of octahedral layers.
+        Example: [2, 2, 2] creates 2x2 in-plane supercell with 2 layers, needs 4 spacers.
     structure_type : str
         Type of 2D structure: 'rp', 'dj', or 'monolayer' (default: 'monolayer').
     BX_dist : float, optional
@@ -667,24 +797,24 @@ def create_2d_perovskite(Ap, A, B, X, n, structure_type='monolayer', BX_dist=Non
         Whether to create double perovskite.
     Bp : str, optional
         Second B-site cation for double perovskite.
-    Ap_coefficients : list[float], optional
-        Coefficients for spacer molecules (must sum to 1.0). 
-        Mutually exclusive with spacer_pattern.
-        Required if Ap is a list and spacer_pattern is None.
-        Used as probabilities for random selection (probability-based).
-    spacer_pattern : str, optional
-        Pattern for spacer assignment ('alternating', 'checkerboard', 'random').
-        Mutually exclusive with Ap_coefficients.
-        Only used for DJ/RP structures. For monolayer, always uses probability-based.
-        If provided, uses deterministic pattern-based selection (equal weights for all spacers).
-    seed : int, optional
-        Random seed for reproducible mixed spacer distributions (probability-based or 'random' pattern).
         
     Returns
     -------
     Atoms
         The 2D perovskite structure.
+        
+    Notes
+    -----
+    Pattern mode: Spacer count must match nx * ny of supercell.
+    For random patterns, generate the list externally before calling.
     """
+    # Extract n_layers from supercell parameter
+    if isinstance(supercell, (list, tuple)):
+        nx, ny, n_layers = supercell[0], supercell[1], supercell[2]
+        supercell_size = (nx, ny, 1)  # For 2D, in-plane supercell only
+    else:
+        raise ValueError("supercell must be a list/tuple [nx, ny, n_layers]")
+    
     # Validate structure_type
     if structure_type not in ['rp', 'dj', 'monolayer']:
         raise ValueError(f"Invalid structure_type: {structure_type}. Choose 'rp', 'dj', or 'monolayer'.")
@@ -695,58 +825,12 @@ def create_2d_perovskite(Ap, A, B, X, n, structure_type='monolayer', BX_dist=Non
     
     # Detect if mixed spacers
     is_mixed_spacers = isinstance(Ap, list)
-    use_pattern = False  # Initialize pattern usage flag
+    
+    # Handle spacer molecules - pattern-based assignment
+    # Copy and align spacer molecules
+    from .molecule_builder import align_ase_molecule_for_perovskite
     
     if is_mixed_spacers:
-        # Mixed spacers - validate and normalize
-        # Ap_coefficients and spacer_pattern are mutually exclusive
-        if spacer_pattern is not None and Ap_coefficients is not None:
-            print("ERROR: Ap_coefficients and spacer_pattern are mutually exclusive!")
-            print("  - Ap_coefficients: Used for probability-based (random) selection")
-            print("  - spacer_pattern: Used for deterministic pattern-based selection")
-            print("  Please choose one approach:")
-            print(f"    Option 1 (pattern-based): Remove Ap_coefficients, keep spacer_pattern='{spacer_pattern}'")
-            print(f"    Option 2 (probability-based): Remove spacer_pattern, keep Ap_coefficients={Ap_coefficients}")
-            raise ValueError("Ap_coefficients and spacer_pattern are mutually exclusive. "
-                           "Use Ap_coefficients for probability-based (random) selection, "
-                           "or spacer_pattern for deterministic pattern-based selection.")
-        
-        # Check if Ap_coefficients is accidentally a string (pattern) instead of a list
-        if isinstance(Ap_coefficients, str):
-            # User probably meant to use spacer_pattern
-            if spacer_pattern is None:
-                spacer_pattern = Ap_coefficients
-                Ap_coefficients = None  # Will be auto-generated for pattern-based
-                print(f"Note: Ap_coefficients was a string ('{spacer_pattern}'), treating it as spacer_pattern")
-            else:
-                raise ValueError(f"Ap_coefficients must be a list of numbers, not a string. "
-                               f"Use spacer_pattern='{Ap_coefficients}' instead, or remove spacer_pattern.")
-        
-        # Handle pattern-based vs probability-based
-        if spacer_pattern is not None:
-            # Pattern-based: don't need coefficients, use equal weights
-            Ap_coefficients = [1.0 / len(Ap)] * len(Ap)
-            print(f"Using pattern-based assignment: '{spacer_pattern}' (equal weights for all spacers)")
-        else:
-            # Probability-based: require coefficients
-            if Ap_coefficients is None:
-                raise ValueError("Ap_coefficients is required when Ap is a list and spacer_pattern is not provided")
-            
-            if not isinstance(Ap_coefficients, (list, np.ndarray)):
-                raise ValueError(f"Ap_coefficients must be a list or array of numbers, got {type(Ap_coefficients)}")
-            
-            if len(Ap) != len(Ap_coefficients):
-                raise ValueError(f"Ap ({len(Ap)} spacers) and Ap_coefficients ({len(Ap_coefficients)} values) must have the same length")
-            
-            # Normalize coefficients
-            Ap_coefficients = list(np.array(Ap_coefficients) / sum(Ap_coefficients))
-            
-            # Validate coefficients sum
-            if abs(sum(Ap_coefficients) - 1.0) > 0.01:
-                raise ValueError(f"Ap_coefficients must sum to 1.0, got {sum(Ap_coefficients)}")
-        
-        # Copy and align all spacer molecules
-        from .molecular_ops import align_ase_molecule_for_perovskite
         Ap_aligned = []
         for spacer in Ap:
             if isinstance(spacer, str):
@@ -755,64 +839,13 @@ def create_2d_perovskite(Ap, A, B, X, n, structure_type='monolayer', BX_dist=Non
             spacer_copy = align_ase_molecule_for_perovskite(spacer_copy)
             Ap_aligned.append(spacer_copy)
         Ap = Ap_aligned
-        
-        # Determine mixing strategy based on structure type
-        # Monolayer: always probability-based
-        # DJ/RP: pattern-based (if specified) or probability-based (fallback)
-        if structure_type in ['dj', 'rp']:
-            if spacer_pattern is not None:
-                use_pattern = True
-            else:
-                # Auto-detect 50/50 case for 2 spacers -> suggest alternating
-                if len(Ap) == 2 and len(Ap_coefficients) == 2 and abs(Ap_coefficients[0] - 0.5) < 0.01:
-                    print(f"Note: 50/50 coefficients detected for {structure_type.upper()}. "
-                          f"Consider using spacer_pattern='alternating' for deterministic pattern.")
-                print(f"Using probability-based assignment for {structure_type.upper()} (consider using spacer_pattern for better physical meaning)")
-        
-        print(f"Mixed spacers: {len(Ap)} spacer types with coefficients {Ap_coefficients}")
     else:
-        # Single spacer - copy and align
+        # Single spacer
         Ap = Ap.copy()
-        from .molecular_ops import align_ase_molecule_for_perovskite
         Ap = align_ase_molecule_for_perovskite(Ap)
-        print(f"Spacer molecule aligned for perovskite coordination")
-    
-    # Handle A-site cation
-    if not isinstance(A, str):
-        A = A.copy()
-        if hasattr(A, 'positions'):
-            A = align_ase_molecule_for_perovskite(A)
-            print(f"A-site cation molecule aligned for perovskite coordination")
-    
-    # Auto-calculate BX distance if not provided
-    if BX_dist is None:
-        BX_dist = auto_calculate_BX_distance(B, X)
-        print(f"Using calculated B-X distance for 2D {structure_type.upper()}: {BX_dist:.3f} Å")
-    
-    # Validate and convert BX_dist to lattice vector sizes
-    lattice_vector_sizes = _validate_and_convert_BX_dist(BX_dist)
-    
-    # Set structure-specific defaults
-    if structure_type == 'rp':
-        attachment_end = 'both'
-        vacuum = spacer_distance
-        print(f"Creating RP structure (n={n}) with {spacer_distance:.1f} Å vacuum gap between spacers")
-    elif structure_type == 'dj':
-        if attachment_end == 'both':  # Only override if not explicitly set
-            attachment_end = 'top'
-        if n == 1:
-            print(f"DJ n=1: Using only spacer molecules (no A-site cations between layers)")
-        else:
-            print(f"DJ n={n}: Using A-site cations between layers + spacer molecules")
-    elif structure_type == 'monolayer':
-        print(f"Creating monolayer structure (n={n})")
-    
-    # Make the base 2D layer
-    layer = _make_2d_layer(A, B, X, n, lattice_vector_sizes, double=double, Bp=Bp)
     
     # Apply rotations to spacer(s)
     if is_mixed_spacers:
-        # Apply rotations to all spacers in the list
         for spacer in Ap:
             if Ap_Rx:
                 spacer.rotate(Ap_Rx, 'x')
@@ -821,7 +854,6 @@ def create_2d_perovskite(Ap, A, B, X, n, structure_type='monolayer', BX_dist=Non
             if Ap_Rz:
                 spacer.rotate(Ap_Rz, 'z')
     else:
-        # Single spacer
         if Ap_Rx:
             Ap.rotate(Ap_Rx, 'x')
         if Ap_Ry:
@@ -829,594 +861,296 @@ def create_2d_perovskite(Ap, A, B, X, n, structure_type='monolayer', BX_dist=Non
         if Ap_Rz:
             Ap.rotate(Ap_Rz, 'z')
     
-    # Setup RNG for mixed spacers (for probability-based or random pattern)
-    rng = np.random.default_rng(seed) if (is_mixed_spacers and not use_pattern) or (use_pattern and spacer_pattern == 'random') else None
+    # Handle A/B/X ions - pattern-based
+    # Use defaults if not provided
+    if A is None:
+        A = 'MA'  # Default A-site
+    if B is None:
+        B = 'Pb'  # Default B-site
+    if X is None:
+        X = 'I'   # Default X-site
     
-    # Attach spacers to the layer
-    structure = _attach_spacer(Ap, layer, n, lattice_vector_sizes, 
-                              attachment_end=attachment_end, penet=penet,
-                              spacer_coefficients=Ap_coefficients if is_mixed_spacers else None,
-                              spacer_pattern=spacer_pattern if use_pattern else None,
-                              rng=rng)
+    # Handle double perovskite
+    if double:
+        if Bp is None:
+            raise ValueError("Bp (second B-site cation) is required for double perovskites")
+        if isinstance(B, list):
+            if Bp not in B:
+                B = B + [Bp]
+        else:
+            B = [B, Bp]  # Simple alternating pattern
+    
+    # Validate and convert BX_dist to lattice vector sizes
+    lattice_vector_sizes = _validate_and_convert_BX_dist(BX_dist)
+    
+    # Apply 2D layer specific transformation (from _make_2d_layer)
+    if isinstance(lattice_vector_sizes, (int, float)):
+        lattice_vector_sizes = [lattice_vector_sizes, lattice_vector_sizes, lattice_vector_sizes]
+    # Pre-compute sqrt calculation once (from _make_2d_layer)
+    lv1_sqrt = np.sqrt(lattice_vector_sizes[1]**2 / 2) * 2
+    lattice_vector_sizes[0] = lv1_sqrt
+    lattice_vector_sizes[1] = lv1_sqrt
+    
+    # Set structure-specific defaults
+    if structure_type == 'rp':
+        attachment_end = 'both'
+        vacuum = spacer_distance
+    elif structure_type == 'dj':
+        if attachment_end == 'both':  # Only override if not explicitly set
+            attachment_end = 'top'
+    elif structure_type == 'monolayer':
+        pass  # Use defaults
+    
+    # Create the base 2D layer using unified core
+    layer = _create_unified_core(
+        structure_type='2d_layer',
+        lattice_vectors=lattice_vector_sizes,
+        A_ions=A,
+        B_ions=B,
+        X_ions=X,
+        n=n_layers,
+        supercell_size=supercell_size
+    )
+    
+    # Attach spacers to the layer (pattern-based)
+    structure = _attach_spacer(
+        Ap, layer, n_layers, lattice_vector_sizes, supercell_size,
+        attachment_end=attachment_end, penet=penet
+    )
     
     # Compute geometric parameters for cell dimensions
+    from .molecule_builder import get_molecule_length
     if is_mixed_spacers:
         # Average molecule length for mixed spacers
-        mol_lens = [_get_molecule_length(sp) for sp in Ap]
+        mol_lens = [get_molecule_length(sp) for sp in Ap]
         mol_len = float(np.mean(mol_lens))
     else:
-        mol_len = _get_molecule_length(Ap)
+        mol_len = get_molecule_length(Ap)
+    
+    # Calculate cell dimensions accounting for supercell size
+    # IMPORTANT: Multiply x and y by supercell dimensions (nx, ny)
+    cell_a = nx * lattice_vector_sizes[0]
+    cell_b = ny * lattice_vector_sizes[1]
     
     if structure_type == 'dj':
         # DJ-specific cell calculation
-        z_length = n * lattice_vector_sizes[2] + (mol_len - lattice_vector_sizes[2] * penet)
-        structure.cell = [lattice_vector_sizes[0], lattice_vector_sizes[1], z_length, 90, 90, 90]
+        z_length = n_layers * lattice_vector_sizes[2] + (mol_len - lattice_vector_sizes[2] * penet)
+        structure.cell = [cell_a, cell_b, z_length, 90, 90, 90]
     else:
         # RP and monolayer: adjust z_length based on attachment type
         if attachment_end == 'both':
-            z_length = n * lattice_vector_sizes[2] + (2 * mol_len - lattice_vector_sizes[2] * penet) + vacuum
+            z_length = n_layers * lattice_vector_sizes[2] + (2 * mol_len - lattice_vector_sizes[2] * penet) + vacuum
         else:
             # Only one spacer (top or bottom)
-            z_length = n * lattice_vector_sizes[2] + (mol_len - .5 * lattice_vector_sizes[2] * penet) + vacuum
+            z_length = n_layers * lattice_vector_sizes[2] + (mol_len - .5 * lattice_vector_sizes[2] * penet) + vacuum
         
         # Center monolayer structure
         if structure_type == 'monolayer':
             trans_vec = [0, 0, z_length / 2 - structure.get_center_of_mass()[2]]
-            structure = _translate(structure, trans_vec)
+            from .molecule_builder import translate_atoms
+            structure = translate_atoms(structure, trans_vec)
         
-        structure.cell = [lattice_vector_sizes[0], lattice_vector_sizes[1], z_length, 90, 90, 90]
+        # Set cell first (before checking positions, so positions are relative to cell)
+        structure.cell = [cell_a, cell_b, z_length, 90, 90, 90]
+        structure.pbc = [1, 1, 1]
+        
+        # Now check if any atoms are outside the cell bounds
+        positions = structure.get_positions()
+        if len(positions) > 0:
+            min_z = min(pos[2] for pos in positions)
+            max_z = max(pos[2] for pos in positions)
+            z_range = max_z - min_z
+            
+            # If atoms extend below z=0 or above cell, we need to adjust
+            if min_z < -0.1:  # Small tolerance for floating point
+                # Translate all atoms up so minimum z is at least 1.0 (buffer)
+                trans_z = -min_z + 1.0
+                structure.translate([0, 0, trans_z])
+                # Recalculate after translation
+                positions = structure.get_positions()
+                max_z = max(pos[2] for pos in positions) if len(positions) > 0 else max_z
+                # Adjust z_length to accommodate the actual range plus buffer
+                z_length = max_z - min_z + 2.0  # Add 1.0 buffer on each side
+                structure.cell = [cell_a, cell_b, z_length, 90, 90, 90]
+            elif max_z > z_length - 0.1:
+                # Atoms extend above cell, increase cell size
+                z_length = max_z + 1.0  # Add 1.0 buffer at top
+                structure.cell = [cell_a, cell_b, z_length, 90, 90, 90]
     
-    structure.pbc = [1, 1, 1]
-    
-    if wrap:
-        structure.wrap()
+    # For DJ, cell is already set above, but ensure pbc is set
+    if structure_type == 'dj':
+        structure.pbc = [1, 1, 1]
     
     return structure
 
 
-def determine_molecule_orientation(atoms, cartesian=True):
+def _attach_spacer(spacer, layer, n, lattice_vector_sizes, supercell_size, 
+                   penet=PENET, attachment_end='both'):
     """
-    Aims to determine the cartesian axis of orientation of the input molecule.
-    This is to aid users of the code in adding their own spacer molecules in 
-    conjunction with the orient_along_z function.
-
-    Parameters
-    ----------
-    atoms : ase.Atoms object
-        The molecule to be analyzed.
-    cartesian : bool
-        If True, the function will return the cartesian axis of orientation.
-
-    Returns
-    -------
-    axis : str
-        The best guess for axis of orientation of the molecule. (x, y, or z)
-    """
-    positions = atoms.positions
-
-    at_num = len(positions)
-    if at_num < 2:
-        return "Input atoms object is not a molecule."
-
-    i = 0
-    j = 0
-    dir_vec = np.zeros((3,))
-    print("Analyzing Molecule for orientation")
-    while i < at_num:
-        j = 0
-        while i > j:
-            dir_vec[0] += abs(positions[i, 0] - positions[j, 0])
-            dir_vec[1] += abs(positions[i, 1] - positions[j, 1])
-            dir_vec[2] += abs(positions[i, 2] - positions[j, 2])
-            j += 1
-        i += 1
-
-    if cartesian:
-        if dir_vec[0] > dir_vec[1] and dir_vec[0] > dir_vec[2]:
-            print("Best guess is current orientation along X-direction")
-            cart_dir = 'x'
-        elif dir_vec[1] > dir_vec[0] and dir_vec[1] > dir_vec[2]:
-            print("Best guess is current orientation along Y-direction")
-            cart_dir = 'y'
-        elif dir_vec[2] > dir_vec[0] and dir_vec[2] > dir_vec[1]:
-            print("Best guess is current orientation along Z-direction")
-            cart_dir = 'z'
-        else:
-            # Default case for symmetrical molecules or ambiguity
-            print("Ambiguous orientation; defaulting to Z-direction")
-            cart_dir = 'z'
-        return cart_dir
-    else:
-        return ("Not yet implemented, please orient the molecule along one of "
-                "the cartesian axes prior to input. Note pubchem_atoms_search will "
-                "generally return molecules oriented along x-axis.")
-
-
-def orient_along_z(atoms, theta=90, invert=False):
-    """
-    Aims to determine the cartesian axis of orientation of the input molecule,
-    and then reorient it along the Z axis for usage with the rest of the code
-    base. This is a very primitive function, and may or may not be easier than
-    just opening and reorienting the molecule in a visualizer by hand.
-
-    Parameters
-    ----------
-    atoms : Atoms
-        The molecule to be analyzed.
-    theta : float
-        The angle of rotation to be applied to the molecule (in degrees).
-    invert : bool
-        If True, the molecule will be inverted prior to rotation.
-
-    Returns
-    -------
-    mod_atoms : Atoms
-        The rotated Atoms object.
-    """
-    mod_atoms = atoms.copy()
-
-    # Flip the molecule.
-    if invert:
-        theta += 180
+    Attach spacer molecules to 2D layer using pattern-based assignment with supercell expansion.
     
-    # Shift COM to the origin.
-    mod_atoms = _com_to_origin(mod_atoms)
-
-    direction = determine_molecule_orientation(mod_atoms)
-    print(direction)
-    if direction == 'x':
-        mod_atoms.rotate(theta, 'y')
-    elif direction == 'y':
-        mod_atoms.rotate(theta, 'x')
-    else:
-        if invert:
-            mod_atoms.rotate(180, 'x')
-        else:
-            print("Already oriented on z-axis, and no inversion requested.")
-    return mod_atoms
-
-
-# Internal helper functions
-def _center_of_mass_correction(mol, mol_index=0):
-    """
-    Intended for internal use only.
-
-    Purpose:
-        In ase, add_adsorbate treats the coordinate of the molecule as the
-        coordinate of mol_index, this function computes 
-        r_corr = r_mol_index - r_com. 
-        Then r_mol_index - r_corr = r_com. Useful when the desired placement is
-        determined by the CoM of the molecule.
-
-    Parameters
-    ----------
-    mol : Atoms
-        Atoms object containing the molecule
-    mol_index : int
-        Index of the atom for which the molecules 'position' is determined,
-        default 0 in ASE.
-    
-    Returns
-    -------
-    r_corr : array
-        Correction vector [rx, ry, rz] required to shift position to CoM.
-    """
-    r_mol_index = mol.positions[mol_index]
-    r_com = np.around(mol.get_center_of_mass(), decimals=4)
-    return r_mol_index - r_com
-
-
-def _make_2d_layer(A, B, X, n, lattice_vector_sizes, double=False, Bp=None):
-    """
-    For internal use only. Generate the 2D layer without A' spacer molecule.
-
-    Parameters
-    ----------
-    A : Atoms or str
-        A-site cation molecule or symbol.
-    B : str
-        B-site cation symbol.
-    X : str
-        X-site anion symbol.
-    n : int
-        Number of octahedral layers.
-    lattice_vector_sizes : float or array
-        Lattice vector sizes (cubic if float).
-    double : bool
-        Whether to create double perovskite.
-    Bp : str, optional
-        Second B-site cation for double perovskite.
-
-    Returns
-    -------
-    Atoms
-        The 2D layer without organic spacers.
-    """
-    if type(lattice_vector_sizes) == int or type(lattice_vector_sizes) == float:
-        lattice_vector_sizes = [lattice_vector_sizes,
-                                lattice_vector_sizes, lattice_vector_sizes]
-    
-    # Normalize A-site (convert molecular cation strings to Atoms objects)
-    A = _normalize_a_site(A)
-    
-    # If still a string (atomic cation), create single atom
-    if type(A) == str:
-        A = Atoms(A, positions=[[0, 0, 0]])
-
-    # Experimental cell construction
-    lattice_vector_sizes[0] = np.sqrt(lattice_vector_sizes[1]**2 / 2) * 2
-    lattice_vector_sizes[1] = lattice_vector_sizes[0]
-    atomList = [X, X]
-    positionList = [[.25, .25, 0], [.75, .75, 0]]
-    
-    for i in range(n):
-        if double:
-            if i % 2 == 0:
-                this_layer_atoms = [X, X, B, X, X, Bp, X, X]
-            if i % 2 == 1:
-                this_layer_atoms = [X, X, Bp, X, X, B, X, X]
-        else:
-            this_layer_atoms = [X, X, B, X, X, B, X, X]
-
-        this_layer_positions = [
-            [0, 0, .5 + i], [.5, 0, .5 + i], [.25, .25, .5 + i],
-            [0, .5, .5 + i], [.5, .5, .5 + i], [.75, .75, .5 + i],
-            [.25, .25, 1 + i], [.75, .75, 1 + i]
-        ]
-        atomList.extend(this_layer_atoms)
-        positionList.extend(this_layer_positions)
-    
-    layer_2d = Atoms(atomList, positions=positionList)
-    layer_2d.positions[:] *= lattice_vector_sizes
-
-    # Place A-site cations between layers
-    for i in range(n - 1):
-        r1 = [.25 * lattice_vector_sizes[0], .75 * lattice_vector_sizes[1],
-              lattice_vector_sizes[2] + lattice_vector_sizes[2] * i]
-        r2 = [.75 * lattice_vector_sizes[0], .25 * lattice_vector_sizes[1],
-              lattice_vector_sizes[2] + lattice_vector_sizes[2] * i]
-
-        A1 = _place_atoms_at_location(A.copy(), r1)
-        layer_2d = _add_atoms(layer_2d, A1)
-        A2 = _place_atoms_at_location(A.copy(), r2)
-        layer_2d = _add_atoms(layer_2d, A2)
-
-    return layer_2d
-
-
-def _com_to_origin(atoms):
-    """
-    For internal use only.
-    
-    Purpose: Center the center of mass of some atoms on the origin
-    
-    Parameters
-    ----------
-    atoms : Atoms
-        Input atoms
-
-    Returns
-    -------
-    mod_atoms : Atoms
-        Modified atoms object, centered on origin.
-    """
-    mod_atoms = atoms.copy()
-    com = mod_atoms.get_center_of_mass()
-    curr_positions = mod_atoms.get_positions()
-    new_positions = np.zeros(curr_positions.shape)
-    for i in range(len(curr_positions)):
-        new_positions[i] = np.around(curr_positions[i] - com, decimals=4)
-    mod_atoms.set_positions(new_positions)
-    return mod_atoms
-
-
-def _end_to_origin(atoms, side):
-    """
-    For internal use only.
-
-    Purpose: 
-        For the A' cations, it is necessary to be careful about the layer 
-        penetration depth. For this reason, it desired to translate the origin 
-        of the molecule to the end (either top or bottom w.r.t z-axis).
-
-    Parameters
-    ----------
-    atoms : Atoms
-        The ase Atoms object containing the desired molecule.
-    side : str
-        'top' and 'bottom' center the molecule around the top or 
-        bottom part of the molecule.
-        *I.e. if you're attaching to the bottom of a perovskite,
-        you want side = 'top'.
-
-    Returns
-    -------
-    mod_atoms : Atoms
-        The ase Atoms object with the bottom/top of the molecule
-        (wrt z) centered on origin. bottom/top atom will be at coordinates
-        [CoM x, CoM, y, min(z coords in molecule)]
-    """
-    mod_atoms = atoms.copy()
-    com = mod_atoms.get_center_of_mass()
-    if side == 'bottom':
-        zmin = min(mod_atoms.positions[:, 2])
-        translation_vector = np.array([-com[0], -com[1], -zmin])
-    elif side == 'top':
-        zmax = max(mod_atoms.positions[:, 2])
-        translation_vector = np.array([-com[0], -com[1], -zmax])
-    mod_atoms = _translate(mod_atoms, translation_vector)
-    return mod_atoms
-
-
-def _add_atoms(atoms, new_atoms):
-    """
-    For internal use only.
-
-    Purpose: 
-        Combining ase Atoms objects
-        
-    Parameters
-    ----------
-    atoms : Atoms
-        First set of atoms *This atoms' cell parameters are used
-    new_atoms : Atoms
-        Second set of atoms
-
-    Returns
-    -------
-    combined_atoms : Atoms
-        New Atoms object containing both input objects,
-        in the cell of the first.
-
-    Note:
-        This returns a new Atoms object, not a modified version of the inputs.
-    """
-    at_syms = atoms.get_chemical_symbols().copy()
-    new_at_syms = new_atoms.get_chemical_symbols().copy()
-    at_syms.extend(new_at_syms)
-
-    combined_atoms = Atoms(at_syms, cell=atoms.cell)
-
-    num_of_atoms = len(at_syms)
-    combined_atoms.set_positions(np.append(
-        atoms.get_positions(),
-        new_atoms.get_positions()).reshape((num_of_atoms, 3)))
-    return combined_atoms
-
-
-def _translate(atoms, r):
-    """
-    For internal use only.
-
-    Purpose:
-        Apply spatial translations to Atoms objects.
-
-    Parameters
-    ----------
-    atoms : Atoms
-        Input atoms
-    r : np.array
-        Vector for the translation (3,)
-
-    Returns
-    -------
-    atoms : Atoms
-        Translated atoms (Also modified Atoms object.)
-    """
-    try:
-        r = np.array(r)
-    except:
-        pass
-
-    curr_positions = atoms.get_positions()
-    atoms.set_positions(
-        curr_positions + np.broadcast_to(r, curr_positions.shape))
-    return atoms
-
-
-def _place_atoms_at_location(atoms, r):
-    """
-    For internal use only.
-
-    Purpose:
-        Place the desired atoms' CoM at the location r.
-        
-    Parameters
-    ----------
-    atoms : Atoms
-        Input atoms
-    r : array
-        Vector for the translation (3,)
-        
-    Returns
-    -------
-    mod_atoms : Atoms
-        The modified atoms object.
-    """
-    mod_atoms = atoms.copy()
-    mod_atoms = _com_to_origin(mod_atoms)
-    mod_atoms = _translate(mod_atoms, r)
-    return mod_atoms
-
-
-def _attach_spacer(spacer, layer, n, lattice_vector_sizes, penet=PENET, 
-                   attachment_end='both', spacer_coefficients=None, 
-                   spacer_pattern=None, rng=None):
-    """
-    For internal use only. Attach organic spacers to inorganic layers.
-
     Parameters
     ----------
     spacer : Atoms or list[Atoms]
-        Organic spacer molecule(s). If list, uses pattern-based or probability-based selection.
+        Spacer molecule(s). If list, assigned sequentially to positions (pattern-based).
     layer : Atoms
-        2D perovskite layer without organic spacers.
+        The 2D inorganic layer
     n : int
-        Layer thickness (number of octahedra in out-of-plane direction).
-    lattice_vector_sizes : array or float
-        Lattice vector sizes.
+        Number of octahedral layers
+    lattice_vector_sizes : list[float]
+        Lattice vector sizes [a, b, c]
+    supercell_size : tuple[int, int, int]
+        Supercell dimensions (nx, ny, nz) - only nx and ny are used for spacer positions
     penet : float
-        Penetration depth of spacer (in units of BX bond length).
+        Penetration of spacer into layer
     attachment_end : str
-        'both', 'top', or 'bottom' - where to attach spacers.
-    spacer_coefficients : list[float], optional
-        Coefficients for mixed spacers (required if spacer is a list).
-    spacer_pattern : str, optional
-        Pattern for spacer assignment ('alternating', 'checkerboard', 'random').
-        If provided, uses pattern-based selection instead of probability-based.
-    rng : np.random.Generator, optional
-        Random number generator for probability-based or 'random' pattern selection.
-
+        'top', 'bottom', or 'both'
+        
     Returns
     -------
     Atoms
-        Layer with attached spacers.
+        Structure with spacers attached
     """
-    if type(lattice_vector_sizes) == float or type(lattice_vector_sizes) == int:
+    # Handle single spacer or list pattern
+    if not isinstance(spacer, list):
+        spacer = [spacer]
+    
+    if isinstance(lattice_vector_sizes, (int, float)):
         lattice_vector_sizes = [lattice_vector_sizes,
                                 lattice_vector_sizes, lattice_vector_sizes]
-
-    BX_bond_length_z = .5 * lattice_vector_sizes[2]
     
-    # Determine number of positions
-    if attachment_end == 'both':
-        num_positions = 4
-    else:  # 'top' or 'bottom'
-        num_positions = 2
+    structure = layer.copy()
     
-    # Generate pattern if using pattern-based selection
-    pattern_indices = None
-    if isinstance(spacer, list) and spacer_pattern is not None:
-        pattern_indices = _generate_spacer_pattern(num_positions, len(spacer), spacer_pattern, rng)
+    # Extract supercell dimensions
+    nx, ny, _ = supercell_size
     
-    # Helper function to select spacer (single, pattern-based, or probability-based)
-    position_idx = [0]  # Use list to track position index across calls
+    # Pre-compute position values
+    lv0 = lattice_vector_sizes[0]
+    lv1 = lattice_vector_sizes[1]
+    lv2 = lattice_vector_sizes[2]
     
-    def _select_spacer():
-        if isinstance(spacer, list):
-            if spacer_pattern is not None:
-                # Pattern-based selection
-                idx = pattern_indices[position_idx[0]]
-                position_idx[0] += 1
-                return spacer[idx].copy()
-            else:
-                # Probability-based selection
-                return _select_ion_by_probability(spacer, spacer_coefficients, rng).copy()
+    # Ensure cell is set to supercell size before attaching spacers
+    # Get current z-size from layer cell (should be n_layers * lv2)
+    current_cell = structure.cell
+    if current_cell is not None:
+        # Get z-size from current cell (ASE cell is 3x3 matrix)
+        if hasattr(current_cell, 'lengths'):
+            _, _, current_z = current_cell.lengths()
         else:
-            return spacer.copy()
+            # Fallback: calculate from cell matrix
+            current_z = np.linalg.norm(current_cell[2]) if hasattr(current_cell[0], '__len__') else current_cell[2]
+        
+        # Set cell to supercell size (x and y expanded, z unchanged)
+        structure.set_cell([nx * lv0, ny * lv1, current_z])
+        structure.pbc = [1, 1, 1]
+    lv2_n = n * lv2
+    BX_bond_length_z = 0.5 * lv2
+    penet_z = penet * BX_bond_length_z
+    top_z = lv2_n - penet_z
     
-    # Reset position index for each attachment section
-    # Add to the bottom
+    # Base fractional positions for spacers in unit cell
+    # CRITICAL: For EACH unit cell, we need BOTH positions [0.25, 0.75] AND [0.75, 0.25]
+    # So for a 2x2 supercell: 4 unit cells × 2 positions = 8 spacer positions
+    # Spacers go at both [0.25, 0.75] AND [0.75, 0.25] in fractional coordinates
+    # A-sites also go at both positions (handled by _create_unified_core)
+    # They occupy the same (x,y) but at different z-levels
+    base_positions_frac = [
+        [0.25, 0.75],  # First spacer position
+        [0.75, 0.25]   # Second spacer position (same as A-site position)
+    ]
+    
+    # Generate all attachment positions for supercell
+    # IMPORTANT: Generate positions in the same way as A-sites to ensure consistency
+    attachments = []
+    
+    # Determine which z-levels and orientations are needed
+    # CRITICAL: For 2x2 supercell, we need 8 spacers total
+    # This means: 1 z-level × 2 positions per unit cell × 4 unit cells = 8 positions
+    # OR: 2 z-levels × 1 position per unit cell × 4 unit cells = 8 positions
+    # Since we now have 2 positions per unit cell ([0.25, 0.75] and [0.75, 0.25]),
+    # we only need 1 z-level to get 8 total spacers
     if attachment_end == 'bottom' or attachment_end == 'bot':
-        position_idx[0] = 0  # Reset for bottom section
-        # First spacer (bottom-left)
-        spacer1 = _select_spacer()
-        spacer1 = _end_to_origin(spacer1, 'top')
-        spacer1 = _translate(spacer1, [lattice_vector_sizes[0] * .25,
-                                     lattice_vector_sizes[1] * .75,
-                                     penet * BX_bond_length_z])
-        layer = _add_atoms(layer, spacer1)
-
-        # Second spacer (bottom-right)
-        spacer2 = _select_spacer()
-        spacer2 = _end_to_origin(spacer2, 'top')
-        spacer2 = _translate(spacer2, [lattice_vector_sizes[0] * .75,
-                                     lattice_vector_sizes[1] * .25,
-                                     penet * BX_bond_length_z])
-        layer = _add_atoms(layer, spacer2)
-
+        z_levels = [(penet_z, 'top', False)]
     elif attachment_end == 'top':
-        position_idx[0] = 0  # Reset for top section
-        # First spacer (top-left)
-        spacer1 = _select_spacer()
-        spacer1.rotate(180, 'x')
-        spacer1 = _end_to_origin(spacer1, 'bottom')
-        spacer1 = _translate(spacer1, [lattice_vector_sizes[0] * .25,
-                                     lattice_vector_sizes[1] * .75,
-                                     n * lattice_vector_sizes[2] -
-                                     penet * BX_bond_length_z])
-        layer = _add_atoms(layer, spacer1)
-
-        # Second spacer (top-right)
-        spacer2 = _select_spacer()
-        spacer2.rotate(180, 'x')
-        spacer2 = _end_to_origin(spacer2, 'bottom')
-        spacer2 = _translate(spacer2, [lattice_vector_sizes[0] * .75,
-                                     lattice_vector_sizes[1] * .25,
-                                     n * lattice_vector_sizes[2] -
-                                     penet * BX_bond_length_z])
-        layer = _add_atoms(layer, spacer2)
-
-    elif attachment_end == 'both':
-        position_idx[0] = 0  # Reset for both section (4 positions)
-        # First spacer (bottom-left)
-        spacer1 = _select_spacer()
-        spacer1 = _end_to_origin(spacer1, 'top')
-        spacer1 = _translate(spacer1, [lattice_vector_sizes[0] * .25,
-                                      lattice_vector_sizes[1] * .75,
-                                      penet * BX_bond_length_z])
-        layer = _add_atoms(layer, spacer1)
-
-        # Second spacer (bottom-right)
-        spacer2 = _select_spacer()
-        spacer2 = _end_to_origin(spacer2, 'top')
-        spacer2 = _translate(spacer2, [lattice_vector_sizes[0] * .75,
-                                      lattice_vector_sizes[1] * .25,
-                                      penet * BX_bond_length_z])
-        layer = _add_atoms(layer, spacer2)
-
-        # Third spacer (top-left)
-        spacer3 = _select_spacer()
-        spacer3.rotate(180, 'x')
-        spacer3 = _end_to_origin(spacer3, 'bottom')
-        spacer3 = _translate(spacer3, [lattice_vector_sizes[0] * .25,
-                                      lattice_vector_sizes[1] * .75,
-                                      n * lattice_vector_sizes[2] -
-                                      penet * BX_bond_length_z])
-        layer = _add_atoms(layer, spacer3)
-
-        # Fourth spacer (top-right)
-        spacer4 = _select_spacer()
-        spacer4.rotate(180, 'x')
-        spacer4 = _end_to_origin(spacer4, 'bottom')
-        spacer4 = _translate(spacer4, [lattice_vector_sizes[0] * .75,
-                                      lattice_vector_sizes[1] * .25,
-                                      n * lattice_vector_sizes[2] -
-                                      penet * BX_bond_length_z])
-        layer = _add_atoms(layer, spacer4)
-
-    return layer
-
-
-def _get_molecule_length(atoms, direction='z'):
-    """
-    For internal use only.
-
-    Purpose:
-        Determine the length of the molecule along a desired direction, as
-        defined simply by max-min of the positions along the desired axis.
-        This is needed for the translation of 2D layers in out-of-plane 
-        direction for stacking in the DJ, RP phases.
+        # For DJ: only top attachment, 1 z-level
+        # With 2 positions per unit cell, this gives us 8 spacers for 2x2 supercell
+        z_levels = [(top_z, 'bottom', True)]
+    else:  # 'both'
+        # For RP: both top and bottom, 2 z-levels
+        # With 2 positions per unit cell, this gives us 16 spacers for 2x2 supercell
+        z_levels = [
+            (penet_z, 'top', False),    # Bottom level
+            (top_z, 'bottom', True)     # Top level
+        ]
+    
+    # Expand positions across supercell
+    # Use the same expansion logic as A-sites to ensure consistency
+    for z, end_side, rotate_180 in z_levels:
+        for base_pos_frac in base_positions_frac:
+            # Expand to all unit cells in supercell
+            # CRITICAL: For EACH unit cell, we generate positions for BOTH base positions
+            # This ensures we have 2 positions per unit cell × nx × ny = 8 positions for 2x2
+            # Translation: new_x = base_x + ix, new_y = base_y + iy
+            # Examples for 2x2:
+            #   Unit cell (0,0): [0.25+0, 0.75+0] = [0.25, 0.75] and [0.75+0, 0.25+0] = [0.75, 0.25]
+            #   Unit cell (1,1): [0.25+1, 0.75+1] = [1.25, 1.75] and [0.75+1, 0.25+1] = [1.75, 1.25]
+            for ix in range(nx):
+                for iy in range(ny):
+                    # Translate fractional coordinates by unit cell indices
+                    # x_frac = base_x + ix, y_frac = base_y + iy
+                    x_frac = base_pos_frac[0] + ix
+                    y_frac = base_pos_frac[1] + iy
+                    
+                    # Convert to Angstroms using unit cell sizes
+                    # EXACTLY the same conversion as A-sites: new_pos_frac[0] * lattice_vectors[0]
+                    x = x_frac * lv0
+                    y = y_frac * lv1
+                    
+                    # Add attachment for this unit cell (ix, iy) and this base position
+                    # This ensures we have spacers at BOTH [0.25, 0.75] AND [0.75, 0.25] for each unit cell
+                    attachments.append((x, y, z, end_side, rotate_180))
+    
+    # Verify spacer count
+    expected_spacers = len(z_levels) * len(base_positions_frac) * nx * ny
+    if len(attachments) != expected_spacers:
+        raise ValueError(f"Spacer position generation failed: expected {expected_spacers} positions, got {len(attachments)}")
+    
+    
+    # Attach spacers using pattern (cycle through spacer list)
+    # IMPORTANT: Process ALL attachments to ensure every position gets a spacer
+    from .molecule_builder import align_ase_molecule_for_perovskite, end_to_origin, translate_atoms, add_atoms
+    
+    # Process attachments in the order they were generated (by z-level, then by unit cell)
+    for i, (x, y, z, end_side, rotate_180) in enumerate(attachments):
+        # Select spacer from pattern (cycle if list is shorter)
+        current_spacer = spacer[i % len(spacer)].copy()
         
-    Parameters
-    ----------
-    atoms : Atoms
-        The input molecule's Atoms object
-    direction : str
-        'x', 'y', 'z' direction for the computation.
+        # Align spacer for 2D perovskite attachment BEFORE rotation
+        # This ensures NH3/NH3+ groups face the perovskite layer correctly
+        # 
+        # For attachment from bottom (end_side='top', no rotation):
+        #   - N should be at top end, which attaches to layer
+        # 
+        # For attachment from top (end_side='bottom', with 180° rotation):
+        #   - Align N to top end, then 180° rotation flips it to bottom end
+        #   - After end_to_origin('bottom'), N will be at the attachment point
+        # 
+        # In both cases, we align N to top end initially
+        current_spacer = align_ase_molecule_for_perovskite(current_spacer, attachment_end='top')
         
-    Returns
-    -------
-    mol_length : float
-        Molecule length along desired direction.
-    """
-    pos = atoms.positions
+        # Apply rotation if needed (after alignment)
+        if rotate_180:
+            current_spacer.rotate(180, 'x')
+        
+        # Align spacer end to origin
+        current_spacer = end_to_origin(current_spacer, end_side)
+        
+        # Translate to position
+        current_spacer = translate_atoms(current_spacer, [x, y, z])
+        
+        # Add to structure
+        structure = add_atoms(structure, current_spacer)
+    
+    return structure
 
-    if direction == 'x':
-        idx = 0
-    elif direction == 'y':
-        idx = 1
-    elif direction == 'z':
-        idx = 2
 
-    return max(pos[:, idx]) - min(pos[:, idx])
