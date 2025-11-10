@@ -26,7 +26,11 @@ pip install ase numpy rdkit
 from q2D_Materials.core.creator import q2D_creator
 
 # Initialize creator with composition
-q2d = q2D_creator(B='Pb', X='I', A='MA', name='MAPbI3')
+q2d = q2D_creator(B='Pb', X='I', A='MA', name='MAPbI3') # This return the ase object
+
+# You can use any way to save or modify it with ase:
+from ase.io import write
+write("MAPbI3", q2d) # Cif, Vasp, etc ...
 ```
 
 ## Examples
