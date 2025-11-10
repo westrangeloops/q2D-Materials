@@ -5,7 +5,6 @@ MAPb*_*.png
 # Analysis outputs and temporary data
 batch_analysis_plots/
 correlation_plots/
-Examples/
 Graphs/
 
 # Development artifacts
