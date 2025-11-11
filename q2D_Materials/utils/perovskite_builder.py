@@ -69,6 +69,44 @@ def auto_calculate_BX_distance(B, X):
         return 2.0
 
 
+def _get_effective_spacer_size(spacer):
+    """
+    Get effective size of spacer for layer separation calculations.
+    
+    For molecules: returns the molecule length along z-axis.
+    For single atoms: returns 2 * ionic_radius to account for sphere diameter.
+    
+    Parameters
+    ----------
+    spacer : Atoms
+        Spacer molecule or atom (ASE Atoms object)
+        
+    Returns
+    -------
+    float
+        Effective spacer size in Angstroms
+    """
+    from .molecule_builder import get_molecule_length
+    
+    # Check if it's a single atom
+    if len(spacer) == 1:
+        # Single atom: use ionic radius
+        symbol = spacer.get_chemical_symbols()[0]
+        try:
+            # Try to get ionic radius from A-site database
+            ionic_rad = get_ionic_radius("A", symbol)
+            # Return 2 * ionic_radius to account for sphere diameter
+            return 2.0 * ionic_rad
+        except (ValueError, KeyError):
+            # If not found in A-site, try a reasonable default
+            # Common atomic spacers: Cs (1.88), Rb (1.72), K (1.64)
+            # Use 2.0 as fallback (reasonable for most atomic cations)
+            return 2.0 * 1.8  # Default to ~3.6 Angstrom for unknown atoms
+    else:
+        # Molecule: use molecule length
+        return get_molecule_length(spacer)
+
+
 def create_perovskite(A, B, X, structure_type='bulk', supercell_size=(1, 1, 1), 
                      BX_dist=None, Ap=None, n_layers=1, double=False, Bp=None,
                      penet=PENET, vacuum=12, spacer_distance=SPACER_DISTANCE,
@@ -773,8 +811,11 @@ def create_2d_perovskite(Ap, A, B, X, supercell, structure_type='monolayer', BX_
     
     Parameters
     ----------
-    Ap : Atoms or list[Atoms]
-        Spacer molecule(s). Single molecule or list pattern for mixed spacers.
+    Ap : str/Atoms or list[str/Atoms]
+        Spacer molecule(s) or atomic cation(s). Can be:
+        - Atomic cation string (e.g., 'Cs', 'K', 'Rb') - for all 2D structures
+        - Molecules as Atoms objects or SMILES strings
+        - List pattern for mixed spacers
         For supercell[0] x supercell[1] = 4 positions, provide list of 4 spacers.
     A : str/Atoms or list[str/Atoms]
         A-site cation(s). Single value or list pattern.
@@ -835,36 +876,48 @@ def create_2d_perovskite(Ap, A, B, X, supercell, structure_type='monolayer', BX_
     if structure_type not in ['rp', 'dj', 'monolayer']:
         raise ValueError(f"Invalid structure_type: {structure_type}. Choose 'rp', 'dj', or 'monolayer'.")
     
-    # Validate Ap_spacer
-    if isinstance(Ap, str):
-        raise ValueError("Ap must be a molecule in the form of an Atoms object, not a single atom as a string.")
-    
-    # Detect if mixed spacers
+    # Handle Ap_spacer - can be molecule (Atoms) or atomic cation (str/Atoms with 1 atom)
+    # For 2D structures (RP, DJ, monolayer), atomic cations like Cs can be used as spacers
     is_mixed_spacers = isinstance(Ap, list)
     
-    # Handle spacer molecules - pattern-based assignment
-    # Copy and align spacer molecules
+    # Convert string atomic cations to Atoms objects
+    if isinstance(Ap, str):
+        # Atomic cation (e.g., 'Cs', 'K', 'Rb') - create single atom
+        Ap = Atoms(Ap)
+    elif not isinstance(Ap, Atoms):
+        raise ValueError("Ap must be a molecule (Atoms object), atomic cation (string), or list of either.")
+    
+    # Handle spacer molecules/atoms - pattern-based assignment
+    # Copy and align spacer molecules (skip alignment for single atoms)
     from .molecule_builder import align_ase_molecule_for_perovskite
     
     if is_mixed_spacers:
         Ap_aligned = []
         for idx, spacer in enumerate(Ap):
+            # Convert string atomic cations to Atoms objects
             if isinstance(spacer, str):
-                raise ValueError("Ap list must contain Atoms objects, not strings")
+                spacer = Atoms(spacer)
+            
+            if not isinstance(spacer, Atoms):
+                raise ValueError(f"Spacer {idx} must be an Atoms object or atomic cation string")
+            
             # Validate original spacer
             num_atoms_orig = len(spacer)
             if num_atoms_orig == 0:
-                raise ValueError(f"Spacer {idx} in list has no atoms")
+                raise ValueError(f"Spacer {idx} has no atoms")
             
             spacer_copy = spacer.copy()
             # Validate after copy
             if len(spacer_copy) != num_atoms_orig:
                 raise ValueError(f"Spacer {idx} lost atoms during copy: {num_atoms_orig} -> {len(spacer_copy)}")
             
-            spacer_copy = align_ase_molecule_for_perovskite(spacer_copy)
-            # Validate after alignment
-            if len(spacer_copy) != num_atoms_orig:
-                raise ValueError(f"Spacer {idx} lost atoms during initial alignment: {num_atoms_orig} -> {len(spacer_copy)}")
+            # Only align if it's a molecule (more than 1 atom)
+            # Single atoms don't need alignment
+            if num_atoms_orig > 1:
+                spacer_copy = align_ase_molecule_for_perovskite(spacer_copy)
+                # Validate after alignment
+                if len(spacer_copy) != num_atoms_orig:
+                    raise ValueError(f"Spacer {idx} lost atoms during initial alignment: {num_atoms_orig} -> {len(spacer_copy)}")
             
             Ap_aligned.append(spacer_copy)
         Ap = Ap_aligned
@@ -878,9 +931,12 @@ def create_2d_perovskite(Ap, A, B, X, supercell, structure_type='monolayer', BX_
         if len(Ap) != num_atoms_orig:
             raise ValueError(f"Spacer lost atoms during copy: {num_atoms_orig} -> {len(Ap)}")
         
-        Ap = align_ase_molecule_for_perovskite(Ap)
-        if len(Ap) != num_atoms_orig:
-            raise ValueError(f"Spacer lost atoms during initial alignment: {num_atoms_orig} -> {len(Ap)}")
+        # Only align if it's a molecule (more than 1 atom)
+        # Single atoms don't need alignment
+        if num_atoms_orig > 1:
+            Ap = align_ase_molecule_for_perovskite(Ap)
+            if len(Ap) != num_atoms_orig:
+                raise ValueError(f"Spacer lost atoms during initial alignment: {num_atoms_orig} -> {len(Ap)}")
     
     # Apply rotations to spacer(s)
     if is_mixed_spacers:
@@ -957,13 +1013,42 @@ def create_2d_perovskite(Ap, A, B, X, supercell, structure_type='monolayer', BX_
     
     # Compute geometric parameters for cell dimensions BEFORE attaching spacers
     # We need mol_len to calculate proper z positions for RP structures
-    from .molecule_builder import get_molecule_length, add_atoms
+    # Use effective spacer size (accounts for ionic radius for single atoms)
+    from .molecule_builder import add_atoms
+    
+    # Check if spacers are atomic (single atoms)
     if is_mixed_spacers:
-        # Average molecule length for mixed spacers
-        mol_lens = [get_molecule_length(sp) for sp in Ap]
-        mol_len = float(np.mean(mol_lens))
+        is_atomic = all(len(sp) == 1 for sp in Ap)
+        if is_atomic:
+            # For atomic spacers: get ionic radius (not 2*radius)
+            ionic_rads = []
+            for sp in Ap:
+                symbol = sp.get_chemical_symbols()[0]
+                try:
+                    ionic_rad = get_ionic_radius("A", symbol)
+                    ionic_rads.append(ionic_rad)
+                except (ValueError, KeyError):
+                    ionic_rads.append(1.8)  # Default fallback
+            atomic_separation = float(np.mean(ionic_rads))
+            mol_len = None  # Not used for atomic spacers
+        else:
+            # Mixed: average effective spacer size
+            mol_lens = [_get_effective_spacer_size(sp) for sp in Ap]
+            mol_len = float(np.mean(mol_lens))
+            atomic_separation = None
     else:
-        mol_len = get_molecule_length(Ap)
+        is_atomic = (len(Ap) == 1)
+        if is_atomic:
+            # For atomic spacer: get ionic radius (not 2*radius)
+            symbol = Ap.get_chemical_symbols()[0]
+            try:
+                atomic_separation = get_ionic_radius("A", symbol)
+            except (ValueError, KeyError):
+                atomic_separation = 1.8  # Default fallback
+            mol_len = None  # Not used for atomic spacers
+        else:
+            mol_len = _get_effective_spacer_size(Ap)
+            atomic_separation = None
     
     # Handle RP structure separately - it requires two shifted layers
     if structure_type == 'rp':
@@ -971,35 +1056,49 @@ def create_2d_perovskite(Ap, A, B, X, supercell, structure_type='monolayer', BX_
         bottom_layer = _attach_spacer(
             Ap, layer, n_layers, lattice_vector_sizes, supercell_size,
             attachment_end='both', penet=penet,
-            mol_len=mol_len, spacer_distance=spacer_distance
+            mol_len=mol_len
         )
         
-        # Calculate z_length using RP formula with interlayer penetration
-        # Formula: n * lattice_vector_sizes[2] * 2 + 2 * (2 * mol_len - 2 * .5 * lattice_vector_sizes[2] * penet - mol_len * interlayer_penet)
-        z_length = n_layers * lattice_vector_sizes[2] * 2 + 2 * \
-            (2 * mol_len - 2 * .5 * lattice_vector_sizes[2] * penet - mol_len * interlayer_penet)
+        # Calculate z_length using appropriate formula
+        if is_atomic:
+            # For atomic spacers: use 2 ionic radii for inter-slab separation
+            # Formula: 2 * (layer height) + 2 * ionic_radius
+            z_length = 2 * (n_layers * lattice_vector_sizes[2]) + 2 * atomic_separation + 0.5
+        else:
+            # For molecular spacers: use RP formula with interlayer penetration
+            # Formula: n * lattice_vector_sizes[2] * 2 + 2 * (2 * mol_len - 2 * .5 * lattice_vector_sizes[2] * penet - mol_len * interlayer_penet)
+            z_length = n_layers * lattice_vector_sizes[2] * 2 + 2 * \
+                (2 * mol_len - 2 * .5 * lattice_vector_sizes[2] * penet - mol_len * interlayer_penet)
+        
+        # Set cell dimensions for bottom layer before copying
+        # This ensures we can calculate the cell center for rotation
+        cell_a = nx * lattice_vector_sizes[0]
+        cell_b = ny * lattice_vector_sizes[1]
+        # Use a temporary z-length for bottom layer (will be updated after combining)
+        bottom_layer.set_cell([cell_a, cell_b, z_length / 2.0, 90, 90, 90])
+        bottom_layer.pbc = [1, 1, 1]
+        
+        # Get the actual z-center of the bottom layer for rotation
+        bottom_z_positions = bottom_layer.get_positions()[:, 2]
+        bottom_z_center = (np.min(bottom_z_positions) + np.max(bottom_z_positions)) / 2.0
         
         # Create top layer by copying bottom layer
         top_layer = bottom_layer.copy()
         
         # CRITICAL: Rotate top layer 90 degrees around Z axis (in XY plane)
-        # This is essential for the RP structure - the top layer must be rotated relative to bottom
-        # Rotate around center of mass to keep structure centered
-        com = top_layer.get_center_of_mass()
-        top_layer.rotate(90, 'z', center=com)
+        # Rotate around the cell center in x/y and the actual z-center of the layer
+        # This ensures no displacement - rotation happens around the geometric center
+        rotation_center = [cell_a / 2.0, cell_b / 2.0, bottom_z_center]
+        top_layer.rotate(90, 'z', center=rotation_center)
         
-        # Shift top layer: z by z_length/2, x by 0.5*lattice_vector_sizes[0], y by 0.5*lattice_vector_sizes[1]
-        # Note: The provided code always applies y shift, matching the original make_2drp
+        # Shift top layer only in z-direction to separate layers vertically
+        # No x/y displacement - rotation around cell center maintains proper alignment
         top_layer.positions[:, 2] += z_length / 2.0
-        top_layer.positions[:, 0] += .5 * lattice_vector_sizes[0]
-        top_layer.positions[:, 1] += .5 * lattice_vector_sizes[1]
         
         # Combine both layers
         structure = add_atoms(bottom_layer, top_layer)
         
-        # Set cell dimensions for RP structure
-        cell_a = nx * lattice_vector_sizes[0]
-        cell_b = ny * lattice_vector_sizes[1]
+        # Set final cell dimensions for RP structure
         structure.cell = [cell_a, cell_b, z_length, 90, 90, 90]
         structure.pbc = [1, 1, 1]
         
@@ -1013,8 +1112,7 @@ def create_2d_perovskite(Ap, A, B, X, supercell, structure_type='monolayer', BX_
     structure = _attach_spacer(
         Ap, layer, n_layers, lattice_vector_sizes, supercell_size,
         attachment_end=attachment_end, penet=penet,
-        mol_len=mol_len if attachment_end == 'both' else None,
-        spacer_distance=spacer_distance if attachment_end == 'both' else None
+        mol_len=mol_len if attachment_end == 'both' else None
     )
     
     # Calculate cell dimensions accounting for supercell size
@@ -1024,16 +1122,30 @@ def create_2d_perovskite(Ap, A, B, X, supercell, structure_type='monolayer', BX_
     
     if structure_type == 'dj':
         # DJ-specific cell calculation
-        z_length = n_layers * lattice_vector_sizes[2] + (mol_len - lattice_vector_sizes[2] * penet)
+        if is_atomic:
+            # For atomic spacers: use 2 ionic radii for separation (top attachment only)
+            z_length = n_layers * lattice_vector_sizes[2] + 2 * atomic_separation
+        else:
+            # For molecular spacers: original formula
+            z_length = n_layers * lattice_vector_sizes[2] + (mol_len - lattice_vector_sizes[2] * penet)
         structure.cell = [cell_a, cell_b, z_length, 90, 90, 90]
     else:
         # Monolayer: adjust z_length based on attachment type
-        if attachment_end == 'both':
-            # Original calculation for monolayer (with vacuum)
-            z_length = n_layers * lattice_vector_sizes[2] + (2 * mol_len - lattice_vector_sizes[2] * penet) + vacuum
+        if is_atomic:
+            # For atomic spacers: use 1 ionic radius for separation
+            if attachment_end == 'both':
+                z_length = n_layers * lattice_vector_sizes[2] + 2 * atomic_separation + vacuum
+            else:
+                # Only one spacer (top or bottom)
+                z_length = n_layers * lattice_vector_sizes[2] + atomic_separation + vacuum
         else:
-            # Only one spacer (top or bottom)
-            z_length = n_layers * lattice_vector_sizes[2] + (mol_len - .5 * lattice_vector_sizes[2] * penet) + vacuum
+            # For molecular spacers: original formulas
+            if attachment_end == 'both':
+                # Original calculation for monolayer (with vacuum)
+                z_length = n_layers * lattice_vector_sizes[2] + (2 * mol_len - lattice_vector_sizes[2] * penet) + vacuum
+            else:
+                # Only one spacer (top or bottom)
+                z_length = n_layers * lattice_vector_sizes[2] + (mol_len - .5 * lattice_vector_sizes[2] * penet) + vacuum
         
         # Center monolayer structure
         if structure_type == 'monolayer':
@@ -1076,7 +1188,7 @@ def create_2d_perovskite(Ap, A, B, X, supercell, structure_type='monolayer', BX_
 
 
 def _attach_spacer(spacer, layer, n, lattice_vector_sizes, supercell_size, 
-                   penet=PENET, attachment_end='both', mol_len=None, spacer_distance=None):
+                   penet=PENET, attachment_end='both', mol_len=None):
     """
     Attach spacer molecules to 2D layer using pattern-based assignment with supercell expansion.
     
@@ -1228,11 +1340,47 @@ def _attach_spacer(spacer, layer, n, lattice_vector_sizes, supercell_size,
         if num_atoms_initial == 0:
             raise ValueError(f"Spacer {i} has no atoms after copy")
         
+        # Check if spacer is a single atom (atomic spacer)
+        is_atomic_spacer = (num_atoms_initial == 1)
+        
+        # For atomic spacers: position at the height of the BX bond
+        # - Bottom: at z = 0 + 0.5 * ionic_radius (half ionic radius above bottom)
+        # - Top: at z = n * lv2 - 0.5 * ionic_radius (half ionic radius below top)
+        # Initial X atoms are at z=0, top X atoms in layer i are at z = (1.0 + i) * lv2
+        if is_atomic_spacer:
+            # Get ionic radius for this atomic spacer
+            symbol = current_spacer.get_chemical_symbols()[0]
+            try:
+                ionic_rad = get_ionic_radius("A", symbol)
+            except (ValueError, KeyError):
+                ionic_rad = 1.8  # Default fallback
+            
+            # Calculate positions: bottom + half radius, top - half radius
+            bottom_z = 0.0 + 0.5 * ionic_rad
+            top_z = n * lv2 - 0.5 * ionic_rad
+            
+            # Determine which layer this spacer belongs to based on attachment_end
+            if attachment_end == 'bottom' or attachment_end == 'bot':
+                # Bottom attachment: position at bottom + half ionic radius
+                z = bottom_z 
+            elif attachment_end == 'top':
+                # Top attachment: position at top - half ionic radius
+                z = top_z 
+            else:  # 'both'
+                # Determine if this is bottom or top spacer based on the z_level
+                # Bottom spacers are at bottom_z_adjusted, top spacers are at top_z
+                if abs(z - bottom_z_adjusted) < abs(z - top_z):
+                    # This is a bottom spacer: position at bottom + half ionic radius
+                    z = bottom_z
+                else:
+                    # This is a top spacer: position at top - half ionic radius
+                    z = top_z
+        
         # Spacer is already aligned from the initial alignment step above
         # We just need to apply rotation and positioning for this specific attachment
         
-        # Apply rotation if needed
-        if rotate_180:
+        # Apply rotation if needed (skip for atomic spacers - they don't need rotation)
+        if rotate_180 and not is_atomic_spacer:
             # Rotate around center of mass to ensure all atoms rotate together
             com = current_spacer.get_center_of_mass()
             current_spacer.rotate(180, 'x', center=com)
@@ -1241,6 +1389,9 @@ def _attach_spacer(spacer, layer, n, lattice_vector_sizes, supercell_size,
                 raise ValueError(f"Spacer {i} lost atoms during rotation: {num_atoms_initial} -> {len(current_spacer)}")
         
         # Align spacer end to origin
+        # For atomic spacers, end_to_origin places the atom at origin (0, 0, 0)
+        # For molecules, it aligns the specified end to origin
+        # We always call this to ensure consistent starting position before translation
         current_spacer = end_to_origin(current_spacer, end_side)
         # Validate after end_to_origin
         if len(current_spacer) != num_atoms_initial:
