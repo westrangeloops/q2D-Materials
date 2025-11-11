@@ -281,10 +281,20 @@ class q2D_creator:
             if supercell is None:
                 raise ValueError(f"supercell is required for {structure_type} structures (e.g., supercell=[1, 1, 1])")
             
-            # Get A/B/X ion patterns (pattern-based only)
-            A_ions = kwargs.get('A_ions', self.A_cation)
-            B_ions = kwargs.get('B_ions', self.B)
-            X_ions = kwargs.get('X_ions', self.X)
+            # Get A/B/X ion patterns - always use unified pattern-based approach
+            # Whether provided as lists or single values, they're handled the same way
+            A_ions = kwargs.get('A_ions')
+            B_ions = kwargs.get('B_ions')
+            X_ions = kwargs.get('X_ions')
+            
+            # If not provided, use defaults (but keep as single values, not lists)
+            # The unified core will handle normalization consistently
+            if A_ions is None:
+                A_ions = self.A  # Use string, not self.A_cation - let unified core normalize
+            if B_ions is None:
+                B_ions = self.B
+            if X_ions is None:
+                X_ions = self.X
             
             # Recalculate BX_dist if pattern-based mixing is used and BX_dist not explicitly provided
             # This ensures BX_dist matches the actual composition being used

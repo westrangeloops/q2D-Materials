@@ -804,10 +804,10 @@ def create_2d_perovskite(Ap, A, B, X, supercell, structure_type='monolayer', BX_
                          interlayer_penet=0.0, attachment_end=None, Ap_Rx=None, Ap_Ry=None, Ap_Rz=None, 
                          wrap=None, double=False, Bp=None):
     """
-    Create 2D perovskite structures using explicit patterns (RP, DJ, or monolayer).
+    Create 2D perovskite structures using unified pattern-based assignment (RP, DJ, or monolayer).
     
-    NOTE: This function is partially updated for pattern-based assignment.
-    Full refactoring to match bulk perovskite pattern API is in progress.
+    This function uses the unified core (_create_unified_core) for consistent structure creation,
+    whether using single values or pattern lists for A/B/X ions.
     
     Parameters
     ----------
