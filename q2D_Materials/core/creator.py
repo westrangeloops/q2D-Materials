@@ -134,7 +134,9 @@ class q2D_creator:
             - BX_dist (float): B-X distance (auto-calculated if None)
             - penet (float): Penetration depth (default: 0.3)
             - spacer_distance (float): For RP - vacuum gap between spacers in Å (default: 2.0)
+            - interlayer_penet (float): For RP - interlayer penetration as fraction of molecule length (default: 0.0)
             - vacuum (float): For monolayer only (default: 12)
+            - attachment_end (str): For monolayer only - 'top', 'bottom', or 'both' (default: 'both')
             - Ap_Rx, Ap_Ry, Ap_Rz (float): Rotation angles in degrees
             
             For pattern-based mixed compositions (all structures):
@@ -295,12 +297,17 @@ class q2D_creator:
             # Structure-specific parameters with automatic attachment_end
             if structure_type == 'rp':
                 create_kwargs['spacer_distance'] = kwargs.get('spacer_distance', 2.0)
+                create_kwargs['interlayer_penet'] = kwargs.get('interlayer_penet', 0.0)
                 create_kwargs['attachment_end'] = 'both'  # RP always uses 'both'
             elif structure_type == 'dj':
                 create_kwargs['attachment_end'] = 'top'  # DJ always uses 'top'
             elif structure_type == 'monolayer':
                 create_kwargs['vacuum'] = kwargs.get('vacuum', 12)
-                create_kwargs['attachment_end'] = 'both'  # Monolayer always uses 'both'
+                # Monolayer supports flexible attachment - use user-provided or default to 'both'
+                if 'attachment_end' in kwargs:
+                    create_kwargs['attachment_end'] = kwargs['attachment_end']
+                else:
+                    create_kwargs['attachment_end'] = 'both'  # Default for monolayer
             
             return create_perovskite(structure_type=structure_type, **create_kwargs)
     

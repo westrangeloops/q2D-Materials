@@ -170,7 +170,7 @@ write('mixed_perovskite.vasp', mixed_all)
 
 ## 2D Perovskites - Ruddlesden-Popper (RP)
 
-RP structures have organic spacers between inorganic layers with vacuum gaps.
+RP structures are **true two-layer structures** with organic spacers between inorganic layers. The top layer is rotated 90° around the Z-axis (in the XY plane) and shifted relative to the bottom layer, creating the characteristic Ruddlesden-Popper phase.
 
 ### Simple RP Structure
 
@@ -196,6 +196,7 @@ rp = q2d.create_perovskite(
     
     # RP-specific parameters
     spacer_distance=2.0,  # Vacuum gap between opposing spacers (Å)
+    interlayer_penet=0.0,  # Interlayer penetration as fraction of molecule length
     
     # Optional parameters
     penet=0.3,  # Spacer penetration into layer (fraction of BX bond)
@@ -205,6 +206,17 @@ rp = q2d.create_perovskite(
     BX_dist=None  # Auto-calculated if None
 )
 ```
+
+### RP Structure Details
+
+The RP structure is created by:
+1. Creating a bottom layer with spacers attached to both top and bottom
+2. Copying the bottom layer to create the top layer
+3. **Rotating the top layer 90° around the Z-axis** (in the XY plane)
+4. Shifting the top layer: z by `z_length/2`, x by `0.5×lattice_a`, y by `0.5×lattice_b`
+5. Combining both layers
+
+The `interlayer_penet` parameter controls the interlocking of Ap cations between layers (as a fraction of molecule length).
 
 ### RP with Mixed Compositions
 
@@ -284,7 +296,7 @@ dj_rotated = q2d.create_perovskite(
 
 ## 2D Perovskites - Monolayer
 
-Single-layer 2D structures with vacuum.
+Single-layer 2D structures with vacuum. Monolayers support **flexible attachment options**: spacers can be attached to the top, bottom, or both sides of the inorganic layer.
 
 ### Simple Monolayer
 
@@ -296,6 +308,37 @@ monolayer = q2d.create_perovskite(
 )
 from ase.io import write
 write('MAPbI3_monolayer.vasp', monolayer)
+```
+
+### Monolayer with Flexible Attachment
+
+```python
+# Monolayer with top attachment only
+monolayer_top = q2d.create_perovskite(
+    'monolayer',
+    spacer_molecule='[NH3+]CCCCC[NH3+]',
+    supercell=[1, 1, 1],
+    vacuum=12,
+    attachment_end='top'  # Attach only to top
+)
+
+# Monolayer with bottom attachment only
+monolayer_bottom = q2d.create_perovskite(
+    'monolayer',
+    spacer_molecule='[NH3+]CCCCC[NH3+]',
+    supercell=[1, 1, 1],
+    vacuum=12,
+    attachment_end='bottom'  # Attach only to bottom
+)
+
+# Monolayer with both attachments (default)
+monolayer_both = q2d.create_perovskite(
+    'monolayer',
+    spacer_molecule='[NH3+]CCCCC[NH3+]',
+    supercell=[1, 1, 1],
+    vacuum=12,
+    attachment_end='both'  # Attach to both top and bottom (default)
+)
 ```
 
 ### Monolayer with All Parameters
@@ -310,6 +353,8 @@ monolayer = q2d.create_perovskite(
     
     # Monolayer-specific parameters
     vacuum=12,  # Vacuum thickness in Angstrom
+    attachment_end='both',  # 'top', 'bottom', or 'both' (default: 'both')
+    
     # Optional parameters
     penet=0.3,
     BX_dist=None,
@@ -401,7 +446,9 @@ mixed_spacers = q2d.create_perovskite(
 | `X_ions` | str/list | X-site anion(s) pattern. | Uses `X` from initialization |
 | `penet` | float | Spacer penetration into inorganic layer (fraction of BX bond). | `0.3` |
 | `spacer_distance` | float | Vacuum gap between opposing spacers for RP (Å). | `2.0` |
+| `interlayer_penet` | float | Interlayer penetration for RP (fraction of molecule length). | `0.0` |
 | `vacuum` | float | Vacuum thickness for monolayer (Å). | `12` |
+| `attachment_end` | str | For monolayer only: `'top'`, `'bottom'`, or `'both'`. | `'both'` |
 | `Ap_Rx` | float | Rotation around x-axis in degrees (applied as Rx→Ry→Rz). | `0.0` |
 | `Ap_Ry` | float | Rotation around y-axis in degrees. | `0.0` |
 | `Ap_Rz` | float | Rotation around z-axis in degrees. | `0.0` |
@@ -538,11 +585,41 @@ rp_complete = q2d.create_perovskite(
     B_ions=['Pb', 'Sn'],
     X_ions=['Br', 'I'],
     spacer_distance=2.5,  # Larger gap
+    interlayer_penet=0.1,  # Interlayer penetration
     penet=0.25,  # Less penetration
     BX_dist=3.18
 )
 from ase.io import write
 write('RP_complete.vasp', rp_complete)
+```
+
+### Example 4: Monolayer with Different Attachments
+
+```python
+# Compare monolayers with different attachment configurations
+monolayer_top = q2d.create_perovskite(
+    'monolayer',
+    spacer_molecule='[NH3+]CCCCC[NH3+]',
+    supercell=[1, 1, 1],
+    vacuum=12,
+    attachment_end='top'
+)
+
+monolayer_bottom = q2d.create_perovskite(
+    'monolayer',
+    spacer_molecule='[NH3+]CCCCC[NH3+]',
+    supercell=[1, 1, 1],
+    vacuum=12,
+    attachment_end='bottom'
+)
+
+monolayer_both = q2d.create_perovskite(
+    'monolayer',
+    spacer_molecule='[NH3+]CCCCC[NH3+]',
+    supercell=[1, 1, 1],
+    vacuum=12,
+    attachment_end='both'
+)
 ```
 
 ## Visualization

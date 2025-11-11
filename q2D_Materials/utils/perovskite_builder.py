@@ -72,7 +72,7 @@ def auto_calculate_BX_distance(B, X):
 def create_perovskite(A, B, X, structure_type='bulk', supercell_size=(1, 1, 1), 
                      BX_dist=None, Ap=None, n_layers=1, double=False, Bp=None,
                      penet=PENET, vacuum=12, spacer_distance=SPACER_DISTANCE,
-                     attachment_end=None, Ap_Rx=None, Ap_Ry=None, Ap_Rz=None,
+                     interlayer_penet=0.0, attachment_end=None, Ap_Rx=None, Ap_Ry=None, Ap_Rz=None,
                      wrap=None):
     """
     Unified function to create bulk or 2D perovskite structures.
@@ -110,12 +110,15 @@ def create_perovskite(A, B, X, structure_type='bulk', supercell_size=(1, 1, 1),
         Vacuum for monolayer structures in Angstrom (default: 12).
     spacer_distance : float, optional
         Vacuum gap between opposing spacers for RP phase (default: 2.0).
+    interlayer_penet : float, optional
+        Interlayer penetration for RP phase, as a fraction of molecule length (default: 0.0).
+        Controls interlocking of Ap cations in RP structures.
     attachment_end : str, optional
         Where to attach spacer for 2D. Automatically set based on structure_type:
         - RP: 'both' (always)
         - DJ: 'top' (always)
-        - Monolayer: 'both' (always)
-        Users should not need to specify this.
+        - Monolayer: 'top', 'bottom', or 'both' (default: 'both')
+        Users can override for monolayer structures.
     Ap_Rx, Ap_Ry, Ap_Rz : float, optional
         Rotation angles in degrees for spacers (applied as Rx->Ry->Rz).
     wrap : bool, optional
@@ -149,7 +152,8 @@ def create_perovskite(A, B, X, structure_type='bulk', supercell_size=(1, 1, 1),
             Ap=Ap, A=A, B=B, X=X, supercell=supercell_2d,
             structure_type=structure_type, BX_dist=BX_dist,
             penet=penet, vacuum=vacuum, spacer_distance=spacer_distance,
-            attachment_end=attachment_end, Ap_Rx=Ap_Rx, Ap_Ry=Ap_Ry, Ap_Rz=Ap_Rz,
+            interlayer_penet=interlayer_penet, attachment_end=attachment_end, 
+            Ap_Rx=Ap_Rx, Ap_Ry=Ap_Ry, Ap_Rz=Ap_Rz,
             wrap=wrap, double=double, Bp=Bp
         )
     else:
@@ -759,7 +763,7 @@ def _create_unified_core(structure_type, lattice_vectors, A_ions, B_ions, X_ions
 
 def create_2d_perovskite(Ap, A, B, X, supercell, structure_type='monolayer', BX_dist=None, 
                          penet=PENET, vacuum=12, spacer_distance=SPACER_DISTANCE, 
-                         attachment_end=None, Ap_Rx=None, Ap_Ry=None, Ap_Rz=None, 
+                         interlayer_penet=0.0, attachment_end=None, Ap_Rx=None, Ap_Ry=None, Ap_Rz=None, 
                          wrap=None, double=False, Bp=None):
     """
     Create 2D perovskite structures using explicit patterns (RP, DJ, or monolayer).
@@ -791,12 +795,15 @@ def create_2d_perovskite(Ap, A, B, X, supercell, structure_type='monolayer', BX_
         Amount of vacuum to add to unit cell (in Angstrom, for monolayer only).
     spacer_distance : float
         Vacuum gap between opposing spacers for RP phase (in Angstroms, default: 2.0).
+    interlayer_penet : float
+        Interlayer penetration for RP phase, as a fraction of molecule length (default: 0.0).
+        Controls interlocking of Ap cations in RP structures.
     attachment_end : str, optional
         Where to attach spacer. Automatically set based on structure_type:
         - RP: 'both' (always)
         - DJ: 'top' (always)
-        - Monolayer: 'both' (always)
-        Users should not need to specify this.
+        - Monolayer: 'top', 'bottom', or 'both' (default: 'both')
+        Users can override for monolayer structures.
     Ap_Rx, Ap_Ry, Ap_Rz : float, optional
         Rotation angles in degrees (applied as Rx->Ry->Rz). Applied to all spacers.
     wrap : bool, optional
@@ -932,7 +939,9 @@ def create_2d_perovskite(Ap, A, B, X, supercell, structure_type='monolayer', BX_
         attachment_end = 'top'  # DJ always uses 'top'
         wrap = True  # Always wrap for 2D structures
     elif structure_type == 'monolayer':
-        attachment_end = 'both'  # Monolayer always uses 'both'
+        # Monolayer supports flexible attachment - use user-provided or default to 'both'
+        if attachment_end is None:
+            attachment_end = 'both'  # Default for monolayer
         wrap = True  # Always wrap for 2D structures
     
     # Create the base 2D layer using unified core
@@ -948,7 +957,7 @@ def create_2d_perovskite(Ap, A, B, X, supercell, structure_type='monolayer', BX_
     
     # Compute geometric parameters for cell dimensions BEFORE attaching spacers
     # We need mol_len to calculate proper z positions for RP structures
-    from .molecule_builder import get_molecule_length
+    from .molecule_builder import get_molecule_length, add_atoms
     if is_mixed_spacers:
         # Average molecule length for mixed spacers
         mol_lens = [get_molecule_length(sp) for sp in Ap]
@@ -956,13 +965,56 @@ def create_2d_perovskite(Ap, A, B, X, supercell, structure_type='monolayer', BX_
     else:
         mol_len = get_molecule_length(Ap)
     
-    # Attach spacers to the layer (pattern-based)
-    # For RP structures, pass mol_len and spacer_distance to calculate correct top_z position
+    # Handle RP structure separately - it requires two shifted layers
+    if structure_type == 'rp':
+        # Create bottom layer with spacers attached
+        bottom_layer = _attach_spacer(
+            Ap, layer, n_layers, lattice_vector_sizes, supercell_size,
+            attachment_end='both', penet=penet,
+            mol_len=mol_len, spacer_distance=spacer_distance
+        )
+        
+        # Calculate z_length using RP formula with interlayer penetration
+        # Formula: n * lattice_vector_sizes[2] * 2 + 2 * (2 * mol_len - 2 * .5 * lattice_vector_sizes[2] * penet - mol_len * interlayer_penet)
+        z_length = n_layers * lattice_vector_sizes[2] * 2 + 2 * \
+            (2 * mol_len - 2 * .5 * lattice_vector_sizes[2] * penet - mol_len * interlayer_penet)
+        
+        # Create top layer by copying bottom layer
+        top_layer = bottom_layer.copy()
+        
+        # CRITICAL: Rotate top layer 90 degrees around Z axis (in XY plane)
+        # This is essential for the RP structure - the top layer must be rotated relative to bottom
+        # Rotate around center of mass to keep structure centered
+        com = top_layer.get_center_of_mass()
+        top_layer.rotate(90, 'z', center=com)
+        
+        # Shift top layer: z by z_length/2, x by 0.5*lattice_vector_sizes[0], y by 0.5*lattice_vector_sizes[1]
+        # Note: The provided code always applies y shift, matching the original make_2drp
+        top_layer.positions[:, 2] += z_length / 2.0
+        top_layer.positions[:, 0] += .5 * lattice_vector_sizes[0]
+        top_layer.positions[:, 1] += .5 * lattice_vector_sizes[1]
+        
+        # Combine both layers
+        structure = add_atoms(bottom_layer, top_layer)
+        
+        # Set cell dimensions for RP structure
+        cell_a = nx * lattice_vector_sizes[0]
+        cell_b = ny * lattice_vector_sizes[1]
+        structure.cell = [cell_a, cell_b, z_length, 90, 90, 90]
+        structure.pbc = [1, 1, 1]
+        
+        # Wrap if requested
+        if wrap:
+            structure.wrap()
+        
+        return structure
+    
+    # For DJ and monolayer: attach spacers normally
     structure = _attach_spacer(
         Ap, layer, n_layers, lattice_vector_sizes, supercell_size,
         attachment_end=attachment_end, penet=penet,
-        mol_len=mol_len if structure_type == 'rp' and attachment_end == 'both' else None,
-        spacer_distance=spacer_distance if structure_type == 'rp' and attachment_end == 'both' else None
+        mol_len=mol_len if attachment_end == 'both' else None,
+        spacer_distance=spacer_distance if attachment_end == 'both' else None
     )
     
     # Calculate cell dimensions accounting for supercell size
@@ -975,31 +1027,10 @@ def create_2d_perovskite(Ap, A, B, X, supercell, structure_type='monolayer', BX_
         z_length = n_layers * lattice_vector_sizes[2] + (mol_len - lattice_vector_sizes[2] * penet)
         structure.cell = [cell_a, cell_b, z_length, 90, 90, 90]
     else:
-        # RP and monolayer: adjust z_length based on attachment type
+        # Monolayer: adjust z_length based on attachment type
         if attachment_end == 'both':
-            if structure_type == 'rp' and spacer_distance is not None:
-                # For RP with spacer_distance: 
-                # - Bottom spacer: attached at penet_z with end_to_origin('top')
-                #   Top end is at penet_z, bottom end is at (penet_z - mol_len)
-                #   Need 2 Å vacuum below bottom spacer: cell starts at (penet_z - mol_len - 2.0)
-                # - Top spacer: attached at top_z with end_to_origin('bottom')
-                #   Bottom end is at top_z, top end is at (top_z + mol_len)
-                #   Cell ends right after top spacer: (top_z + mol_len)
-                lv2_n = n_layers * lattice_vector_sizes[2]
-                BX_bond_length_z = 0.5 * lattice_vector_sizes[2]
-                penet_z = penet * BX_bond_length_z
-                top_z = lv2_n - penet_z
-                # Bottom spacer bottom end
-                bottom_spacer_bottom = penet_z - mol_len
-                # Cell should start 2 Å below bottom spacer
-                cell_bottom = bottom_spacer_bottom - spacer_distance
-                # Cell top is right after top spacer
-                cell_top = top_z + mol_len
-                # Cell length
-                z_length = cell_top - cell_bottom
-            else:
-                # Original calculation for monolayer (with vacuum)
-                z_length = n_layers * lattice_vector_sizes[2] + (2 * mol_len - lattice_vector_sizes[2] * penet) + vacuum
+            # Original calculation for monolayer (with vacuum)
+            z_length = n_layers * lattice_vector_sizes[2] + (2 * mol_len - lattice_vector_sizes[2] * penet) + vacuum
         else:
             # Only one spacer (top or bottom)
             z_length = n_layers * lattice_vector_sizes[2] + (mol_len - .5 * lattice_vector_sizes[2] * penet) + vacuum
@@ -1015,74 +1046,27 @@ def create_2d_perovskite(Ap, A, B, X, supercell, structure_type='monolayer', BX_
         structure.pbc = [1, 1, 1]
         
         # Now check if any atoms are outside the cell bounds
-        # For RP with spacer_distance, cell should have 2 Å vacuum below bottom spacer
-        # For other cases, add small buffer if needed
+        # Add small buffer if needed
         positions = structure.get_positions()
         if len(positions) > 0:
             min_z = min(pos[2] for pos in positions)
             max_z = max(pos[2] for pos in positions)
-            z_range = max_z - min_z
             
-            # For RP with spacer_distance, ensure 2 Å vacuum below bottom spacer
-            if structure_type == 'rp' and attachment_end == 'both' and spacer_distance is not None:
-                # Bottom spacer bottom end should be at (penet_z - mol_len)
-                # We want 2 Å vacuum below it, so cell should start at (penet_z - mol_len - spacer_distance)
-                # If this is negative, translate atoms up so cell starts at z=0
-                lv2_n = n_layers * lattice_vector_sizes[2]
-                BX_bond_length_z = 0.5 * lattice_vector_sizes[2]
-                penet_z = penet * BX_bond_length_z
-                bottom_spacer_bottom_expected = penet_z - mol_len
-                cell_bottom_expected = bottom_spacer_bottom_expected - spacer_distance
-                
-                # If expected cell bottom is negative, translate atoms up
-                if cell_bottom_expected < 0:
-                    trans_z = -cell_bottom_expected
-                    structure.translate([0, 0, trans_z])
-                    positions = structure.get_positions()
-                    min_z = min(pos[2] for pos in positions)
-                    max_z = max(pos[2] for pos in positions)
-                    cell_bottom_actual = 0
-                else:
-                    cell_bottom_actual = cell_bottom_expected
-                
-                # Verify bottom spacer is at expected position (with tolerance)
-                if abs(min_z - bottom_spacer_bottom_expected) > 0.2:
-                    # Adjust based on actual position
-                    cell_bottom_actual = min_z - spacer_distance
-                    if cell_bottom_actual < 0:
-                        trans_z = -cell_bottom_actual
-                        structure.translate([0, 0, trans_z])
-                        positions = structure.get_positions()
-                        min_z = min(pos[2] for pos in positions)
-                        max_z = max(pos[2] for pos in positions)
-                        cell_bottom_actual = 0
-                
-                # Cell top should be right after top spacer
-                top_z = lv2_n - penet_z
-                cell_top_expected = top_z + mol_len
-                
-                # Set cell with 2 Å vacuum below bottom spacer
-                z_length = max_z - cell_bottom_actual
-                # Ensure cell top is correct (minimal buffer if needed)
-                if max_z > cell_top_expected - 0.1:
-                    z_length = max_z - cell_bottom_actual + 0.1
+            # For monolayer, use original logic
+            if min_z < -0.1:  # Small tolerance for floating point
+                # Translate all atoms up so minimum z is at least 1.0 (buffer)
+                trans_z = -min_z + 1.0
+                structure.translate([0, 0, trans_z])
+                # Recalculate after translation
+                positions = structure.get_positions()
+                max_z = max(pos[2] for pos in positions) if len(positions) > 0 else max_z
+                # Adjust z_length to accommodate the actual range plus buffer
+                z_length = max_z - min_z + 2.0  # Add 1.0 buffer on each side
                 structure.cell = [cell_a, cell_b, z_length, 90, 90, 90]
-            else:
-                # For other cases, use original logic
-                if min_z < -0.1:  # Small tolerance for floating point
-                    # Translate all atoms up so minimum z is at least 1.0 (buffer)
-                    trans_z = -min_z + 1.0
-                    structure.translate([0, 0, trans_z])
-                    # Recalculate after translation
-                    positions = structure.get_positions()
-                    max_z = max(pos[2] for pos in positions) if len(positions) > 0 else max_z
-                    # Adjust z_length to accommodate the actual range plus buffer
-                    z_length = max_z - min_z + 2.0  # Add 1.0 buffer on each side
-                    structure.cell = [cell_a, cell_b, z_length, 90, 90, 90]
-                elif max_z > z_length - 0.1:
-                    # Atoms extend above cell, increase cell size
-                    z_length = max_z + 1.0  # Add 1.0 buffer at top
-                    structure.cell = [cell_a, cell_b, z_length, 90, 90, 90]
+            elif max_z > z_length - 0.1:
+                # Atoms extend above cell, increase cell size
+                z_length = max_z + 1.0  # Add 1.0 buffer at top
+                structure.cell = [cell_a, cell_b, z_length, 90, 90, 90]
     
     # For DJ, cell is already set above, but ensure pbc is set
     if structure_type == 'dj':
