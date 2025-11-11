@@ -11,9 +11,9 @@ Complete guide to creating perovskite structures from simple bulk to complex mix
 3. [Bulk with Supercells](#bulk-with-supercells)
 4. [Double Perovskites](#double-perovskites)
 5. [Pattern-Based Mixed Compositions](#pattern-based-mixed-compositions)
-6. [2D Perovskites - Ruddlesden-Popper (RP)](#2d-perovskites---ruddlesden-popper-rp)
-7. [2D Perovskites - Dion-Jacobson (DJ)](#2d-perovskites---dion-jacobson-dj)
-8. [2D Perovskites - Monolayer](#2d-perovskites---monolayer)
+6. [2D Perovskites - Monolayer](#2d-perovskites---monolayer)
+7. [2D Perovskites - Ruddlesden-Popper (RP)](#2d-perovskites---ruddlesden-popper-rp)
+8. [2D Perovskites - Dion-Jacobson (DJ)](#2d-perovskites---dion-jacobson-dj)
 9. [Spacer Molecules](#spacer-molecules)
 10. [Complete Parameter Reference](#complete-parameter-reference)
 11. [Pattern-Based Mixing Guide](#pattern-based-mixing-guide)
@@ -36,14 +36,15 @@ pip install ase numpy rdkit
 from q2D_Materials.core.creator import q2D_creator
 
 # Initialize creator with composition
-q2d = q2D_creator(B='Pb', X='I', A='MA', name='MAPbI3')
+q2d = q2D_creator(B='Pb', X='I', A='MA')
 ```
 
 The `q2D_creator` class requires:
 - `B`: B-site cation (e.g., 'Pb', 'Sn', 'Ge')
 - `X`: X-site anion (e.g., 'I', 'Br', 'Cl')
 - `A`: A-site cation (e.g., 'Cs', 'MA', 'FA')
-- `name`: Optional identifier for the structure
+
+These are the default values used when creating structures, but can be overridden with pattern-based mixing.
 
 ## Simple Bulk Perovskites
 
@@ -54,7 +55,7 @@ The simplest bulk perovskite structure:
 ```python
 from q2D_Materials.core.creator import q2D_creator
 
-q2d = q2D_creator(B='Pb', X='I', A='MA', name='MAPbI3')
+q2d = q2D_creator(B='Pb', X='I', A='MA')
 
 # Create single unit cell
 bulk = q2d.create_perovskite('bulk', supercell_size=(1, 1, 1))
@@ -168,6 +169,88 @@ from ase.io import write
 write('mixed_perovskite.vasp', mixed_all)
 ```
 
+## 2D Perovskites - Monolayer
+
+Single-layer 2D structures with vacuum. Monolayers support **flexible attachment options**: spacers can be attached to the top, bottom, or both sides of the inorganic layer.
+
+### Simple Monolayer
+
+```python
+monolayer = q2d.create_perovskite(
+    'monolayer',
+    spacer_molecule='[NH3+]CCCCC[NH3+]',  # Divalent spacer
+    supercell=[1, 1, 1]
+)
+from ase.io import write
+write('MAPbI3_monolayer.vasp', monolayer)
+```
+
+### Monolayer with Flexible Attachment
+
+```python
+# Monolayer with top attachment only
+monolayer_top = q2d.create_perovskite(
+    'monolayer',
+    spacer_molecule='[NH3+]CCCCC[NH3+]',
+    supercell=[1, 1, 1],
+    vacuum=12,
+    attachment_end='top'  # Attach only to top
+)
+
+# Monolayer with bottom attachment only
+monolayer_bottom = q2d.create_perovskite(
+    'monolayer',
+    spacer_molecule='[NH3+]CCCCC[NH3+]',
+    supercell=[1, 1, 1],
+    vacuum=12,
+    attachment_end='bottom'  # Attach only to bottom
+)
+
+# Monolayer with both attachments (default)
+monolayer_both = q2d.create_perovskite(
+    'monolayer',
+    spacer_molecule='[NH3+]CCCCC[NH3+]',
+    supercell=[1, 1, 1],
+    vacuum=12,
+    attachment_end='both'  # Attach to both top and bottom (default)
+)
+```
+
+### Monolayer with All Parameters
+
+```python
+monolayer = q2d.create_perovskite(
+    structure_type='monolayer',
+    
+    # Required parameters
+    spacer_molecule='CN1C=NC2=C1C(=O)N(C(=O)N2C)CC[NH3+]',
+    supercell=[1, 1, 1],
+    
+    # Monolayer-specific parameters
+    vacuum=12,  # Vacuum thickness in Angstrom
+    attachment_end='both',  # 'top', 'bottom', or 'both' (default: 'both')
+    
+    # Optional parameters
+    penet=0.3,
+    BX_dist=None,
+)
+```
+
+### Monolayer with Atomic Spacers
+
+Monolayer structures can use atomic cations (like Cs, K, Rb) as spacers instead of molecules:
+
+```python
+# Monolayer structure with Cs as spacer
+monolayer_cs = q2d.create_perovskite(
+    'monolayer',
+    spacer_molecule='Cs',  # Atomic cation
+    supercell=[1, 1, 1],
+    vacuum=12,
+    attachment_end='both'  # Can be 'top', 'bottom', or 'both'
+)
+```
+
 ## 2D Perovskites - Ruddlesden-Popper (RP)
 
 RP structures are **true two-layer structures** with organic spacers between inorganic layers. The top layer is rotated 90° around the Z-axis (in the XY plane) and shifted relative to the bottom layer, creating the characteristic Ruddlesden-Popper phase.
@@ -213,7 +296,7 @@ The RP structure is created by:
 1. Creating a bottom layer with spacers attached to both top and bottom
 2. Copying the bottom layer to create the top layer
 3. **Rotating the top layer 90° around the Z-axis** (in the XY plane)
-4. Shifting the top layer: z by `z_length/2`, x by `0.5×lattice_a`, y by `0.5×lattice_b`
+4. Shifting the top layer vertically by `z_length/2`
 5. Combining both layers
 
 The `interlayer_penet` parameter controls the interlocking of Ap cations between layers (as a fraction of molecule length).
@@ -231,6 +314,41 @@ rp_mixed = q2d.create_perovskite(
     spacer_distance=2.0,
     penet=0.3
 )
+```
+
+### RP with Atomic Spacers
+
+RP structures can use atomic cations (like Cs, K, Rb) as spacers instead of molecules. Atomic spacers are positioned at the BX bond height with proper inter-slab separation based on ionic radius:
+
+```python
+# RP structure with Cs as spacer
+rp_cs = q2d.create_perovskite(
+    'RP',
+    spacer_molecule='Cs',  # Atomic cation
+    supercell=[1, 1, 2],
+    spacer_distance=2.0
+)
+from ase.io import write
+write('MAPbI3_RP_Cs.vasp', rp_cs)
+```
+
+**Atomic Spacer Positioning:**
+- Atomic spacers are positioned at the BX bond height
+- Bottom spacers: `z = 0 + 0.5 × ionic_radius` (half ionic radius above bottom)
+- Top spacers: `z = n × lv2 - 0.5 × ionic_radius` (half ionic radius below top)
+- Inter-slab separation: `2 × ionic_radius` (provides proper spacing between layers)
+
+**Example with different atomic spacers:**
+
+```python
+# RP with Cs (ionic radius: 1.88 Å)
+rp_cs = q2d.create_perovskite('RP', spacer_molecule='Cs', supercell=[1, 1, 2])
+
+# RP with Rb (ionic radius: 1.72 Å)
+rp_rb = q2d.create_perovskite('RP', spacer_molecule='Rb', supercell=[1, 1, 2])
+
+# RP with K (ionic radius: 1.64 Å)
+rp_k = q2d.create_perovskite('RP', spacer_molecule='K', supercell=[1, 1, 2])
 ```
 
 ## 2D Perovskites - Dion-Jacobson (DJ)
@@ -294,73 +412,6 @@ dj_rotated = q2d.create_perovskite(
 )
 ```
 
-## 2D Perovskites - Monolayer
-
-Single-layer 2D structures with vacuum. Monolayers support **flexible attachment options**: spacers can be attached to the top, bottom, or both sides of the inorganic layer.
-
-### Simple Monolayer
-
-```python
-monolayer = q2d.create_perovskite(
-    'monolayer',
-    spacer_molecule='CN1C=NC2=C1C(=O)N(C(=O)N2C)CC[NH3+]',  # Caffeine-based
-    supercell=[1, 1, 1]
-)
-from ase.io import write
-write('MAPbI3_monolayer.vasp', monolayer)
-```
-
-### Monolayer with Flexible Attachment
-
-```python
-# Monolayer with top attachment only
-monolayer_top = q2d.create_perovskite(
-    'monolayer',
-    spacer_molecule='[NH3+]CCCCC[NH3+]',
-    supercell=[1, 1, 1],
-    vacuum=12,
-    attachment_end='top'  # Attach only to top
-)
-
-# Monolayer with bottom attachment only
-monolayer_bottom = q2d.create_perovskite(
-    'monolayer',
-    spacer_molecule='[NH3+]CCCCC[NH3+]',
-    supercell=[1, 1, 1],
-    vacuum=12,
-    attachment_end='bottom'  # Attach only to bottom
-)
-
-# Monolayer with both attachments (default)
-monolayer_both = q2d.create_perovskite(
-    'monolayer',
-    spacer_molecule='[NH3+]CCCCC[NH3+]',
-    supercell=[1, 1, 1],
-    vacuum=12,
-    attachment_end='both'  # Attach to both top and bottom (default)
-)
-```
-
-### Monolayer with All Parameters
-
-```python
-monolayer = q2d.create_perovskite(
-    structure_type='monolayer',
-    
-    # Required parameters
-    spacer_molecule='CN1C=NC2=C1C(=O)N(C(=O)N2C)CC[NH3+]',
-    supercell=[1, 1, 1],
-    
-    # Monolayer-specific parameters
-    vacuum=12,  # Vacuum thickness in Angstrom
-    attachment_end='both',  # 'top', 'bottom', or 'both' (default: 'both')
-    
-    # Optional parameters
-    penet=0.3,
-    BX_dist=None,
-)
-```
-
 ## Spacer Molecules
 
 Spacer molecules can be provided in multiple formats:
@@ -403,6 +454,23 @@ dj = q2d.create_perovskite(
 )
 ```
 
+### Atomic Cations
+
+```python
+# Using atomic cations as spacers (for RP and monolayer)
+rp_cs = q2d.create_perovskite(
+    'RP',
+    spacer_molecule='Cs',  # Atomic cation
+    supercell=[1, 1, 2]
+)
+
+monolayer_cs = q2d.create_perovskite(
+    'monolayer',
+    spacer_molecule='Cs',  # Atomic cation
+    supercell=[1, 1, 1]
+)
+```
+
 ### Pattern-Based Mixed Spacers
 
 For supercells with multiple spacer positions, you can provide a list:
@@ -439,7 +507,7 @@ mixed_spacers = q2d.create_perovskite(
 | Parameter | Type | Description | Default |
 |-----------|------|-------------|---------|
 | `structure_type` | str | `'RP'`, `'DJ'`, or `'monolayer'` | Required |
-| `spacer_molecule` | str/Atoms/list | **Required**. Spacer molecule(s) as SMILES, XYZ file, or Atoms object. | Required |
+| `spacer_molecule` | str/Atoms/list | **Required**. Spacer molecule(s) as SMILES, XYZ file, Atoms object, or atomic cation (for RP/monolayer). | Required |
 | `supercell` | list | **Required**. `[nx, ny, n_layers]` where `n_layers` is number of octahedral layers. | Required |
 | `A_ions` | str/list | A-site cation(s) pattern. | Uses `A` from initialization |
 | `B_ions` | str/list | B-site cation(s) pattern. | Uses `B` from initialization |
@@ -542,7 +610,7 @@ dj_mixed = q2d.create_perovskite('DJ',
 ### Example 1: Complex Mixed Bulk
 
 ```python
-q2d = q2D_creator(B='Pb', X='I', A='MA', name='ComplexBulk')
+q2d = q2D_creator(B='Pb', X='I', A='MA')
 
 complex_bulk = q2d.create_perovskite(
     'bulk',
@@ -556,22 +624,21 @@ from ase.io import write
 write('complex_bulk.vasp', complex_bulk)
 ```
 
-### Example 2: DJ with Mixed Spacers
+### Example 2: RP with Atomic Spacers and Mixed Composition
 
 ```python
-# Create different spacer molecules
-spacer1 = '[NH3+]CCCCC[NH3+]'  # Pentanediammonium
-spacer2 = '[NH3+]CCCCCC[NH3+]'  # Hexanediammonium
-
-dj_mixed_spacers = q2d.create_perovskite(
-    'DJ',
-    spacer_molecule=[spacer1, spacer2],  # Alternating spacers
+# RP structure with Cs atomic spacer and mixed A/B/X sites
+rp_complex = q2d.create_perovskite(
+    'RP',
+    spacer_molecule='Cs',  # Atomic cation
     supercell=[2, 2, 2],
-    penet=0.3,
-    Ap_Rx=10.0  # Rotate spacers
+    A_ions=['Cs', 'MA'],
+    B_ions=['Pb', 'Sn'],
+    X_ions=['Br', 'I'],
+    spacer_distance=2.0
 )
 from ase.io import write
-write('DJ_mixed_spacers.vasp', dj_mixed_spacers)
+write('RP_Cs_mixed.vasp', rp_complex)
 ```
 
 ### Example 3: RP with All Features
@@ -672,4 +739,3 @@ write_vasp('POSCAR', bulk, sort=True, direct=True)
 ### Getting Help
 
 For more information, see the main [README.md](../README.md) or check the source code documentation.
-
