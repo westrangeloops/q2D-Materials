@@ -21,8 +21,6 @@ class q2D_creator:
         X-site anion symbol (e.g., 'I', 'Br', 'Cl')
     A : str
         A-site cation symbol (e.g., 'Cs', 'MA', 'FA')
-    name : str, optional
-        Name identifier for the structure (default: 'structure')
         
     Notes
     -----
@@ -30,12 +28,11 @@ class q2D_creator:
     molecule when calling create_perovskite() via the `spacer_molecule` parameter.
     """
     
-    def __init__(self, B, X, A, name='structure'):
+    def __init__(self, B, X, A):
         # Core composition - essential for all structures
         self.B = B
         self.X = X
         self.A = A
-        self.name = name
         
         # Get A-site cation object
         from q2D_Materials.utils.common_a_sites import get_a_site_object
@@ -46,12 +43,13 @@ class q2D_creator:
     
     def _load_spacer_molecule(self, spacer_input):
         """
-        Load spacer molecule(s) from XYZ file, SMILES string, or ASE Atoms object.
+        Load spacer molecule(s) from XYZ file, SMILES string, atomic cation, or ASE Atoms object.
         
         Parameters
         ----------
         spacer_input : str, ase.Atoms, or list
             Either:
+            - Atomic cation string (e.g., 'Cs', 'K', 'Rb') - for RP structures
             - Path to XYZ file containing the organic molecule
             - SMILES string representation (e.g., 'CN' for methylamine)
             - ASE Atoms object directly
@@ -60,7 +58,7 @@ class q2D_creator:
         Returns
         -------
         ase.Atoms or list[ase.Atoms]
-            Spacer molecule(s) (alignment will be done by the builder functions)
+            Spacer molecule(s) or atomic cation(s) (alignment will be done by the builder functions)
         """
         # Handle list of spacers
         if isinstance(spacer_input, list):
@@ -70,6 +68,12 @@ class q2D_creator:
         if isinstance(spacer_input, Atoms):
             return spacer_input.copy()
         else:
+            # Check if it's an atomic cation (single letter or common atomic symbols)
+            atomic_cations = ['Cs', 'K', 'Rb', 'Na', 'Li', 'Ca', 'Sr', 'Ba', 'Mg']
+            if spacer_input in atomic_cations or (len(spacer_input) <= 2 and spacer_input[0].isupper() and not any(c in spacer_input for c in ['(', ')', '[', ']', '=', '#', '@'])):
+                # Atomic cation - create single atom Atoms object
+                return Atoms(spacer_input)
+            
             # Detect if input is SMILES string or file path
             is_smiles = self._is_smiles_string(spacer_input)
             
@@ -128,7 +132,10 @@ class q2D_creator:
             'bulk', 'RP', 'DJ', or 'monolayer'
         **kwargs : dict
             Structure-specific parameters:
-            - spacer_molecule (str/Atoms/list): Required for 2D. XYZ path, SMILES, Atoms, or list for patterns
+            - spacer_molecule (str/Atoms/list): Required for 2D. Can be:
+              - Atomic cation string (e.g., 'Cs', 'K', 'Rb') for all 2D structures
+              - Molecule as XYZ path, SMILES, or Atoms object
+              - List for pattern-based mixed spacers
             - supercell (list): Required for 2D. [nx, ny, n_layers] where n_layers is the layer thickness
             - Bp (str): Second B cation for double perovskites
             - BX_dist (float): B-X distance (auto-calculated if None)
@@ -278,6 +285,26 @@ class q2D_creator:
             A_ions = kwargs.get('A_ions', self.A_cation)
             B_ions = kwargs.get('B_ions', self.B)
             X_ions = kwargs.get('X_ions', self.X)
+            
+            # Recalculate BX_dist if pattern-based mixing is used and BX_dist not explicitly provided
+            # This ensures BX_dist matches the actual composition being used
+            if kwargs.get('BX_dist') is None:
+                # Check if pattern-based mixing is being used
+                is_pattern_mixing = (isinstance(A_ions, list)) or \
+                                  (isinstance(B_ions, list)) or \
+                                  (isinstance(X_ions, list))
+                
+                if is_pattern_mixing:
+                    # Use first ions from patterns for BX_dist calculation
+                    B_first = B_ions[0] if isinstance(B_ions, list) else B_ions
+                    X_first = X_ions[0] if isinstance(X_ions, list) else X_ions
+                    try:
+                        from q2D_Materials.utils.common_a_sites import calculate_BX_distance
+                        BX_dist = calculate_BX_distance(B_first, X_first)
+                        create_kwargs['BX_dist'] = BX_dist
+                    except:
+                        # If calculation fails, keep the original BX_dist
+                        pass
             
             # Prepare 2D-specific parameters
             # attachment_end and wrap are automatically set based on structure_type

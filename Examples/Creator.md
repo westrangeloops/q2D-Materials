@@ -270,6 +270,7 @@ write('MAPbI3_RP_n2.vasp', rp)
 ### RP with All Parameters
 
 ```python
+# Simple RP with default composition (uses initialization values)
 rp = q2d.create_perovskite(
     structure_type='RP',
     
@@ -283,12 +284,11 @@ rp = q2d.create_perovskite(
     
     # Optional parameters
     penet=0.3,  # Spacer penetration into layer (fraction of BX bond)
-    A_ions=['MA'],  # Pattern-based A-sites
-    B_ions=['Pb'],  # Pattern-based B-sites
-    X_ions=['I'],  # Pattern-based X-sites
-    BX_dist=None  # Auto-calculated if None
+    BX_dist=None  # Auto-calculated if None (uses Pb-I from initialization)
 )
 ```
+
+**Note:** If you don't specify `A_ions`, `B_ions`, or `X_ions`, the structure uses the default values from initialization (`B='Pb'`, `X='I'`, `A='MA'`). Only provide pattern lists if you want mixed compositions.
 
 ### RP Structure Details
 
@@ -303,18 +303,23 @@ The `interlayer_penet` parameter controls the interlocking of Ap cations between
 
 ### RP with Mixed Compositions
 
+When using pattern-based mixing, `BX_dist` is automatically recalculated from the first ions in your pattern:
+
 ```python
 rp_mixed = q2d.create_perovskite(
     'RP',
     spacer_molecule='[NH3+]CCCCC=O',
     supercell=[2, 2, 2],
-    A_ions=['Cs', 'MA', 'FA', 'MA'],
-    B_ions=['Pb', 'Sn'],
-    X_ions=['Br', 'I'],
+    A_ions=['Cs', 'MA', 'FA', 'MA'],  # Pattern-based mixing
+    B_ions=['Pb', 'Sn'],  # Pattern-based mixing
+    X_ions=['Br', 'I'],  # Pattern-based mixing
     spacer_distance=2.0,
-    penet=0.3
+    penet=0.3,
+    BX_dist=None  # Auto-calculated from first ions (Pb-Br in this case)
 )
 ```
+
+**Important:** When you provide `A_ions`, `B_ions`, or `X_ions` as lists, the code treats them as patterns for mixed compositions. If you want to use the default composition from initialization, simply don't provide these parameters.
 
 ### RP with Atomic Spacers
 
