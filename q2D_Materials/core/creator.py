@@ -5,6 +5,8 @@ from ..utils.molecule_builder import smiles_to_ase_atoms
 from ..utils.perovskite_builder import (
     create_perovskite, create_bulk_perovskite, create_2d_perovskite, auto_calculate_BX_distance
 )
+from ..utils.recomender import get_recommendations
+from .structure import q2DStructure
 
 class q2D_creator:
     """
@@ -12,34 +14,17 @@ class q2D_creator:
     
     This class provides comprehensive perovskite building capabilities for creating
     various 2D and 3D perovskite structures.
-    
-    Parameters
-    ----------
-    B : str
-        B-site cation symbol (e.g., 'Pb', 'Sn')
-    X : str  
-        X-site anion symbol (e.g., 'I', 'Br', 'Cl')
-    A : str
-        A-site cation symbol (e.g., 'Cs', 'MA', 'FA')
         
     Notes
     -----
-    For 2D structures (RP, DJ, monolayer), you must provide the organic spacer
-    molecule when calling create_perovskite() via the `spacer_molecule` parameter.
+    All composition parameters (A_ions, B_ions, X_ions) must be provided when calling
+    create_perovskite(). For 2D structures (RP, DJ, monolayer), you must also provide
+    the organic spacer molecule via the `spacer_molecule` parameter.
     """
     
-    def __init__(self, B, X, A):
-        # Core composition - essential for all structures
-        self.B = B
-        self.X = X
-        self.A = A
-        
-        # Get A-site cation object
-        from q2D_Materials.utils.common_a_sites import get_a_site_object
-        self.A_cation = get_a_site_object(A)
-        
-        # Calculate optimal B-X distance from ionic radii
-        self.optimal_BX_dist = auto_calculate_BX_distance(self.B, self.X)
+    def __init__(self):
+        """Initialize an empty q2D_creator instance."""
+        pass
     
     def _load_spacer_molecule(self, spacer_input):
         """
@@ -146,10 +131,10 @@ class q2D_creator:
             - attachment_end (str): For monolayer only - 'top', 'bottom', or 'both' (default: 'both')
             - Ap_Rx, Ap_Ry, Ap_Rz (float): Rotation angles in degrees
             
-            For pattern-based mixed compositions (all structures):
-            - A_ions (str/list): A-site cation(s). If list, assigned sequentially to positions.
-            - B_ions (str/list): B-site cation(s). If list, assigned sequentially to positions.
-            - X_ions (str/list): X-site anion(s). If list, assigned sequentially to positions.
+            Required composition parameters (all structures):
+            - A_ions (str/list): A-site cation(s). Required. If list, assigned sequentially to positions.
+            - B_ions (str/list): B-site cation(s). Required. If list, assigned sequentially to positions.
+            - X_ions (str/list): X-site anion(s). Required. If list, assigned sequentially to positions.
             - supercell_size (tuple): For bulk only. (nx, ny, nz) supercell size.
             
             Note: For pattern-based assignment, provide lists of ions that will be cycled through
@@ -157,10 +142,12 @@ class q2D_creator:
             
         Returns
         -------
-        ase.Atoms
-            The created perovskite structure. Use ASE's write functions to save to file.
+        q2DStructure
+            The created perovskite structure as a q2DStructure object. This wraps
+            ase.Atoms and preserves creation metadata. Use ASE's write functions to save to file.
             Example: from ase.io import write; write('structure.vasp', structure)
             For VASP with sorting: from ase.io.vasp import write_vasp; write_vasp('POSCAR', structure, sort=True, direct=True)
+            Access underlying Atoms: structure.atoms
         """
         # Normalize structure type
         structure_type = structure_type.upper()
@@ -196,10 +183,29 @@ class q2D_creator:
             
         Returns
         -------
-        Atoms
-            The created perovskite structure
+        q2DStructure
+            The created perovskite structure as a q2DStructure object
         """
-        BX_dist = kwargs.get('BX_dist') or self.optimal_BX_dist
+        # Require A_ions, B_ions, X_ions for all structures
+        A_ions = kwargs.get('A_ions')
+        B_ions = kwargs.get('B_ions')
+        X_ions = kwargs.get('X_ions')
+        
+        if A_ions is None:
+            raise ValueError("A_ions is required. Provide as string (e.g., 'MA') or list for pattern-based mixing.")
+        if B_ions is None:
+            raise ValueError("B_ions is required. Provide as string (e.g., 'Pb') or list for pattern-based mixing.")
+        if X_ions is None:
+            raise ValueError("X_ions is required. Provide as string (e.g., 'I') or list for pattern-based mixing.")
+        
+        # Calculate BX_dist on-demand from provided B/X ions
+        BX_dist = kwargs.get('BX_dist')
+        if BX_dist is None:
+            # Get first ions (for pattern-based, use first; for single, use the value)
+            B_first = B_ions[0] if isinstance(B_ions, list) else B_ions
+            X_first = X_ions[0] if isinstance(X_ions, list) else X_ions
+            BX_dist = auto_calculate_BX_distance(B_first, X_first)
+        
         Bp = kwargs.get('Bp')
         double = (Bp is not None)
         
@@ -210,17 +216,20 @@ class q2D_creator:
             'Bp': Bp
         }
         
+        # Store metadata for q2DStructure
+        metadata = {
+            'penet': kwargs.get('penet', 0.3),
+            'double': double,
+            'Bp': Bp
+        }
+        
         if structure_type == 'bulk':
-            # Check if pattern-based mixed composition is requested
-            A_ions = kwargs.get('A_ions')
-            B_ions = kwargs.get('B_ions')
-            X_ions = kwargs.get('X_ions')
             supercell_size = kwargs.get('supercell_size')
             
             # Detect if mixed (any list provided)
-            is_mixed = (A_ions is not None and isinstance(A_ions, list)) or \
-                      (B_ions is not None and isinstance(B_ions, list)) or \
-                      (X_ions is not None and isinstance(X_ions, list))
+            is_mixed = isinstance(A_ions, list) or \
+                      isinstance(B_ions, list) or \
+                      isinstance(X_ions, list)
             
             if is_mixed:
                 # Pattern-based mixed bulk perovskite
@@ -231,46 +240,31 @@ class q2D_creator:
                         "Example: supercell_size=(2, 2, 2) for 2x2x2 supercell.\n"
                         "The supercell must be large enough to accommodate your ion patterns."
                     )
-                
-                # Use defaults from constructor if not specified
-                if A_ions is None:
-                    A_ions = self.A
-                if B_ions is None:
-                    B_ions = self.B
-                if X_ions is None:
-                    X_ions = self.X
-                
-                # Calculate BX_dist for mixed if needed
-                if BX_dist is None or BX_dist == self.optimal_BX_dist:
-                    # Use first ion for BX distance calculation
-                    B_first = B_ions[0] if isinstance(B_ions, list) else B_ions
-                    X_first = X_ions[0] if isinstance(X_ions, list) else X_ions
-                    try:
-                        from q2D_Materials.utils.common_a_sites import calculate_BX_distance
-                        BX_dist = calculate_BX_distance(B_first, X_first)
-                        create_kwargs['BX_dist'] = BX_dist
-                    except:
-                        pass
-                
-                create_kwargs.update({
-                    'A': A_ions,
-                    'B': B_ions,
-                    'X': X_ions,
-                    'supercell_size': supercell_size
-                })
             else:
                 # Single bulk perovskite (uniform composition)
                 if supercell_size is None:
                     supercell_size = (1, 1, 1)  # Default to single unit cell
-                
-                create_kwargs.update({
-                    'A': self.A_cation,
-                    'B': self.B,
-                    'X': self.X,
-                    'supercell_size': supercell_size
-                })
             
-            return create_perovskite(structure_type='bulk', **create_kwargs)
+            create_kwargs.update({
+                'A': A_ions,
+                'B': B_ions,
+                'X': X_ions,
+                'supercell_size': supercell_size
+            })
+            
+            atoms = create_perovskite(structure_type='bulk', **create_kwargs)
+            
+            # Wrap in q2DStructure with metadata
+            return q2DStructure(
+                atoms,
+                structure_type='bulk',
+                BX_dist=BX_dist,
+                A_ions=A_ions,
+                B_ions=B_ions,
+                X_ions=X_ions,
+                supercell_size=supercell_size,
+                **metadata
+            )
         else:
             # 2D structures require spacer molecule
             if 'spacer_molecule' not in kwargs:
@@ -280,41 +274,6 @@ class q2D_creator:
             supercell = kwargs.get('supercell')
             if supercell is None:
                 raise ValueError(f"supercell is required for {structure_type} structures (e.g., supercell=[1, 1, 1])")
-            
-            # Get A/B/X ion patterns - always use unified pattern-based approach
-            # Whether provided as lists or single values, they're handled the same way
-            A_ions = kwargs.get('A_ions')
-            B_ions = kwargs.get('B_ions')
-            X_ions = kwargs.get('X_ions')
-            
-            # If not provided, use defaults (but keep as single values, not lists)
-            # The unified core will handle normalization consistently
-            if A_ions is None:
-                A_ions = self.A  # Use string, not self.A_cation - let unified core normalize
-            if B_ions is None:
-                B_ions = self.B
-            if X_ions is None:
-                X_ions = self.X
-            
-            # Recalculate BX_dist if pattern-based mixing is used and BX_dist not explicitly provided
-            # This ensures BX_dist matches the actual composition being used
-            if kwargs.get('BX_dist') is None:
-                # Check if pattern-based mixing is being used
-                is_pattern_mixing = (isinstance(A_ions, list)) or \
-                                  (isinstance(B_ions, list)) or \
-                                  (isinstance(X_ions, list))
-                
-                if is_pattern_mixing:
-                    # Use first ions from patterns for BX_dist calculation
-                    B_first = B_ions[0] if isinstance(B_ions, list) else B_ions
-                    X_first = X_ions[0] if isinstance(X_ions, list) else X_ions
-                    try:
-                        from q2D_Materials.utils.common_a_sites import calculate_BX_distance
-                        BX_dist = calculate_BX_distance(B_first, X_first)
-                        create_kwargs['BX_dist'] = BX_dist
-                    except:
-                        # If calculation fails, keep the original BX_dist
-                        pass
             
             # Prepare 2D-specific parameters
             # attachment_end and wrap are automatically set based on structure_type
@@ -336,15 +295,96 @@ class q2D_creator:
                 create_kwargs['spacer_distance'] = kwargs.get('spacer_distance', 2.0)
                 create_kwargs['interlayer_penet'] = kwargs.get('interlayer_penet', 0.0)
                 create_kwargs['attachment_end'] = 'both'  # RP always uses 'both'
+                metadata['spacer_distance'] = kwargs.get('spacer_distance', 2.0)
+                metadata['interlayer_penet'] = kwargs.get('interlayer_penet', 0.0)
             elif structure_type == 'dj':
                 create_kwargs['attachment_end'] = 'top'  # DJ always uses 'top'
             elif structure_type == 'monolayer':
                 create_kwargs['vacuum'] = kwargs.get('vacuum', 12)
+                metadata['vacuum'] = kwargs.get('vacuum', 12)
                 # Monolayer supports flexible attachment - use user-provided or default to 'both'
                 if 'attachment_end' in kwargs:
                     create_kwargs['attachment_end'] = kwargs['attachment_end']
+                    metadata['attachment_end'] = kwargs['attachment_end']
                 else:
                     create_kwargs['attachment_end'] = 'both'  # Default for monolayer
+                    metadata['attachment_end'] = 'both'
             
-            return create_perovskite(structure_type=structure_type, **create_kwargs)
+            # Store rotation angles if provided
+            if kwargs.get('Ap_Rx') is not None:
+                metadata['Ap_Rx'] = kwargs.get('Ap_Rx')
+            if kwargs.get('Ap_Ry') is not None:
+                metadata['Ap_Ry'] = kwargs.get('Ap_Ry')
+            if kwargs.get('Ap_Rz') is not None:
+                metadata['Ap_Rz'] = kwargs.get('Ap_Rz')
+            
+            atoms = create_perovskite(structure_type=structure_type, **create_kwargs)
+            
+            # Wrap in q2DStructure with metadata
+            return q2DStructure(
+                atoms,
+                structure_type=structure_type,
+                BX_dist=BX_dist,
+                A_ions=A_ions,
+                B_ions=B_ions,
+                X_ions=X_ions,
+                supercell_size=supercell,
+                spacer_molecule=kwargs['spacer_molecule'],  # Store original input, not processed
+                **metadata
+            )
+    
+    def recommend(self, X=None, B=None, spacer=None, top_n=10, min_occurrences=1):
+        """
+        Recommend compatible ions for perovskite structures based on database occurrence.
+        
+        Given an X-site anion, B-site cation, or spacer molecule, this method recommends
+        commonly used combinations based on occurrence frequency in the perovskite database.
+        
+        Parameters
+        ----------
+        X : str, optional
+            X-site anion abbreviation (e.g., 'Cl', 'I', 'Br')
+        B : str, optional
+            B-site cation abbreviation (e.g., 'Pb', 'Sn')
+        spacer : str, optional
+            Spacer molecule abbreviation (e.g., 'PEA', 'BA')
+            Note: Spacers are A-site ions with >10 atoms in their molecular formula
+        top_n : int, default=10
+            Number of recommendations to return per category
+        min_occurrences : float, default=1
+            Minimum occurrence count in database to include in recommendations
+            
+        Returns
+        -------
+        dict
+            Dictionary with the following keys:
+            - 'A': List of recommended A-site cations (dicts with abbrev, name, occurrences, etc.)
+            - 'B': List of recommended B-site cations
+            - 'X': List of recommended X-site anions
+            - 'spacer': List of recommended spacers (A-site ions with >10 atoms)
+            
+            Each recommendation entry contains:
+            - 'abbreviation': Ion abbreviation
+            - 'common_name': Human-readable name
+            - 'occurrences': Number of occurrences in database
+            - 'molecular_formula': Molecular formula string
+            - 'smile': SMILES string (if available)
+            - 'ion_type': Ion type ('A', 'B', or 'X')
+        
+        Examples
+        --------
+        >>> creator = q2D_creator()
+        >>> # Get recommendations based on X = Cl
+        >>> recs = creator.recommend(X='Cl', top_n=5)
+        >>> print(recs['B'])  # Top 5 B-site cations used with Cl
+        >>> print(recs['A'])  # Top 5 A-site cations used with Cl
+        >>> print(recs['spacer'])  # Top 5 spacers used with Cl
+        
+        >>> # Get recommendations based on B = Pb
+        >>> recs = creator.recommend(B='Pb', top_n=10)
+        
+        >>> # Get recommendations based on spacer = PEA
+        >>> recs = creator.recommend(spacer='PEA')
+        """
+        return get_recommendations(X=X, B=B, spacer=spacer, top_n=top_n, min_occurrences=min_occurrences)
     

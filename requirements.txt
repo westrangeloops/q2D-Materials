@@ -29,3 +29,4 @@ jupyter>=1.0.0
 
 # Utilities
 requests>=2.25.0
+openpyxl>=3.0.0  # For reading Excel files

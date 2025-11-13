@@ -1,0 +1,343 @@
+Index,perovskite_ion_type,abbreviation,alternative_abbreviations,molecular_formula,smile,common_name,iupac_name,cas_number,source_compound_iupac_name,source_compound_smile,source_compound_cas_number,number_of_occurances_in_the_perovskite_database,source
+1,A,Cs,,Cs+,[Cs+] ,Cesium ion,Cesium(1+),18459-37-5,Cesium,[Cs],7440-46-2,7985.0,Perovskite database
+2,A,K,,K+,[K+],Patassium ion,Potassium(+1),24203-36-9,Potassium,[K],7440-09-7,36.0,Perovskite database
+3,A,La,,La+,[La+],Lanthanum ion,Lanthanum ion,,Lanthanum,[La],7439-91-0,6.0,Perovskite database
+4,A,Li,,Li+,[Li+],Lithium ion,Lithium(+1),17341-24-1,Lithium,[Li],7439-93-2,4.0,Perovskite database
+5,A,Na,,Na+,[Na+],Sodium ion,Sodium(+1),17341-25-2,Sodium,[Na],7440-23-5,6.0,Perovskite database
+6,A,ThFA,,C5H9N2S+,[NH3+]C(N)c1cccs1,2-thiopheneformamidinium,1-(thiophen-2-yl)methanediamine,,thiophen-2-ylmethanediamine,C1=CSC(=C1)C(N)N,56-12-2,2.0,Perovskite database
+7,A,PyEA,,C7H11N2+,[NH3+]CCC1=CC=NC=C1,4-Pyridine-ethyl ammonium,2-pyridin-4-ylethylazanium,,4-(2-Aminoethyl)pyridine,C1=CN=CC=C1CCN,13258-63-4,6.0,Perovskite database
+8,A,NH4,,H4N+,[NH4+],Ammonium,Azanium,14798-03-9,Amonia,N,7664-41-7,53.0,Perovskite database
+9,A,Rb,,Rb+,[Rb+],Rubidium ion,Rubidium(+1),22537-38-8,Rubidium,[Rb],7440-17-7,,Perovskite database
+10,A,PGA,BYA,C3H6N+,C#CC[NH3+],Propargylammonium,prop-2-ynylazanium,,prop-2-yn-1-amine,C#CCN,2450-71-7,2.0,Perovskite database
+11,A,BYA,,C4H8N+,C#CCC[NH3+],3-butynylamine,but-3-ynylazanium,54930-25-5,but-3-yn-1-amine,C#CCCN,14044-63-4,1.0,Perovskite database
+12,A,GU,,CH6N3+,C(=[NH2+])(N)N,Guanidinium,diaminomethylideneazanium,25215-10-5,guanidine,C(=N)(N)N,113-00-8,108.0,Perovskite database
+13,A,FA,,CH5N2+,C(=[NH2+])N,Formamidinium,aminomethylideneazanium,,methanimidamide,C(=N)N,463-52-5,10871.0,Perovskite database
+14,A,TFEA,"FTA, F3EA",C2H5F3N+,C(C(F)(F)F)[NH3+],"2,2,2-Trifluoroethylamine","2,2,2-trifluoroethylazanium",,"2,2,2-trifluoroethanamine",C(C(F)(F)F)N,753-90-2,4.0,Perovskite database
+15,A,EDA,DAE,C2H10N2+2,C(C[NH3+])[NH3+],Ethylenediammonium,2-azaniumylethylazanium,,"ethane-1,2-diamine",C(CN)N,107-15-3,,Perovskite database
+16,A,PDA,"1.3-Pr(NH3)2, DAP, TN",C3H12N2+2,C(C[NH3+])C[NH3+],"1,3-diaminopropane",3-azaniumylpropylazanium,,"propane-1,3-diamine",C(CN)CN,109-76-2,1.0,Perovskite database
+17,A,PFPEA,F5PEA,C8H7F5N+,C(C[NH3+])C1=C(C(=C(C(=C1F)F)F)F)F,Pentafluorophenethylammonium ,"2-(2,3,4,5,6-pentafluorophenyl)ethylazanium",,"2-(2,3,4,5,6-pentafluorophenyl)ethanamine",C(CN)C1=C(C(=C(C(=C1F)F)F)F)F,1583-76-2,8.0,Perovskite database
+18,A,GABA,,C4H10NO2+,C(CC(=O)O)C[NH3+],Gamma-aminobutyric acid,3-carboxypropylazanium,,4-aminobutanoic acid,C(CC(=O)O)CN,,9.0,Perovskite database
+19,A,BDA,,C4H14N2+2,C(CC[NH3+])C[NH3+],"1,4-butanediammonium",4-azaniumylbutylazanium,,"butane-1,4-diamine",C(CCN)CN,110-60-1,,Perovskite database
+20,A,AVA,5-AVA,C5H12NO2+,C(CC[NH3+])CC(=O)O,5-ammoniumvaleric  acid,4-carboxybutylazanium,,5-aminopentanoic acid,C(CCN)CC(=O)O,660-88-8,57.0,Perovskite database
+21,A,ACA,6-ACA,C6H14NO2+,C(CCC(=O)O)CC[NH3+],6-aminocaproic acid,5-carboxypentylazanium,,6-aminohexanoic acid,C(CCC(=O)O)CCN,60-32-2,1.0,Perovskite database
+22,A,HDA,DAH,C6H18N2+2,C(CCC[NH3+])CC[NH3+],"1,6-diaminohexane",6-azaniumylhexylazanium,,"hexane-1,6-diamine",C(CCCN)CCN,124-09-4,1.0,Perovskite database
+23,A,ODA,DAO,C8H22N2+2,C(CCCC[NH3+])CCC[NH3+],"1,8-Diammoniooctane",8-azaniumyloctylazanium,,"octane-1,8-diamine",C(CCCCN)CCCN,373-44-4,,Perovskite database
+24,A,DAO,ODA,C8H21N2+,C(CCCCN)CCC[NH3+],"1,8-octanediammonium",8-aminooctylazanium,,"octane-1,8-diamine",C(CCCCN)CCCN,373-44-4,2.0,Perovskite database
+25,A,DAH,"HDA, 1-6-HMDA",C6H17N2+,C(CCCN)CC[NH3+],Hexamethylendiammonium ,6-aminohexylazanium,,"hexane-1,6-diamine",C(CCCN)CCN,124-09-4,4.0,Perovskite database
+26,A,CIEA,,C2H7ClN+,C(CCl)[NH3+],2-choloroethylammonium,2-chloroethylazanium,,2-chloroethanamine,C(CCl)N,689-98-5,4.0,Perovskite database
+27,A,BU,,C4H13N2+,C(CCN)C[NH3+],"1,4-butanediamine",4-aminobutylazanium,,"butane-1,4-diamine",C(CCN)CN,110-60-1,1.0,Perovskite database
+28,A,IEA,,C2H7IN+,C(CI)[NH3+],Iodoethylammonium,2-iodoethylazanium,,2-iodoethanamine,C(CI)N,52689-15-3,5.0,Perovskite database
+29,A,DAE,EDA,C2H9N2+,C(CN)[NH3+],Ethylenediamine ,2-aminoethylazanium,,"ethane-1,2-diamine",C(CN)N,107-15-3,12.0,Perovskite database
+30,A,DAP,"1.3-Pr(NH3)2, PDA, TN",C3H11N2+,C(C[NH3+])CN,"Propane-1,3-diammonium",3-aminopropylazanium,,"propane-1,3-diamine",C(CN)CN,109-76-2,25.0,Perovskite database
+31,A,HEA,ETA,C2H8NO+,C(CO)[NH3+],2-hydroxyethylamine,2-hydroxyethylazanium,,2-aminoethanol,C(CO)N,141-43-5,9.0,Perovskite database
+32,A,TMA,,C4H12N+,C[N+](C)(C)C,Tetramethylammonium ,tetramethylazanium,51-92-3,tetramethylazanium;iodide,C[N+](C)(C)C.[I-],75-58-1,1.0,Perovskite database
+33,A,PTA,,C9H14N+,C[N+](C)(C)C1=CC=CC=C1,Phenyltrimethylammonium,trimethyl(phenyl)azanium,3426-74-2,trimethyl(phenyl)azanium;iodide,C[N+](C)(C)C1=CC=CC=C1.[I-],98-04-4,8.0,Perovskite database
+34,A,ATMA,THM,C3H11N2+,C[N+](C)(C)N,"1,1,1-trimethylhydrazinium",amino(trimethyl)azanium,44024-83-1,amino(trimethyl)azanium;iodide,C[N+](C)(C)N.[I-],3288-80-0,7.0,Perovskite database
+35,A,APMIM,APMim,C7H14N3+,C[N+]1=CN(C=C1)CCCN,3-(3-aminopropyl)-1-methylimidazolium,3-(3-methylimidazol-3-ium-1-yl)propan-1-amine,,3-(3-methylimidazol-3-ium-1-yl)propan-1-amine;iodide,C[N+]1=CN(C=C1)CCCN.[I-],,3.0,Perovskite database
+36,A,MIC1,,C4H6NS+,C[N+]1=CSC=C1,N-methyl thiazolium,"3-methyl-1,3-thiazol-3-ium",693-99-2,"3-methyl-1,3-thiazol-3-ium;iodide",C[N+]1=CSC=C1.[I-],31766-74-2,2.0,Perovskite database
+37,A,DPA,,C8H12N+,C[NH+](C)C1=CC=CC=C1,"N,N-dimethylphenylammounium",dimethyl(phenyl)azanium,,"N,N-dimethylaniline",CN(C)C1=CC=CC=C1,121-69-7,2.0,Perovskite database
+38,A,DMA,DI,C2H8N+,C[NH2+]C,Dimethylammonium ,dimethylazanium,49784-85-2,N-methylmethanamine,CNC,124-40-3,14.0,Perovskite database
+39,A,PMA,,C7H10N+,C[NH2+]C1=CC=CC=C1,N-Methylaniline,methyl(phenyl)azanium,,N-methylaniline,CNC1=CC=CC=C1,100-61-8,9.0,Perovskite database
+40,A,ADA,Ada,C12H22N+,C[NH2+]CC12CC3CC(C1)CC(C3)C2,(adamantan-1-yl)methanammonium,1-adamantylmethyl(methyl)azanium,,1-(1-adamantyl)-N-methylmethanamine,CNCC12CC3CC(C1)CC(C3)C2,153461-22-4,1.0,Perovskite database
+41,A,BrPEMA,"Br-PEA, BrPEA",C9H13BrN+,C[NH2+]CCC1=CC=C(C=C1)Br,2-(4-bromophenyl) ethanaminium,2-(4-bromophenyl)ethyl-methylazanium,,2-(4-bromophenyl)-N-methylethanamine,CNCCC1=CC=C(C=C1)Br,725683-06-7,1.0,Perovskite database
+42,A,FPEMA,"F-PEA, FPEA",C9H13FN+,C[NH2+]CCC1=CC=C(C=C1)F,2-(4-fluorophenyl) ethanaminium,2-(4-fluorophenyl)ethyl-methylazanium,,2-(4-fluorophenyl)-N-methylethanamine,CNCCC1=CC=C(C=C1)F,459-28-9,1.0,Perovskite database
+43,A,MA,,CH6N+,C[NH3+],Methylammonium,methylazanium,17000-00-9,methanamine,CN,74-89-5,38202.0,Perovskite database
+44,A,TMS,(CH3)3S,C3H9S+,C[S+](C)C,Trimethylsulfonium,trimethylsulfanium,676-84-6,trimethylsulfanium;iodide,C[S+](C)C.[I-],2181-42-2,8.0,Perovskite database
+45,A,ALA,,C3H8N+,C=CC[NH3+],Allylammonium ,prop-2-enylazanium,,prop-2-en-1-amine,C=CCN,107-11-9,2.0,Perovskite database
+46,A,HIA,HA,C5H10N3+,C1=C(NC=N1)CC[NH3+],Histammonium ,2-(1H-imidazol-5-yl)ethylazanium,65592-96-3,2-(1H-imidazol-5-yl)ethanamine,C1=C(NC=N1)CCN,51-45-6,48.0,Perovskite database
+47,A,IM,,C3H5N2+,C1=C[NH+]=CN1,Imidazolium ,1H-imidazol-3-ium,,1H-imidazole,C1=CN=CN1,288-32-4,18.0,Perovskite database
+48,A,BBA,3BBA,C7H9BrN+,C1=CC(=CC(=C1)Br)C[NH3+],3-bromobenzylammonium  ,(3-bromophenyl)methylazanium,,(3-bromophenyl)methanamine,C1=CC(=CC(=C1)Br)CN,10269-01-9,1.0,Perovskite database
+49,A,mFPEA,mF1PEA,C8H11FN+,C1=CC(=CC(=C1)F)CC[NH3+],3-fluorophenethylammonium,2-(3-fluorophenyl)ethylazanium,,2-(3-fluorophenyl)ethanamine,C1=CC(=CC(=C1)F)CCN,404-70-6,8.0,Perovskite database
+50,A,APA,"BDA, BzDA",C6H10N2+2,C1=CC(=CC=C1[NH3+])[NH3+],"1,4-benzene diammonium",(4-azaniumylphenyl)azanium,,"benzene-1,4-diamine",C1=CC(=CC=C1N)N,106-50-3,20.0,Perovskite database
+51,A,PDMA,,C8H14N2+2,C1=CC(=CC=C1C[NH3+])C[NH3+],"1,4-phenylenedimethanammonium",[4-(azaniumylmethyl)phenyl]methylazanium,,[4-(aminomethyl)phenyl]methanamine,C1=CC(=CC=C1CN)CN,539-48-0,32.0,Perovskite database
+52,A,CPEA,Cl-PEA,C8H11ClN+,C1=CC(=CC=C1CC[NH3+])Cl,4-chlorophenylethylamine,2-(4-chlorophenyl)ethylazanium,,2-(4-chlorophenyl)ethanamine,C1=CC(=CC=C1CCN)Cl,156-41-2,4.0,Perovskite database
+53,A,FPEA,"4FPEA, pF1PEA, pFPEA",C8H11FN+,C1=CC(=CC=C1CC[NH3+])F, 4-fluoro-phenethylammonium ,2-(4-fluorophenyl)ethylazanium,,2-(4-fluorophenyl)ethanamine,C1=CC(=CC=C1CCN)F,1583-88-6,12.0,Perovskite database
+54,A,PyrEA,,C6H10N2+2,C1=CC=[N+](C=C1)C[NH3+],Pyridinium ethylammonium,pyridin-1-ium-1-ylmethylazanium,,pyridin-1-ium-1-ylmethanamine;iodide,C1=CC=N(C=C1)CN.[I-],,9.0,Perovskite database
+55,A,IAN,C6H4NH2,C6H7IN+,C1=CC=C(C(=C1)[NH3+])I,2-iodoaniline,(2-iodophenyl)azanium,,2-iodoaniline,C1=CC=C(C(=C1)N)I,615-43-0,6.0,Perovskite database
+56,A,oFPEA,oF1PEA,C8H11FN+,C1=CC=C(C(=C1)CC[NH3+])F,2-Fluorophenethylamine,2-(2-fluorophenyl)ethylazanium,,2-(2-fluorophenyl)ethanamine,C1=CC=C(C(=C1)CCN)F,52721-69-4,8.0,Perovskite database
+57,A,AN,"Anyl, PA",C6H8N+,C1=CC=C(C=C1)[NH3+],Anilinium ,phenylazanium,65756-50-5,aniline,C1=CC=C(C=C1)N,62-53-3,12.0,Perovskite database
+58,A,BZA,BE,C7H10N+,C1=CC=C(C=C1)C[NH3+],Benzylamine,benzylazanium,,phenylmethanamine,C1=CC=C(C=C1)CN,100-46-9,1.0,Perovskite database
+59,A,PPEA,,C9H12N+,C1=CC=C(C=C1)C=CC[NH3+],3-phenyl-2-propen-1-amine,3-phenylprop-2-enylazanium,,3-phenylprop-2-en-1-amine,C1=CC=C(C=C1)C=CCN,4335-60-8,4.0,Perovskite database
+60,A,PEA,,C8H12N+,C1=CC=C(C=C1)CC[NH3+],Phenylethylammonium,2-phenylethylazanium,,2-phenylethanamine,C1=CC=C(C=C1)CCN,64-04-0,268.0,Perovskite database
+61,A,PPA,,C9H14N+,C1=CC=C(C=C1)CCC[NH3+],3-phenylpropylamine,3-phenylpropylazanium,,3-phenylpropan-1-amine,C1=CC=C(C=C1)CCCN,2038-57-5,2.0,Perovskite database
+62,A,PBA,,C10H16N+,C1=CC=C(C=C1)CCCC[NH3+], 4-phenylbutan-1-aminium,4-phenylbutylazanium,,4-phenylbutan-1-amine,C1=CC=C(C=C1)CCCCN,13214-66-9,8.0,Perovskite database
+63,A,NMA,,C11H12N+,C1=CC=C2C(=C1)C=CC=C2C[NH3+],1-naphthylmethylammonium,naphthalen-1-ylmethylazanium,,naphthalen-1-ylmethanamine,C1=CC=C2C(=C1)C=CC=C2CN,118-31-0,4.0,Perovskite database
+64,A,BIM,BI,C7H7N2+,C1=CC=C2C(=C1)NC=[NH+]2,Benzimidazolium,1H-benzimidazol-3-ium,,1H-benzimidazole,C1=CC=C2C(=C1)NC=N2,51-17-2,2.0,Perovskite database
+65,A,ImEA,,C5H11N3+2,C1=CN(C=[NH+]1)CC[NH3+],Imidazolium ethylammonium,2-imidazol-3-ium-1-ylethylazanium,,2-imidazol-1-ylethanamine,C1=CN(C=N1)CCN,5739-10-6,9.0,Perovskite database
+66,A,BiIM,BIM,C6H6N4,C1=CN=C(N1)C2=[NH+]C=CN2,"2,2'-Biimidazole",2-(1H-imidazol-2-yl)-1H-imidazole,,2-(1H-imidazol-2-yl)-1H-imidazole,C1=CN=C(N1)C2=NC=CN2,492-98-8,4.0,Perovskite database
+67,A,APY,4ApyH,C5H7N2+,C1=CN=CC=C1[NH3+],4-aminopyridine,pyridin-1-ium-4-amine,,pyridin-4-amine,C1=CN=CC=C1N,504-24-5,2.0,Perovskite database
+68,A,ThMA,ThPEA,C5H8NS+,C1=CSC(=C1)C[NH3+],2-thiophenem-ethylammonium ,thiophen-2-ylmethylazanium,,thiophen-2-ylmethanamine,C1=CSC(=C1)CN,27757-85-3,29.0,Perovskite database
+69,A,ThEA,TEA,C6H10NS+,C1=CSC(=C1)CC[NH3+],Thiophene−2−ethylamine,2-thiophen-2-ylethylazanium,,2-thiophen-2-ylethanamine,C1=CSC(=C1)CCN,30433-91-1,2.0,Perovskite database
+70,A,ThA,TA,C3H4NS+,C1=CSC=[NH+]1,Thiazole ammonium,"1,3-thiazol-3-ium",,"1,3-thiazole",C1=CSC=N1,288-47-1,3.0,Perovskite database
+71,A,AMP,3AMP,C6H9N2+,C1=CC(=CN=C1)C[NH3+], 3-(aminomethyl)piperidinium,piperidin-3-ylmethazanium,,piperidin-3-ylmethanamine,C1CC(CNC1)CN,23099-21-0,15.0,Perovskite database
+72,A,CPA,CA,C3H8N+,C1CC1[NH3+],Cyclopropylamine,cyclopropylazanium,,cyclopropanamine,C1CC1N,765-30-0,5.0,Perovskite database
+73,A,CHMA,,C7H16N+,C1CCC(CC1)C[NH3+],Cyclohexylmethylammonium,cyclohexylmethylazanium,,cyclohexylmethanamine,C1CCC(CC1)CN,3218-02-8,7.0,Perovskite database
+74,A,PEI,,(C2H5N)n,C1CN1,Polyethylenimine ,Poly(iminoethylene),,Polyethylenimine,C1CN1,9002-98-6,18.0,Perovskite database
+75,A,4AMP,,C6H15N2+,C1CNCCC1C[NH3+],4-(aminomethyl)piperidinium,piperidin-4-ylmethazanium,,piperidin-4-ylmethanamine,C1CNCCC1CN,7144-05-0,2.0,Perovskite database
+76,A,ACE,"Aa, Ace",C2H7N2+,CC(=[NH2+])N,Acetamidinium ,1-aminoethylideneazanium,,ethanimidamide,CC(=N)N,143-37-3,9.0,Perovskite database
+77,A,TBA,,C4H12N+,CC(C)(C)[NH3+],Tert-butylammonium,tert-butylazanium,,2-methylpropan-2-amine,CC(C)(C)N,75-64-9,18.0,Perovskite database
+78,A,IPAM,iPA,C3H10N+,CC(C)[NH3+],Isopropylammonium ,propan-2-ylazanium,,propan-2-amine,CC(C)N,75-31-0,2.0,Perovskite database
+79,A,NEA,,C12H14N+,CC(C1=CC=CC2=CC=CC=C21)[NH3+],1-naphthalene ethylamine,1-naphthalen-1-ylethylazanium,,1-naphthalen-1-ylethanamine,CC(C1=CC=CC2=CC=CC=C21)N,42882-31-5,1.0,Perovskite database
+80,A,PN,,C3H11N2+,CC(CN)[NH3+],Propylenediammonium ,1-aminopropan-2-ylazanium,,"propane-1,2-diamine",CC(CN)N,78-90-0,4.0,Perovskite database
+81,A,ETPY,N-EtPy,C7H10N+,CC[N+]1=CC=CC=C1,1-ethylpyridin-1-ium,1-ethylpyridin-1-ium,15302-96-2,1-ethylpyridin-1-ium;iodide,CC[N+]1=CC=CC=C1.[I-],872-90-2,4.0,Perovskite database
+82,A,EA,,C2H8N+,CC[NH3+],Ethylammonium,ethylazanium,16999-99-8,ethanamine,CCN,75-04-7,22.0,Perovskite database
+83,A,EU-pyP,,C44H38N8I4EuO2C2H3,CC=1O[Eu]234(O=1)N=1C=5C=CC=1C(=C1C=CC(N13)=C(C=1C=CC(N=14)=C(c1ccc(n12)C=5c1cc[n+](C)cc1)c1cc[n+](C)cc1)c1cc[n+](C)cc1)c1cc[n+](C)cc1,Eu-porphyrin complex,meso-Tetrakis(2-N-methylpyridyl)porphine.europiumacetate,,meso-Tetrakis(2-N-methylpyridyl)porphine.europiumacetate,CC=1O[Eu]234(O=1)N=1C=5C=CC=1C(=C1C=CC(N13)=C(C=1C=CC(N=14)=C(c1ccc(n12)C=5c1cc[n+](C)cc1)c1cc[n+](C)cc1)c1cc[n+](C)cc1)c1cc[n+](C)cc1,,1.0,Perovskite database
+84,A,MIC3,,C6H10NS+,CC1=C(SC=[N+]1C)C,"3,4,5-trimethyl thiazolium","3,4,5-trimethyl-1,3-thiazol-3-ium",40265-67-6,"3,4,5-trimethyl-1,3-thiazol-3-ium;iodide",CC1=C(SC=[N+]1C)C.[I-],62993-85-5,2.0,Perovskite database
+85,A,MIC2,,C5H8NS+,CC1=CSC=[N+]1C,"3,4-dimethyl thiazolium","3,4-dimethyl-1,3-thiazol-3-ium",694-30-4,"3,4-dimethyl-1,3-thiazol-3-ium;iodide",CC1=CSC=[N+]1C.[I-],24300-70-7,2.0,Perovskite database
+86,A,ISOBA,iso-BA,C4H12N+,CCC(C)[NH3+],Butan-2-amine,butan-2-ylazanium,,butan-2-amine,CCC(C)N,13952-84-6,2.0,Perovskite database
+87,A,PA,n-C3H7NH3,C3H10N+,CCC[NH3+],Propylammonium,propylazanium,,propan-1-amine,CCCN,107-10-8,25.0,Perovskite database
+88,A,BA,,C4H12N+,CCCC[NH3+],Butylamine ,butylazanium,,butan-1-amine,CCCCN,109-73-9,372.0,Perovskite database
+89,A,HTAB,,C9H22N+,CCCCCC[N+](C)(C)C,n-hexyl trimethyl ammonium,hexyl(trimethyl)azanium,16208-27-8,hexyl(trimethyl)azanium;iodide,CCCCCC[N+](C)(C)C.[I-],15066-77-0,5.0,Perovskite database
+90,A,HA,C6H13NH3,C6H16N+,CCCCCC[NH3+],Hexylamine,hexylazanium,,hexan-1-amine,CCCCCCN,111-26-2,5.0,Perovskite database
+91,A,OA,,C8H20N+,CCCCCCCC[NH3+],Octylamine ,octylazanium,,octan-1-amine,CCCCCCCCN,111-86-4,4.0,Perovskite database
+92,A,DA,,C12H28N+,CCCCCCCCCCCC[NH3+],Dodecylamine ,dodecylazanium,,dodecan-1-amine,CCCCCCCCCCCCN,124-22-1,2.0,Perovskite database
+93,A,MTEA,,C3H10NS+,CSCC[NH3+],2-(methylthio)ethylammonium ,2-methylsulfanylethylazanium,,2-methylsulfanylethanamine,CSCCN,18542-42-2,2.0,Perovskite database
+94,A,A43,,C7H9F9NO+,FC(F)(F)C(OCCC[NH3+])(C(F)(F)F)C(F)(F)F,"3-{[1,1,1,3,3,3-hexafluoro-2-(trifluoromethyl)propan-2-yl]oxy}propan-1-aminium","3-{[1,1,1,3,3,3-hexafluoro-2-(trifluoromethyl)propan-2-yl]oxy}propan-1-aminium",,"3-[1,1,1,3,3,3-hexafluoro-2-(trifluoromethyl)propan-2-yl]oxypropan-1-amine",FC(F)(F)C(OCCCN)(C(F)(F)F)C(F)(F)F,,2.0,Perovskite database
+95,A,4FBzA,4-FBzA,C7H9FN+,C1=CC(=CC=C1C[NH3+])F,4-fluorophenylmethylammonium,(4-fluorophenyl)methylazanium,,(4-fluorophenyl)methanamine,C1=CC(=CC=C1CN)F,140-75-0,,2D database
+96,A,4BrBzA,4-BrBzA,C7H9BrN+,C1=CC(=CC=C1C[NH3+])Br,4-bromophenylmethylammonium,(4-bromophenyl)methylazanium,,(4-bromophenyl)methanamine,C1=CC(=CC=C1CN)Br,3959-07-7,,2D database
+97,A,4ClBzA,4-ClBzA,C7H9ClN+,C1=CC(=CC=C1C[NH3+])Cl,4-chlorophenylmethylammonium,(4-chlorophenyl)methylazanium,,(4-chlorophenyl)methanamine,C1=CC(=CC=C1CN)Cl,104-86-9,,2D database
+98,A,4IBzA,4-IBzA,C7H9IN+,C1=CC(=CC=C1C[NH3+])I,4-iodophenylmethylammonium,(4-iodophenyl)methylazanium,,(4-iodophenyl)methanamine,C1=CC(=CC=C1CN)I,39959-59-6,,2D database
+99,A,CEA,beta3-alaH,C3H8NO2+,C(C[NH3+])C(=O)O,alaninium,2-carboxyethylazanium,,3-aminopropanoic acid,C(CN)C(=O)O,107-95-9,,2D database
+100,A,IBA,IBA,C4H12N+,CC(C)C[NH3+],Isobutylammonium,2-methylpropylazanium,58471-06-0,2-methylpropan-1-amine,CC(C)CN,78-81-9,,2D database
+101,A,Tl,,Tl3+,[Tl+3],Thallium,thallium,14627-67-9,Thallium,[Tl],7440-28-0,,2D database
+102,A,BEA,,C4H10N+,C=CCC[NH3+],3-Butenylammonium,but-3-enylazanium,,but-3-en-1-amine,C=CCCN,2524-49-4,,2D database
+103,A,IFA,,CH4IN2+,C(=[NH2+])(N)I,Iodoformamidinium,[amino(iodo)methylidene]azanium,,iodomethanediamine,C(N)(N)I,,,2D database
+104,A,F2EA,,C2H6F2N+,C(C(F)F)[NH3+],"2,2-difluoroethylammonium","2,2-difluoroethylazanium",,"2,2-difluoroethanamine",C(C(F)F)N,430-67-1,,2D database
+105,A,HPA,,C3H10NO+,C(C[NH3+])CO,3-aminopropanol,3-hydroxypropylazanium,,3-aminopropan-1-ol,C(CN)CO,156-87-6,,2D database
+106,A,BrEA,,C2H7BrN+,C(CBr)[NH3+],2-bromoethylammonium,2-bromoethylazanium,,2-bromoethanamine,C(CBr)N,107-09-5,,2D database
+107,A,DDDA,,C12H30N2+2,C(CCCCCC[NH3+])CCCCC[NH3+],"1,12-dodecanediammonium",12-azaniumyldodecylazanium,2783-17-7,"dodecane-1,12-diamine",C(CCCCCCN)CCCCCN,2783-17-7,,2D database
+108,A,DDA,,C10H25N2+,C(CCCCC[NH3+])CCCC[NH3+],"1,10-decanediammonium",10-aminodecanazanium,,"decane-1,10-diamine",C(CCCCCN)CCCCN,646-25-3,,2D database
+109,A,HEDA,,C7H19N2+,C(CCC[NH3+])CCC[NH3+],"1,7-heptanediammonium",7-aminoheptlazanium,,"heptane-1,7-diamine",C(CCCN)CCCN,646-19-5,,2D database
+110,A,PEDA,C5di,C5H16N2+2,C(CC[NH3+])CC[NH3+],"1,5-pentyldiammonium",5-azaniumylpentylazanium,,"pentane-1,5-diamine",C(CCN)CCN,462-94-2,,2D database
+111,A,DAPO,,C3H12N2O+2,C(C(C[NH3+])O)[NH3+],"1,3-Diamino-2-propanol",(3-azaniumyl-2-hydroxypropyl)azanium,,"1,3-diaminopropan-2-ol",C(C(CN)O)N,616-29-5,,2D database
+112,A,EDBE,,C6H17N2O2+,C(COCCOCCN)[NH3+],"2,2'-(ethylenedioxy)bis-(ethylammonium)",2-[2-(2-aminoethoxy)ethoxy]ethylazanium,,2-[2-(2-aminoethoxy)ethoxy]ethanamine,C(COCCOCCN)N,929-59-9,,2D database
+113,A,CSEA,,C3H10N3S+,C(CSC(=N)N)[NH3+],2-(aminoethyl)isothiourea,2-carbamimidoylsulfanylethylazanium,,2-aminoethyl carbamimidothioate,C(CSC(=N)N)N,151-16-6,,2D database
+114,A,AESE,,C4H14N2S2+2,C(CSSCC[NH3+])[NH3+],"2,2'-dithiobisethanammonium",2-(2-azaniumylethyldisulfanyl)ethylazanium,,2-(2-aminoethyldisulfanyl)ethanamine,C(CSSCCN)N,51-85-4,,2D database
+115,A,FEA,,C2H7FN+,C(CF)[NH3+],2-fluoroethylammonium,2-fluoroethylazanium,,2-fluoroethanamine,C(CF)N,406-34-8,,2D database
+116,A,ClAl,,C6H7ClN+,C1=CC(=CC=C1[NH3+])Cl,4-Chloroanilinium,(4-chlorophenyl)azanium,,4-chloroaniline,C1=CC(=CC=C1N)Cl,106-47-8,,2D database
+117,A,3AMP,,C6H9N2+,C1=CC(=C[NH+]=C1)C[NH3+],3-(aminomethyl)pyridinium,pyridin-1-ium-3-ylmethylazanium,,pyridin-3-ylmethanamine,C1=CC(=CN=C1)CN,3731-52-0,,2D database
+118,A,4PyMA,4AMP,C6H10N2+2,C1=C[NH+]=CC=C1C[NH3+],4-(aminomethyl)pyridinium,pyridin-1-ium-4-ylmethylazanium,,pyridin-4-ylmethanamine,C1=CN=CC=C1CN,3731-53-1,,2D database
+119,A,DMEN,,C4H14N2+2,C[NH+](C)CC[NH3+],2-(Dimethylamino)etylamine,2-azaniumylethyl(dimethyl)azanium,,"N',N'-dimethylethane-1,2-diamine",CN(C)CCN,108-00-9,,2D database
+120,A,DMABA,,C6H18N2+2,C[NH+](C)CCCC[NH3+],4-(Dimethylamino)butylamine,4-azaniumylbutyl(dimethyl)azanium,,"N',N'-dimethylbutane-1,4-diamine",CN(C)CCCCN,3529-10-0,,2D database
+121,A,BeDCA,,C9H7N2O4+,C1=C(C(=CC2=C1NC=[NH+]2)C(=O)O)C(=O)O,"5,6-dicarboxybenzimidazolium","1H-benzimidazol-3-ium-5,6-dicarboxylic acid",,"1H-benzimidazole-5,6-dicarboxylic acid",C1=C(C(=CC2=C1NC=N2)C(=O)O)C(=O)O,10351-75-4,,2D database
+122,A,BPY,,C10H10N2+2,C1=C[NH+]=CC=C1C2=CC=[NH+]C=C2,"4,4'-Bipyridinium",4-pyridin-1-ium-4-ylpyridin-1-ium,,4-pyridin-4-ylpyridine,C1=CN=CC=C1C2=CC=NC=C2,553-26-4,,2D database
+123,A,DFBA,,C7H5F2N2+,C1=C2C(=CC(=C1F)F)[NH+]=CN2,"5,6-difluorobenzimidazolium","5,6-difluoro-1H-benzenediazonium  ",,"5,6-difluoro-1H-benzimidazole",C1=C2C(=CC(=C1F)F)N=CN2,78581-99-4,,2D database
+124,A,IPY,,C5H5IN+,C1=CC(=C[NH+]=C1)I,3-Iodopyridinium,3-iodopyridin-1-ium,,3-iodopyridine,C1=CC(=CN=C1)I,1120-90-7,,2D database
+125,A,mPDA,,C6H10N2+2,C1=CC(=CC(=C1)[NH3+])[NH3+],m-phenylenediammonium,(3-azaniumylphenyl)azanium,,"benzene-1,3-diamine",C1=CC(=CC(=C1)N)N,108-45-2,,2D database
+126,A,AEA,,C8H14N2++,C1=CC(=CC(=C1)[NH3+])CC[NH3+],3-(2-aminoethyl)anilinium,[3-(2-azaniumylethyl)phenyl]azanium,,3-(2-aminoethyl)aniline,C1=CC(=CC(=C1)N)CCN,76935-75-6,,2D database
+127,A,APPA,,C12H14N2+2,C1=CC(=CC=C1C2=CC=C(C=C2)[NH3+])[NH3+],"1,1'-biphenyl-4,4'-diammonium",[4-(4-aminophenyl)phenyl]azanium,,4-(4-aminophenyl)aniline,C1=CC(=CC=C1C2=CC=C(C=C2)N)N,92-87-5,,2D database
+128,A,BrPEA,,C8H11BrN+,C1=CC(=CC=C1CC[NH3+])Br,p-bromophenylethylammonium,2-(p-bromophenyl)ethylazanium,,2-(p-bromophenyl)ethanamine),C1=CC(=CC=C1CCN)Br,73918-56-6,,2D database
+129,A,3AP,,C6H8N3+,C1=CC(=CN=C1)C(=[NH2+])N,3-amidinopyridinium,amino(pyridin-3-yl)methylidene]azanium,,pyridine-3-carboximidamide,C1=CC(=CN=C1)C(=N)N,23255-20-1,,2D database
+130,A,4AP,,C6H8N3+,C1=CN=CC=C1C(=[NH2+])N,4-amidinopyridinium,[amino(pyridin-4-yl)methylidene]azanium,,pyridine-4-carboximidamide,C1=CN=CC=C1C(=N)N,33278-46-5,,2D database
+131,A,ClPEA,,C8H11ClN+,C1=CC=C(C(=C1)CC[NH3+])Cl,2-chlorophenylethylammonium,2-(2-chlorophenyl)ethylazanium,,2-(2-chlorophenyl)ethanamine,C1=CC=C(C(=C1)CCN)Cl,13078-80-3,,2D database
+132,A,BiPhA,,C12H12N+,C1=CC=C(C=C1)C2=CC=C(C=C2)[NH3+],p-biphenylammonium,(4-phenylphenyl)azanium,,p-phenylaniline,C1=CC=C(C=C1)C2=CC=C(C=C2)N,92-67-1,,2D database
+133,A,NAOEA,,C12H14ON+,C1=CC=C2C(=C1)C=CC=C2OCC[NH3+],Naphthalene-O-ethylammonium,2-[(naphthalen-1-yl)oxy]ethan-1-aminium,,2-naphthalen-1-yloxyethanamine,C1=CC=C2C(=C1)C=CC=C2OCCN,,,2D database
+134,A,NAEA,,C12H14N+,C1=CC=C2C(=C1)C=CC=C2CC[NH3+],2-naphthyleneethylammonium,2-naphthalen-1-ylethylazanium,,2-naphthalen-1-ylethanamine,C1=CC=C2C(=C1)C=CC=C2CCN,4735-50-6,,2D database
+135,A,NADA,,C10H12N2+2,C1=CC2=C(C=CC=C2[NH3+])C(=C1)[NH3+],"1,5-Naphthalenediamine",(5-azaniumylnaphthalen-1-yl)azanium,,"naphthalene-1,5-diamine",C1=CC2=C(C=CC=C2N)C(=C1)N,2243-62-1,,2D database
+136,A,PYBA,,C20H20N+,C1=CC2=C3C(=C1)C=CC4=C(C=CC(=C43)C=C2)CCCC[NH3+],pyrene-butylammonium,4-pyren-1-ylbutylazanium,,4-pyren-1-ylbutan-1-amine,C1=CC2=C3C(=C1)C=CC4=C(C=CC(=C43)C=C2)CCCCN,205488-15-9,,2D database
+137,A,API,API,C6H13N3+2,C1=C[N+](=CN1)CCC[NH3+],N-(3-aminopropyl)imidazole,3-(1H-imidazol-3-ium-3-yl)propylazanium,,3-imidazol-1-ylpropan-1-amine,C1=CN(C=N1)CCCN,5036-48-6,,2D database
+138,A,PYEPY,,C12H14N2+2,C1=C[NH+]=CC=C1CCC2=CC=[NH+]C=C2,4-(2-pyridin-1-ium-4-ylethyl)pyridin-1-ium,4-(2-pyridin-4-ylethyl)pyridine,,4-(2-pyridin-4-ylethyl)pyridine,C1=CN=CC=C1CCC2=CC=NC=C2,4916-57-8,,2D database
+139,A,TAZ,TzH,C2H4N3+,C1=[NH+]C=NN1,"1,2,4-triazolium","1H-1,2,4-Triazol-4-ium",,"1,2,4-Triazole",C1=NC=NN,1288-88-0,,2D database
+140,A,3APr,3APr,C4H11N2+,C1C[NH2+]CC1N,3-aminopyrrolidinium,(3R)-pyrrolidin-1-ium-3-amine,,pyrrolidin-3-amine,C1CNCC1N,79286-79-6,,2D database
+141,A,CBA,,C4H10N+,C1CC(C1)[NH3+],Cyclobutylammonium,cyclobutylazanium,,cyclobutanamine,C1CC(C1)N,2516-34-9,,2D database
+142,A,DFCHA,,C6H12F2N+,C1CC(CCC1[NH3+])(F)F,"4,4‐difluorocyclohexylammonium","(4,4-difluorocyclohexyl)azanium",,"4,4-difluorocyclohexan-1-amine",C1CC(CCC1N)(F)F,458566-84-2,,2D database
+143,A,3APY,,C5H13N2+,C1CC(CNC1)[NH3+],3-aminopyridinium,piperidin-3-ylazanium,,piperidin-3-amine,C1CC(CNC1)N,54012-73-6,,2D database
+144,A,CHEA,,C8H16N+,C1CCC(=CC1)CC[NH3+],2-(1-cyclohexenyl)ethylammonium,2-(cyclohexen-1-yl)ethylazanium,,2-(cyclohexen-1-yl)ethanamine,C1CCC(=CC1)CCN,3399-73-3,,2D database
+145,A,CyPA,,C5H12N+,C1CCC(C1)[NH3+],Cyclopentylammonium,cyclopentylazanium,"
+",cyclopentanamine,C1CCC(C1)N,1003-03-8,,2D database
+146,A,CyHA,,C6H14N+,C1CCC(CC1)[NH3+],Cyclohexylammonium,cyclohexylazanium,,cyclohexanamine,C1CCC(CC1)N,108-91-8,,2D database
+147,A,CyHP,CYP,C6H14P+,C1CCC(CC1)[PH3+],Cyclohexylphosphonium,cyclohexylphosphanium,,cyclohexylphosphane,C1CCC(CC1)P,822-68-4,,2D database
+148,A,CyHeA,,C7H16N+,C1CCCC(CC1)[NH3+],Cycloheptylammonium,cycloheptylazanium,,Cycloheptylamine,C1CCCC(CC1)N,5452-35-7,,2D database
+149,A,CyOA,,C8H18N+,C1CCCC(CCC1)[NH3+],Cyclooctylammonium,cyclooctylazanium,,Cyclooctanamine,C1CCCC(CCC1)N,5452-37-9,,2D database
+150,A,PIA,AEPi,C7H17N2+,C1CCN(CC1)CC[NH3+],1-(2-aminoethyl)piperidinium,2-piperidin-1-ylethylazanium,,2-piperidin-1-ylethanamine,C1CCN(CC1)CCN,27578-60-5,,2D database
+151,A,2AMP,2-AMP,C6H9N2+,C1=CC=NC(=C1)C[NH3+],2-(aminomethyl)piperidinium,pyridin-2-ylmethylazanium,,pyridin-2-ylmethanamine,C1=CC=NC(=C1)CN,3731-51-9,,2D database
+152,A,3AMPI,3-AMP,C6H9N2+,C1=CC(=CN=C1)C[NH3+],3-(aminomethyl)piperidinium,pyridin-3-ylmethylazanium,,pyridin-3-ylmethanamine,C1=CC(=CN=C1)CN,3731-52-0,,2D database
+153,A,4AMPI,4-AMP,C6H9N2+,C1=CN=CC=C1C[NH3+],4-(aminomethyl)piperidinium,pyridin-4-ylmethylazanium,,pyridin-4-ylmethanamine,C1=CN=CC=C1CN,3731-53-1,,2D database
+154,A,2PIA,,C5H13N2+,C1CCNC(C1)[NH3+],2-(aminomethyl)piperidinium,piperidin-2-ylazanium,,piperidin-2-amine,C1CCNC(C1)CN,45505-62-2,,2D database
+155,A,BEPI,,C11H17N2+,C1CN(CC[NH2+]1)CC2=CC=CC=C2,1-Benzylpiperazinium,1-benzylpiperazin-4-ium,,1-Benzylpiperazine,C1CN(CCN1)CC2=CC=CC=C2,2759-28-6,,2D database
+156,A,PIPZ,,C4H11N2+,C1CNCC[NH2+]1,Piperazinium,piperazin-1-ium,,Piperazine,C1CNCCN1,110-85-0,,2D database
+157,A,PhPA,,C9H14N+,CC(C[NH3+])C1=CC=CC=C1,2-Phenylpropylammonium,2-phenylpropylazanium,,2-Phenylpropylamine,CC(CN)C1=CC=CC=C1,582-22-9,,2D database
+158,A,ClPhEA,,C8H11ClN+,CC(C1=CC=C(C=C1)Cl)[NH3+],p-chlorophenylethylammonium,1-(4-chlorophenyl)ethylazanium,,2-(p-chlorophenyl)ethanamine,C1=CC(=CC=C1CCN)Cl,156-41-2,,2D database
+159,A,PhEA,,C8H12N+,CC(C1=CC=CC=C1)[NH3+],phenylethylammonium,1-phenylethylazanium,,1-phenylethanamine,CC(C1=CC=CC=C1)N,2627-86-3,,2D database
+160,A,BrPhEA,2-BrPEA,C8H11BrN+,C1=CC=C(C(=C1)CC[NH3+])Br,2-bromophenylethylammonium,2-(2-bromophenyl)ethylazanium,,2-(2-bromophenyl)ethanamine,C1=CC=C(C(=C1)CCN)Br,65185-58-2,,2D database
+161,A,PhMEEA,,C9H14N+,CC(C[NH3+])C1=CC=CC=C1,R-β-methylphenethylamine,2-phenylpropylazanium,,2-phenylpropan-1-amine,CC(CN)C1=CC=CC=C1,582-22-9,,2D database
+162,A,IHA,,C6H15IN+,C(CCCI)CC[NH3+],6-iodohexylammonium,6-Iodo-1-hexanamonium,,1-Iodohexan-2-amine,C(CCCI)CCN,,,2D database
+163,A,TMAEA,TMEA,C5H16N2+2,C[N+](C)(C)CC[NH3+],2-trimethylammonium ethylammonium,2-azaniumylethyl(trimethyl)azanium,,2-aminoethyl(trimethyl)azanium;iodide,C[N+](C)(C)CCN.[I-],,,2D database
+164,A,MPEA,,C9H14N+,CC1=CC=C(C=C1)CC[NH3+],p-methylphenylethylammonium,2-(4-methylphenyl)ethylazanium,,2-(4-Methylphenyl)ethan-1-amine,CC1=CC=C(C=C1)CCN,3261-62-9,,2D database
+165,A,MPA,,C4H12N+,CCC[NH2+]C,1-methyl-propylammonium,methyl(propyl)azanium,,N-methylpropan-1-amine,CCCNC,627-35-0,,2D database
+166,A,IPPA,,C3H9NI+,C(C[NH3+])CI,3-iodopropylammonium,3-Iodo-1-propanamonium,,3-iodopropan-1-amine,C(CN)CI,110300-07-7,,2D database
+167,A,PAM,,C5H14N+,CCCCC[NH3+],Pentylammonium,pentylazanium,,pentan-1-amine,CCCCCN,110-58-7,,2D database
+168,A,TBAI,,C4H11IN+,C(CC[NH3+])CI,4-iodobutylammonium,4-Iodo-1-butylamonium,,4-iodobutan-1-amine,C(CCI)CN,408321-59-5,,2D database
+169,A,ETHA,2ETHA,C8H20N+,CCCCC(CC)C[NH3+],2-ethyl-hexylammonium,2-ethylhexan-1-azanium,,2-ethylhexan-1-amine,CCCCC(CC)CN,104-75-6,,2D database
+170,A,IPEM,,C5H13IN+,C(CC[NH3+])CCI,5-iodopentylammonium,5-Iodo-1-pentylamonium,,5-iodopentan-1-amine,C(CCN)CCI,,,2D database
+171,A,MHA,,C7H18N+,CCCCCC(C)[NH3+],1-methyl-hexylammonium,heptan-2-ylazanium,,heptan-2-amine,CCCCCC(C)N,123-82-0,,2D database
+172,A,HEPA,,C7H18N+,CCCCCCC[NH3+],Heptylammonium,heptylazanium,,heptan-1-amine,CCCCCCCN,111-68-2,,2D database
+173,A,,,C9H22N+,CCCCCCCCC[NH3+],Nonylammonium,nonylazanium,,nonan-1-amine,CCCCCCCCCN,112-20-9,,2D database
+174,A,DEA,,C10H24N+,CCCCCCCCCC[NH3+],Decylammonium,decylazanium,,Decylamine,CCCCCCCCCCN,2016-57-1,,2D database
+175,A,EPI,,C6H15N2+,CCN1CC[NH2+]CC1,1-Ethylpiperazinium,1-ethylpiperazin-4-ium,,1-ethylpiperazine,CCN1CCNCC1,5308-25-8,,2D database
+176,A,DMDA,,C8H14N2+2,C[NH+](C)C1=CC=C(C=C1)[NH3+],"N,N-Dimethylbenzene-1,4-diammonium",(4-azaniumylphenyl)-dimethylazanium,,"4-N,4-N-dimethylbenzene-1,4-diamine",CN(C)C1=CC=C(C=C1)N,99-98-9,,2D database
+177,A,MPI,,C5H13N2+,CN1CC[NH2+]CC1,1-Methylpiperazinium,1-methylpiperazin-4-ium,,1-methylpiperazine,CN1CCNCC1,109-01-3,,2D database
+178,A,POEA,,C18H16ON+,C1=CC2=C3C(=C1)C=CC4=C3C(=CC(=C4)OCC[NH3+])C=C2,Pyrene-O-ethylammonium,2-pyren-2-yloxyethylazanium,,2-pyren-2-yloxyethanamine,C1=CC2=C3C(=C1)C=CC4=C3C(=CC(=C4)OCCN)C=C2,,,2D database
+179,A,AESBT,,C10H12NS3+,C1=CSC(=C1)C2=CC=C(S2)SCC[NH3+],"5-ammoniumethylsulfanyl-2,2'-bithiophene",2-(5-thiophen-2-ylthiophen-2-yl)sulfanylethylazanium,,2-(5-thiophen-2-ylthiophen-2-yl)sulfanylethanamine,C1=CSC(=C1)C2=CC=C(S2)SCCN,,,2D database
+180,A,BAESBT,,C12H18N2S4+2,C1=C(SC(=C1)SCC[NH3+])C2=CC=C(S2)SCC[NH3+],"5,5'-bis(ammoniumethylsulfanyl)- 2,2'-bithiophene",2-[5-[5-(2-azaniumylethylsulfanyl)thiophen-2-yl]thiophen-2-yl]sulfanylethylazanium,,2-[5-[5-(2-aminoethylsulfanyl)thiophen-2-yl]thiophen-2-yl]sulfanylethanamine,C1=C(SC(=C1)SCCN)C2=CC=C(S2)SCCN,,,2D database
+181,A,4Tm,,C20H20NS4+,CC1=C(SC=C1)C2=CC=C(S2)C3=C(C=C(S3)C4=CC=C(S4)CC[NH3+])C,"2-(3''',4'-dimethyl- [2,2':5',2'':5'',2'''-quaterthiophen]-5-yl)ethan-1-ammonium",2-[5-[4-methyl-5-[5-(3-methylthiophen-2-yl)thiophen-2-yl]thiophen-2-yl]thiophen-2-yl]ethylazanium,,2-[5-[4-methyl-5-[5-(3-methylthiophen-2-yl)thiophen-2-yl]thiophen-2-yl]thiophen-2-yl]ethanamine,CC1=C(SC=C1)C2=CC=C(S2)C3=C(C=C(S3)C4=CC=C(S4)CCN)C,,,2D database
+182,A,AEQT,,C20H22N2S4+2,C1=C(SC(=C1)C2=CC=C(S2)C3=CC=C(S3)C4=CC=C(S4)CC[NH3+])CC[NH3+],"5,5'''-bis-(aminoethyl)-2,2':5',2'':5'',2'''-quaterthiophene",2-[5-[5-[5-[5-(2-azaniumylethyl)thiophen-2-yl]thiophen-2-yl]thiophen-2-yl]thiophen-2-yl]ethylazanium,,2-[5-[5-[5-[5-(2-aminoethyl)thiophen-2-yl]thiophen-2-yl]thiophen-2-yl]thiophen-2-yl]ethanamine,C1=C(SC(=C1)C2=CC=C(S2)C3=CC=C(S3)C4=CC=C(S4)CCN)CCN,,,2D database
+183,A,FSA,,C16H17FN+,C1=CC(=CC(=C1)F)C=CC2=CC=C(C=C2)CC[NH3+],2-(4-(3-fluoro)stilbenyl)ethanammonium,2-[4-[2-(3-fluorophenyl)ethenyl]phenyl]ethylazanium,,2-[4-[(E)-2-(3-fluorophenyl)ethenyl]phenyl]ethanamine,C1=CC(=CC(=C1)F)C=CC2=CC=C(C=C2)CCN,,,2D database
+184,A,BBDMS,bbdms,C8H20S2+2,C[S+](C)CCCC[S+](C)C,"Butane-1,4-diylbis(dimethylsulfonium)",4-dimethylsulfoniobutyl(dimethyl)sulfanium,,4-dimethylsulfoniobutyl(dimethyl)sulfanium;diiodide,C[S+](C)CCCC[S+](C)C.[I-].[I-],,,2D database
+185,A,TFMPA,,C8H9F3N+,C1=CC(=CC=C1C[NH3+])C(F)(F)F,p-trifluoromethylphenylmethylammonium,[4-(trifluoromethyl)phenyl]methylazanium,,[4-(trifluoromethyl)phenyl]methanamine,C1=CC(=CC=C1CN)C(F)(F)F,,,2D database
+186,A,NPA,neoPA,C5H14N+,CC(C)(C)C[NH3+],neo-Pentylammonium ,"2,2-dimethylpropylazanium",,"2,2-dimethylpropan-1-amine",CC(C)(C)CN,5813-64-9,,GreatCellSolar
+187,A,MBA,iPA,"
+C5H14N+",CC(C)CC[NH3+],i-Pentylammonium ,3-methylbutylazanium,,3-methylbutylazanium,CC(C)CCN,107-85-7,,GreatCellSolar
+188,A,PYR,Pyrr,C4H10N+,C1CC[NH2+]C1,Pyrrolidinium ,pyrrolidin-1-ium,84316-19-8,pyrrolidine,C1CCNC1,123-75-1,,GreatCellSolar
+189,A,4FPhA,p-F-PEA,C6H7FN+,C1=CC(=CC=C1[NH3+])F,4-Fluoro-Phenylammonium ,(4-fluorophenyl)azanium,,4-fluoroaniline,C1=CC(=CC=C1N)F,371-40-4,,GreatCellSolar
+190,A,HPEA,HO-PEA,C8H12NO+,C1=CC(=CC=C1CC[NH3+])O  ,4-Hydroxyphenethylammonium,2-(4-hydroxyphenyl)ethylazanium  ,,4-(2-aminoethyl)phenol,C1=CC(=CC=C1CCN)O,51-67-2,,GreatCellSolar
+191,A,MOPEA,4MeO-PEA,C9H14NO+,COC1=CC=C(C=C1)CC[NH3+],4-Methoxy-Phenethylammonium,2-(4-methoxyphenyl)ethylazanium,,2-(4-methoxyphenyl)ethanamine,COC1=CC=C(C=C1)CCN,55-81-2,,GreatCellSolar
+192,A,DiEA,DEA,C4H12N+,CC[NH2+]CC,Diethylammonium,diethylazanium,,N-ethylethanamine,CCNCC,109-89-7,,GreatCellSolar
+193,A,PY,Py,C5H6N+,C1=CC=[NH+]C=C1,Pyridinium,pyridin-1-ium,16969-45-2,pyridine,C1=CC=NC=C1,110-86-1,,GreatCellSolar
+194,A,DIP,Dip,C6H16N+,CCC[NH2+]CCC,Di-propylammonium,dipropylazanium,,N-propylpropan-1-amine,CCCNCCC,142-84-7,,GreatCellSolar
+195,A,MORP,Morph,C4H10NO+,C1COCC[NH2+]1,Morpholinium,morpholin-4-ium,,morpholine,C1COCCN1,110-91-8,,GreatCellSolar
+196,A,DIPA,DIPA,C6H16N+,CC(C)[NH2+]C(C)C,Di-isopropylammonium,"
+di(propan-2-yl)azanium",,N-propan-2-ylpropan-2-amine,CC(C)NC(C)C,108-18-9,,GreatCellSolar
+197,A,DEPDA,DEPDA2,C7H20N2+2  ,CC[NH+](CC)CCC[NH3+],"N,N-Diethylpropane-1,3-diammonium ",3-azaniumylpropyl(diethyl)azanium,,"N',N'-diethylpropane-1,3-diamine",CCN(CC)CCCN,104-78-9,,GreatCellSolar
+198,A,PYA,,C6H16N2+2,C1CC[NH+](C1)CC[NH3+],2-Pyrrolidin-1-ium-1-ylethylammonium ,"2-pyrrolidin-1-ium-1-ylethylazanium
+",,2-pyrrolidin-1-ylethanamine,C1CCN(C1)CCN,7154-73-6,,GreatCellSolar
+199,A,MPhA,MeO-PhA,C7H10NO+,COC1=CC=C(C=C1)[NH3+] ,4-Methoxy-Phenylammonium ,"
+(4-methoxyphenyl)azanium",,4-methoxyaniline,COC1=CC=C(C=C1)N,104-94-9,,GreatCellSolar
+200,A,TFPE,CF3-PA,C7H7F3N+,C1=CC(=CC=C1C(F)(F)F)[NH3+],4-Trifluoromethyl-Phenylammonium,"
+[4-(trifluoromethyl)phenyl]azanium",,4-(trifluoromethyl)aniline,C1=CC(=CC=C1C(F)(F)F)N,455-14-1,,GreatCellSolar
+201,A,AZO,,C7H14N+,C1C[NH+]2CCC1CC2,Quinuclidin-1-ium,1-azoniabicyclo[2.2.2]octane,,1-azabicyclo[2.2.2]octane,C1CN2CCC1CC2,100-76-5,,GreatCellSolar
+202,A,PP,PP,C5H12N+,C1CC[NH2+]CC1,Piperidinium,piperidin-1-ium,17523-59-0,piperidine,C1CCNCC1,110-89-4,,GreatCellSolar
+203,A,PPD,PA2,C4H12N2+2,C1C[NH2+]CC[NH2+]1,"Piperazine-1,4-diium","piperazine-1,4-diium",,piperazine,C1CNCCN1,110-85-0,,GreatCellSolar
+204,A,DBO,,C6H14N2+2,C1C[NH+]2CC[NH+]1CC2,"1,4-Diazabicyclo[2,2,2]octane-1,4-diium","1,4-diazoniabicyclo[2.2.2]octane",,"1,4-diazabicyclo[2.2.2]octane",C1CN2CCN1CC2,280-57-9,,GreatCellSolar
+205,A,DiPhA,,C12H12N+,C1=CC=C(C=C1)[NH2+]C2=CC=CC=C2,Diphenylammonium,diphenylazanium,61236-17-7,N-phenylaniline,C1=CC=C(C=C1)NC2=CC=CC=C2,122-39-4,,GreatCellSolar
+206,A,DBA,DBA,C8H20N+,CCCC[NH2+]CCCC,Di-Butylammonium ,dibutylazanium,,N-butylbutan-1-amine,CCCCNCCCC,111-92-2,,GreatCellSolar
+207,A,TA,TA,C3H10N+,C[NH+](C)C,Trimethylammonium,trimethylazanium,,"N,N-dimethylmethanamine",CN(C)C,75-50-3,,GreatCellSolar
+208,A,CFMA,,C7H8ClFN+,C1=CC(=C(C=C1Cl)F)C[NH3+],4-Chloro-2-fluorobenzylammonium,(4-chloro-2-fluorophenyl)methylazanium,,(4-chloro-2-fluorophenyl)methanamine,C1=CC(=C(C=C1Cl)F)CN,72235-57-5,,2D database
+209,A,AMPMA,,C8H14N2+2,C1=CC(=CC(=C1)C[NH3+])C[NH3+],"1,3-xylylenediammonium",[3-(azaniumylmethyl)phenyl]methylazanium,,[3-(aminomethyl)phenyl]methanamine,C1=CC(=CC(=C1)CN)CN,1477-55-0,,2D database
+210,A,FPhMA,,C7H9FN+ ,C1=CC=C(C(=C1)C[NH3+])F,2-fluorobenzylammonium,(2-fluorophenyl)methylazanium,,(2-fluorophenyl)methanamine,C1=CC=C(C(=C1)CN)F,89-99-6,,2D database
+211,A,BPA,,C3H9BrN+  ,C(C[NH3+])CBr,3-bromopropylammonium,3-bromopropylazanium ,,3-bromopropan-1-amine,C(CN)CBr,18370-81-5,,2D database
+212,A,ThYEA,,C10H12NS2+,C1=CSC(=C1)C2=CC=C(S2)CC[NH3+],2-(5-thiophen-2-ylthiophen-2-yl)ethylazanium,2-(5-thiophen-2-ylthiophen-2-yl)ethylazanium,,2-(5-thiophen-2-ylthiophen-2-yl)ethanamine,C1=CSC(=C1)C2=CC=C(S2)CCN,,,2D database
+213,A,BPP,,C5H5BrN+,C1=CC(=C[NH+]=C1)Br,3-bromopyridinium,3-bromopyridin-1-ium,,3-bromopyridine,C1=CC(=CN=C1)Br,626-55-1,,2D database
+214,A,SEA,,C2H8NS+,C(CS)[NH3+],Cysteamine,2-sulfanylethylazanium,,2-aminoethanethiol,C(CS)N,60-23-1,,2D database
+215,A,TMHDA,,C10H18N2+2 ,C[NH+](C)C1=CC=C(C=C1)[NH+](C)C,"N,N,N',N'-tetramethyl-1,6-hexanediammonium",[4-(dimethylazaniumyl)phenyl]-dimethylazanium,,"1-N,1-N,4-N,4-N-tetramethylbenzene-1,4-diamine",CN(C)C1=CC=C(C=C1)N(C)C,100-22-1,,2D database
+216,A,TMEDA,,C6H18N2+2,C[NH+](C)CC[NH+](C)C,"N,N,N',N'-tetramethylethylenediammonium",2-(dimethylazaniumyl)ethyl-dimethylazanium,,"N,N,N',N'-tetramethylethane-1,2-diamine",CN(C)CCN(C)C,110-18-9,,2D database
+217,A,DCPEA,dCl-PEA,C8H10Cl2N+,C1=C(C=C(C=C1Cl)Cl)CC[NH3+],"2-(3,5-Dichlorophenyl)ethyl-1-ammonium","2-(3,5-dichlorophenyl)ethylazanium",,"2-(3,5-dichlorophenyl)ethanamine",C1=C(C=C(C=C1Cl)Cl)CCN,67851-51-8,,2D database
+218,A,AAA,,C2H6NO2+,C(C(=O)O)[NH3+],(2-carboxy)methylammonium,carboxymethylazanium,,2-aminoacetic acid,C(C(=O)O)N,56-40-6,,2D database
+219,A,MMA,,C8H12NO+,C[NH2+]C1=CC=C(C=C1)OC,4-Methoxy-N-methylanilinium,(4-methoxyphenyl)-methylazanium,,4-methoxy-N-methylaniline,NC1=CC=C(C=C1)OC,5961-59-1,,2D database
+220,A,BMA,,C8H12N+,C[NH2+]CC1=CC=CC=C1,4-methylbenzylammonium,benzyl(methyl)azanium,,N-methyl-1-phenylmethanamine,CNCC1=CC=CC=C1,103-67-3,,2D database
+221,A,BPMM,,C8H11BrN+ ,C[NH2+]CC1=CC(=CC=C1)Br,3-bromo-N-methylbenzylammonium, (3-bromophenyl)methyl-methylazanium ,,1-(3-bromophenyl)-N-methylmethanamine,CNCC1=CC(=CC=C1)Br,67344-77-8,,2D database
+222,A,CPMM,,C8H11ClN+  ,C[NH2+]CC1=CC(=CC=C1)Cl,3-chloro-N-methylbenzylammonium,(3-chlorophenyl)methyl-methylazanium ,,1-(3-chlorophenyl)-N-methylmethanamine,CNCC1=CC(=CC=C1)Cl,39191-07-6,,2D database
+223,A,HPEM,,C9H14NO+,C[NH2+]CCC1=CC=C(C=C1)O,2-(4-Methoxyphenyl)ethyl-1-ammonium,2-(4-hydroxyphenyl)ethyl-methylazanium,,4-[2-(methylamino)ethyl]phenol,CNCCC1=CC=C(C=C1)O,370-98-9,,2D database
+224,A,TMP,,C5H16NP+2,C[P+](C)(C)CC[NH3+],(2-aminoethyl)trimethylphosphanium,2-azaniumylethyl(trimethyl)phosphanium,,2-aminoethyl(trimethyl)phosphanium;chloride,C[P+](C)(C)CCN.[Cl-],,,2D database
+225,A,NBA,,C14H18NO+,C1=CC=C2C(=C1)C=CC=C2OCCCC[NH3+],4-[(Naphthalen-1-yl)oxy]butyl-1-ammonium,4-naphthalen-1-yloxybutylazanium,,4-naphthalen-1-yloxybutan-1-amine,C1=CC=C2C(=C1)C=CC=C2OCCCCN,,,2D database
+226,A,MLA,,C3H8N6+2,C1(=[NH+]C(=NC(=[NH+]1)N)N)N,Melamine,"1,3,5-triazin-1-ium-2,4,6-triamine",108-78-1,"1,3,5-triazine-2,4,6-triamine",C1(=NC(=NC(=N1)N)N)N,108-78-1,,2D database
+227,A,TFBDA,4F-PhDMA,C8H9F4N2+,C(C1=C(C(=C(C(=C1F)F)CN)F)F)[NH3+],"2,3,5,6-tetrafluoro-1,4-phenylenedimethanammonium","[4-(aminomethyl)-2,3,5,6-tetrafluorophenyl]methylazanium",,"[4-(aminomethyl)-2,3,5,6-tetrafluorophenyl]methanamine",C(C1=C(C(=C(C(=C1F)F)CN)F)F)N,89992-50-7,,2D database
+228,A,TT,,C22H20NS5+,[NH3+]CCc1ccc(s1)C1C=C(C)C(S1)c1sc2cc(sc2c1)c1sccc1C,Thienothiophene,"2-[5-[4-methyl-5-[2-(3-methylthiophen-2-yl)thieno[3,2-b]thiophen-5-yl]-2,5-dihydrothiophen-2-yl]thiophen-2-yl]ethylazanium",,"2-[5-[4-methyl-5-[2-(3-methylthiophen-2-yl)thieno[3,2-b]thiophen-5-yl]-2,5-dihydrothiophen-2-yl]thiophen-2-yl]ethanamine",NCCc1ccc(s1)C1C=C(C)C(S1)c1sc2cc(sc2c1)c1sccc1C,,,2D database
+229,A,DTT,,C24H20NS6+,[NH3+]CCc1ccc(s1)C1C=C(C)C(S1)c1sc2c3sc(cc3sc2c1)c1sccc1C,Dithienothiophene,"2-[5-[4-methyl-5-[10-(3-methylthiophen-2-yl)-3,7,11-trithiatricyclo[6.3.0.0^2,6]undeca-1(8),2(6),4,9-tetraen-4-yl]-2,5-dihydrothiophen-2-yl]thiophen-2-yl]ethylazanium",,"2-[5-[4-methyl-5-[10-(3-methylthiophen-2-yl)-3,7,11-trithiatricyclo[6.3.0.0^2,6]undeca-1(8),2(6),4,9-tetraen-4-yl]-2,5-dihydrothiophen-2-yl]thiophen-2-yl]ethanamine",NCCc1ccc(s1)C1C=C(C)C(S1)c1sc2c3sc(cc3sc2c1)c1sccc1C,,,2D database
+230,A,FMA,,C7H9FN+,C1=CC(=CC(=C1)F)C[NH3+],3-fluoro-N-methylbenzylammonium,(3-fluorophenyl)methylazanium,,(3-fluorophenyl)methanamine,C1=CC(=CC(=C1)F)CN,100-82-3,,2D database
+231,A,AEIM,,C5H10N3+,C1=NC=NC1CC[NH3+],4-(2-aminoethyl)imidazolium,2-(4H-imidazol-4-yl)ethylazanium,,2-(4H-imidazol-4-yl)ethanamine,C1=NC=NC1CCN,,,2D database
+232,A,PYYEA,,C7H11N2+,C1=CC(=CN=C1)CC[NH3+],2-(3-Pyridyl)ethylammonium,2-pyridin-3-ylethylazanium,,2-pyridin-3-ylethanamine,C1=CC(=CN=C1)CCN,20173-24-4,,2D database
+233,A,IMIEA,,C5H11N3+2,C1=C[NH+]=C(N1)CC[NH3+],2-(2-aminoethyl)imidazolium,2-(1H-imidazol-3-ium-2-yl)ethylazanium,,2-(1H-imidazol-2-yl)ethanamine,C1=CN=C(N1)CCN,19225-96-8,,2D database
+234,A,Ph12D,,C8H14N2+2,C1=CC=C(C=C1)[NH2+]CC[NH3+],"N-phenylethane-1,2-diammonium",2-azaniumylethyl(phenyl)azanium,,"N'-phenylethane-1,2-diamine",C1=CC=C(C=C1)NCCN,1664-40-0,,2D database
+235,A,BPEA,,C14H16N+,C1=CC=C(C=C1)C2=CC=C(C=C2)CC[NH3+],2-(4-biphenyl)ethylammonium,2-(4-phenylphenyl)ethylazanium,,2-(4-phenylphenyl)ethanamine,C1=CC=C(C=C1)C2=CC=C(C=C2)CCN,17027-51-9,,2D database
+236,A,FPP,,C13H15N2F+2,[NH3+]C1=CC=C(C=C1)C2=C(C=C(C=C2)C[NH3+])F,"2-fluoro-[1,1'-biphenyl]-4,4'-dicarbonitrile",[4-[4-(azaniumylmethyl)-2-fluorophenyl]phenyl]azanium,,4-[4-(aminomethyl)-2-fluorophenyl]aniline,NC1=CC=C(C=C1)C2=C(C=C(C=C2)CN)F,,,2D database
+237,A,NAMA,,C11H12N+,C1=CC=C2C=C(C=CC2=C1)C[NH3+],naphthalen-2-ylmethylazanium,naphthalen-2-ylmethylazanium,,naphthalen-2-ylmethanamine,C1=CC=C2C=C(C=CC2=C1)CN,2018-90-8,,2D database
+238,A,NAETA,NEA,C12H14N+,C1=CC=C2C=C(C=CC2=C1)CC[NH3+],2-naphthalen-2-ylethylazanium,2-naphthalen-2-ylethylazanium,,2-naphthalen-2-ylethanamine,C1=CC=C2C=C(C=CC2=C1)CCN,2017-68-7,,2D database
+239,A,TBLM,2tTBlm1,C15H9N2S2+,S1C(=CC=C1)C1=CC=C(S1)C1=CC2=C(NC[NH2+]2)C=C1,5-(5-(thiophen-2-yl)thiophen-2-yl)-1H-benzo[d]imidazolium,"5-(5-thiophen-2-ylthiophen-2-yl)-2,3-dihydro-1H-benzimidazol-3-ium",,"5-(5-thiophen-2-ylthiophen-2-yl)-2,3-dihydro-1H-benzimidazole",C4NC1=C(C=CC(=C1)C2=CC=C(S2)C3=CC=CS3)N4,,,2D database
+240,A,FP,FP,C4H9FN+,C1C[NH2+]CC1F,3-fluoropyrrolidinium,3-fluoropyrrolidin-1-ium,,3-fluoropyrrolidine,C1CNCC1F,679431-51-7,,2D database
+241,A,DFP,DFP,C4H8F2N+,C1C[NH2+]CC1(F)F,3-fluoropyrrolidinium,"3,3-difluoropyrrolidin-1-ium",,"3,3-difluoropyrrolidine",C1CNCC1(F)F,316131-01-8,,2D database
+242,A,DTPA,,C11H20S2N+,[NH3+]CCCC1=CSC(=C1)C2=CC=CS2,"2,2'-bithiophene",3-(5-thiophen-2-ylthiophen-3-yl)propylazanium,,3-(5-thiophen-2-ylthiophen-3-yl)propan-1-amine,NCCCC1=CSC(=C1)C2=CC=CS2,,,2D database
+243,A,CCA,,C7H14NO2+,C1CC(CCC1C(=O)O)[NH3+],4-aminocyclohexanecarboxylic acid,(4-carboxycyclohexyl)azanium,,4-aminocyclohexane-1-carboxylic acid,C1CC(CCC1C(=O)O)N,1776-53-0,,2D database
+244,A,CCMA,,C8H16NO2+,C1CC(CCC1C[NH3+])C(=O)O,4-Aminomethyl-1-cyclohexanecarboxylate,(4-carboxycyclohexyl)methylazanium,,4-(aminomethyl)cyclohexane-1-carboxylic acid,C1CC(CCC1CN)C(=O)O,701-54-2,,2D database
+245,A,CHDMA,,C8H20N2+2,C1CC(CCC1C[NH3+])C[NH3+],"1,4-cyclohexanedimethylammonium",[4-(azaniumylmethyl)cyclohexyl]methylazanium,,[4-(aminomethyl)cyclohexyl]methanamine,C1CC(CCC1CN)CN,2549-93-1,,2D database
+246,A,OYA,,C5H12NO+,C1CC(COC1)[NH3+],tetrahydropyranylammonium,oxan-3-ylazanium,,oxan-3-amine,C1CC(COC1)N,120811-32-7,,2D database
+247,A,R-CHD,,C6H16N2+2,C1CCC(C(C1)[NH3+])N,"(1R, 2R)-(-)-1,2-Cyclohexanediammonium",(2-azaniumylcyclohexyl)azanium,,"cyclohexane-1,2-diamine",C1CCC(C(C1)N)N,694-83-7,,2D database
+248,A,S-CHD,,C6H16N2+2,C1CCC(C(C1)[NH3+])N,"(1S, 2S)-(+)-1,2-Diaminocyclohexane",(2-azaniumylcyclohexyl)azanium,,"cyclohexane-1,2-diamine",C1CCC(C(C1)N)N,694-83-7,,2D database
+249,A,PPAE,,C7H18N2+2,C1CC[NH+](CC1)CC[NH3+],2-(aminoethyl)piperidinium,2-piperidin-1-ium-1-ylethylazanium,,2-piperidin-1-ylethanamine,C1CCN(CC1)CCN,27578-60-5,,2D database
+250,A,PPIEA,,C6H17N3+2,C1CN(CC[NH2+]1)CC[NH3+],1-(2-Aminoethyl)piperazinium,2-piperazin-4-ium-1-ylethylazanium,,2-piperazin-1-ylethanamine,C1CN(CCN1)CCN,140-31-8,,2D database
+251,A,DFPD,,C5H10F2N+,C1C[NH2+]CCC1(F)F,"4,4-difluoropiperidinium","4,4-difluoropiperidin-1-ium",,"4,4-difluoropiperidine",C1CNCCC1(F)F,21987-29-1,,2D database
+252,A,APDA,,C5H16N2+2,C[NH+](C)CCC[NH3+],"N,N-dimethyl-1,3-diaminopropane",3-azaniumylpropyl(dimethyl)azanium,,"N',N'-dimethylpropane-1,3-diamine",CN(C)CCCN,109-55-7,,2D database
+253,A,R-BPEA,,C8H11BrN+,CC(C1=CC=C(C=C1)Br)[NH3+],R-1-(4-bromophenyl)ethylaminium,1-(4-bromophenyl)ethylazanium,,1-(4-bromophenyl)ethanamine,CC(C1=CC=C(C=C1)Br)N,24358-62-1,,2D database
+254,A,S-BPEA,,C8H11BrN+,CC(C1=CC=C(C=C1)Br)[NH3+],S-1-(4-bromophenyl)ethylaminium,1-(4-bromophenyl)ethylazanium,,1-(4-bromophenyl)ethanamine,CC(C1=CC=C(C=C1)Br)N,27298-97-1,,2D database
+255,A,NAYEA,,C12H14N+,CC(C1=CC2=CC=CC=C2C=C1)[NH3+],1-(2-naphthyl)ethylammonium,[(1R)-1-naphthalen-2-ylethyl]azanium,,(1R)-1-naphthalen-2-ylethanamine,CC(C1=CC2=CC=CC=C2C=C1)N,3906-16-9,,2D database
+256,A,MePEA,2meptH2,C6H18N2+2,CC(CCC[NH3+])C[NH3+],"2-Methylpentane-1,5-diammonium",(5-azaniumyl-2-methylpentyl)azanium,,"2-methylpentane-1,5-diamine",CC(CCCN)CN,15520-10-2,,2D database
+257,A,MeBA,,C5H14N+,CCC(C)C[NH3+],(S)-(−)-2-methylbutylammonium,[(2S)-2-methylbutyl]azanium,,(2S)-2-methylbutan-1-amine,CCC(C)CN,34985-37-0,,2D database
+258,A,PRA,,C16H12N+,C1=CC2=C3C(=C1)C=CC4=C(C=CC(=C43)C=C2)[NH3+],pyren-1-amine,pyren-1-ylazanium,,pyren-1-amine,C1=CC2=C3C(=C1)C=CC4=C(C=CC(=C43)C=C2)N,1606-67-3,,2D database
+259,A,PRMA,,C17H14N+,C1=CC2=C3C(=C1)C=CC4=C(C=CC(=C43)C=C2)C[NH3+],pyren-1-ylmethanamine,pyren-1-ylmethylazanium,,pyren-1-ylmethanamine,C1=CC2=C3C(=C1)C=CC4=C(C=CC(=C43)C=C2)CN,3786-54-7,,2D database
+260,A,PREA,,C18H16N+,C1=CC2=C3C(=C1)C=CC4=C(C=CC(=C43)C=C2)CC[NH3+],2-pyren-1-ylethanamine,2-pyren-1-ylethylazanium,,2-pyren-1-ylethanamine,C1=CC2=C3C(=C1)C=CC4=C(C=CC(=C43)C=C2)CCN,197722-88-6,,2D database
+261,A,DFHHA,,C6H12F2N+,C1CC(CC[NH2+]C1)(F)F,4-fluorohexahydroazepine,"4,4-difluoroazepan-1-ium",,"4,4-difluoroazepane",C1CC(CCNC1)(F)F,1094073-72-9,,2D database
+262,A,TMTPT,Me3TPT,C21H21N6+3,C[N+]1=CC=C(C=C1)C2=NC(=NC(=N2)C3=CC=[N+](C=C3)C)C4=CC=[N+](C=C4)C,"Trimethyl-2,4,6-tris(4-pyridyl)-1,3,5-triazine","2,4,6-tris(1-methylpyridin-1-ium-4-yl)-1,3,5-triazine",42517-85-1,,,,,2D database
+263,A,FMPE,,C7H9FN+,CC1=C(C=C(C=C1)[NH3+])F,3-fluoro-N-methylanilinium,(3-fluoro-4-methylphenyl)azanium,,3-fluoro-4-methylaniline,CC1=C(C=C(C=C1)N)F,452-77-7,,2D database
+264,A,MePhEA,,C9H14N+,CC1=CC(=CC=C1)CC[NH3+],2-(3-Methylphenyl)ethylammonium,2-(3-methylphenyl)ethylazanium,55755-17-4,2-(3-methylphenyl)ethanamine,CC1=CC(=CC=C1)CCN,55755-17-4,,2D database
+265,A,MMPEA,,C9H14N+,CC1=CC=C(C=C1)C(C)[NH3+],1-(p-tolyl)ethylammonium,1-(4-methylphenyl)ethylazanium,,1-(4-methylphenyl)ethanamine,CC1=CC=C(C=C1)C(C)N,586-70-9,,2D database
+266,A,ETOEA,,C6N5O2H12+,C(C)OC1=NN=C(N=N1)OCC[NH3+],"2-(6-ethoxy-1,2,4,5-tetrazin-3-yl)oxyethylammonium","2-[(6-ethoxy-1,2,4,5-tetrazin-3-yl)oxy]ethylazanium",,"2-[(6-ethoxy-1,2,4,5-tetrazin-3-yl)oxy]ethylazanium",C(C)OC1=NN=C(N=N1)OCCN,,,2D database
+267,A,TDMP,,C6H15N2+,CC1C[NH2+]C(CN1)C,"Trans-2,5-dimethyl piperazine","2,5-dimethylpiperazin-1-ium",,"2,5-dimethylpiperazine",CC1CNC(CN1)C,106-55-8,,2D database
+268,A,PPPA,,C7H18N2+2,CCC[NH+]1CC[NH2+]CC1,Propylpiperazinium,"1-propylpiperazine-1,4-diium",,1-propylpiperazine,CCCN1CCNCC1,50733-94-3,,2D database
+269,A,PhMEA,,C9H14N+ ,CCC[NH2+]C1=CC=CC=C1,Phenyl-2-methylethylammonium,phenyl(propyl)azanium,,N-propylaniline,CCCNC1=CC=CC=C1,622-80-0,,2D database
+270,A,2TImI,,C11H9N2S2+,S1C(=CC=C1)C1=CC=C(S1)C=1[NH+]=CNC1,4-(5-(thiophen-2-yl)thiophen-2-yl)-1H-imidazolium,4-(5-thiophen-2-ylthiophen-2-yl)imidazol-1-ium,,4-(5-thiophen-2-ylthiophen-2-yl)-1H-imidazole,S1C(=CC=C1)C1=CC=C(S1)C=1N=CNC1,,,2D database
+271,A,MF,,C4H13N5+2,C[N+](=C(N)[NH+]=C(N)N)C,"N,N-dimethylbiguanidinium",[amino(diaminomethylideneazaniumyl)methylidene]-dimethylazanium,,"2-carbamimidoyl-1,1-dimethylguanidine",CN(C)C(=NC(=N)N)N,657-24-9,,2D database
+272,A,CNA,,C10H22NO2+,C(CCCCC(=O)O)CCCC[NH3+],9-carboxynonylazanium,9-carboxynonylazanium,,10-aminodecanoic acid,C(CCCCC(=O)O)CCCCN,,,2D database
+273,A,TDA,,C13H30N+,CCCCCCCCCCCCC[NH3+],Tridecylammonium,tridecylazanium,,tridecan-1-amine,CCCCCCCCCCCCCN,2869-34-3,,2D database
+274,A,PENDA,,C15H34N+,CCCCCCCCCCCCCCC[NH3+],Pentadecylammonium,pentadecylazanium,,pentadecan-1-amine,CCCCCCCCCCCCCCCN,2570-26-5,,2D database
+275,A,HEXDA,,C16H36N+,CCCCCCCCCCCCCCCC[NH3+],Hexadecylammonium,hexadecylazanium,1602-97-7,hexadecan-1-amine,CCCCCCCCCCCCCCCCN,143-27-1,,2D database
+276,A,DDNA,,C10H16N+,CCCCC#CC#CCC[NH3+],"Deca-3,5-diyn-1-ammonium","deca-3,5-diynylazanium",,"deca-3,5-diyn-1-amine",CCCCC#CC#CCCN,,,2D database
+277,A,TFAI,2TFAI,C10H14N2SO+,[NH3+]C(N)CC1=CC=C(S1)C2=CC=CS2,2-(5-(thiophen-2-yl)thiophen-2-yl)acetamidinium,[1-amino-2-(5-thiophen-2-ylthiophen-2-yl)ethyl]azanium,,"2-(5-thiophen-2-ylthiophen-2-yl)ethane-1,1-diamine",NC(N)CC1=CC=C(S1)C2=CC=CS2,,,2D database
+278,A,UDA,,C11H26N+,CCCCCCCCCCC[NH3+],Undecylammonium,undecylazanium,,undecan-1-amine,CCCCCCCCCCCN,7307-55-3,,2D database
+279,A,FPT,,C12FH14N2S+2,[NH3+]CC1=CC(=C(C=C1)C1=CC=C(S1)C[NH3+])F,(5-(4-(ammoniomethyl)-2-fluorophenyl)thiophen-2-yl)methanaminium,[NH3+]CC1=CC(=C(C=C1)C1=CC=C(S1)C[NH3+])F,,[4-[5-(aminomethyl)thiophen-2-yl]-3-fluorophenyl]methanamine,NCC1=CC(=C(C=C1)C1=CC=C(S1)CN)F,,,2D database
+280,A,IDPA,,C3H9IN+,CC(C[NH3+])I,2-iodopropylammonium,2-iodopropylazanium,,2-iodopropan-1-amine,CC(CN)I,20893-41-8,,2D database
+281,A,DMPDA,DMePDA,C5H15N2+,CN(C)CCC[NH3+],"N,N-dimethylpropane-1,3-diammonium",3-(dimethylamino)propylazanium,,"N',N'-dimethylpropane-1,3-diamine",CN(C)CCCN,109-55-7,,2D database
+282,A,PROPA,,C5H15N2+,C[NH2+]CCC[NH2+]C,"N,N'-dimethyl-1,3-propanediammonium",methyl-[3-(methylazaniumyl)propyl]azanium,,"N,N'-dimethylpropane-1,3-diamine",CNCCCNC,111-33-1,,2D database
+283,A,MH,,CH7N2+,CN[NH3+],Methylhydrazinium,methylaminoazanium,,methylhydrazine,CNN,60-34-4,,2D database
+284,A,MPRA,MPA,C4H12NO+ ,COCCC[NH3+],γ-Methoxypropylammonium,3-methoxypropylazanium  ,,3-methoxypropan-1-amine,COCCCN,5332-73-0,,2D database
+285,A,CP,3CP,C6H5N2+,C1=CC=[NH+]C(=C1)C#N,Cyanopyridinium,pyridin-1-ium-2-carbonitrile,82105-90-6,pyridine-2-carbonitrile,C1=CC=NC(=C1)C#N,100-70-9,,2D database
+286,A,CYEA,,"
+C3H7N2+",C(C[NH3+])C#N,2-cyanoethylammonium,2-cyanoethylazanium,,3-aminopropanenitrile,C(CN)C#N,151-18-8,,2D database
+287,A,PIYEA,,C7H12N2+2,C1=CC=[NH+]C(=C1)CC[NH3+],2-(2-Pyridyl)ethylammonium,2-pyridin-1-ium-2-ylethylazanium,,2-pyridin-2-ylethanamine,C1=CC=NC(=C1)CCN,2706-56-1,,2D database
+288,A,ATHP,,C5H12NO+,C1COCCC1[NH3+],tetrahydropyranylammonium,oxan-4-ylazanium,,oxan-4-amine,C1COCCC1N,38041-19-9,,2D database
+289,A,BTm,,C22H20N3S4+,CC1=C(SC=C1)C2=CC=C(C3=NSN=C23)C4=C(C=C(S4)C5=CC=C(S5)CC[NH3+])C,"2-[5-[4-methyl-5-[7-(3-methylthiophen-2-yl)-2,1,3-benzothiadiazol-4-yl]thiophen-2-yl]thiophen-2-yl]ethylammonium","2-[5-[4-methyl-5-[7-(3-methylthiophen-2-yl)-2,1,3-benzothiadiazol-4-yl]thiophen-2-yl]thiophen-2-yl]ethylazanium",,"2-[5-[4-methyl-5-[7-(3-methylthiophen-2-yl)-2,1,3-benzothiadiazol-4-yl]thiophen-2-yl]thiophen-2-yl]ethanamine",CC1=C(SC=C1)C2=CC=C(C3=NSN=C23)C4=C(C=C(S4)C5=CC=C(S5)CCN)C,,,2D database
+290,A,Tu,,CH5N2S+,C(=S)([NH3+])N,thiourea,carbamothioylazanium,,thiourea,C(=S)(N)N,62-56-6,,2D database
+291,A,ClCA,MBA,C6H13ClN+,C1CC(CCC1[NH3+])Cl,R-4-Cl-MBA,(4-chlorocyclohexyl)azanium,,4-chlorocyclohexan-1-amine,C1CC(CCC1N)Cl,,,2D database
+292,A,MNBA,,C5H13O2N2+,ON(O)C1CCC([NH3+])CC1,(S)-α-methyl-4-nitrobenzylamonium,[4-(dihydroxyamino)cyclohexyl]azanium,,"4-N,4-N-dihydroxycyclohexane-1,4-diamine",ON(O)C1CCC(N)CC1,,,2D database
+293,A,4T,,C18H16S4N+,C1=C(SC=C1)C2=CC=C(S2)C3=CC=C(S3)C4=CC=C(S4)CC[NH3+],"2-(3''',4'-dimethyl- [2,2':5',2'':5'',2'''- quaterthiophen]-5-yl)ethan-1-ammonium",2-[5-[5-(5-thiophen-2-ylthiophen-2-yl)thiophen-2-yl]thiophen-2-yl]ethylazanium,,2-[5-[5-(5-thiophen-2-ylthiophen-2-yl)thiophen-2-yl]thiophen-2-yl]ethanamine,C1=C(SC=C1)C2=CC=C(S2)C3=CC=C(S3)C4=CC=C(S4)CCN,,,2D database
+294,A,NAA,1-NA,C10H10N+,C1=CC=C2C(=C1)C=CC=C2[NH3+],1-naphthylamine,naphthalen-1-ylazanium,70450-98-5,naphthalen-1-amine,C1=CC=C2C(=C1)C=CC=C2N,134-32-7,,Paper
+295,A,FUMA,FuMA,C5H8NO+,C1=COC(=C1)C[NH3+],2-furfurylammonium,furan-2-ylmethylazanium,,furan-2-ylmethanamine,C1=COC(=C1)CN,617-89-0,,Paper
+1,B,Pb,,Pb+2,[Pb+2],Lead,lead(2+),14280-50-3,Lead,[Pb],7439-92-1,42297.0,
+2,B,Sn,,Sn+2,[Sn+2],Tin,tin(2+),22541-90-8,Tin,[Sn],7440-31-5,1223.0,
+3,B,Bi,,Bi+3,[Bi+3],Bismuth ,bismuth(3+),23713-46-4,Bismuth ,[Bi],7440-69-9,366.0,
+4,B,Sb,,Sb+3,[Sb+3],Antimony,Antimony(3+),23713-48-6,Antimony,[Sb],7440-36-0,137.0,
+5,B,Ag,,Ag+,[Ag+],Silver,Silver(1+),14701-21-4,Silver,[Ag],7440-22-4,57.0,
+6,B,Cu,,Cu+2,[Cu+2],Copper,Copper(2+),15158-11-9,Copper,[Cu],7440-50-8,28.0,
+7,B,Ge,,Ge+2,[Ge+2],Germanium,Gemanium(2+),,Germanium,[Ge],7440-56-4,21.0,
+8,B,Sr,,Sr+2,[Sr+2],Strontium,Strontium(2+),22537-39-9,Strontium,[Sr],7440-24-6,20.0,
+9,B,Ba,,Ba+2,[Ba+2],Barium,Barium(2+),22541-12-4,Barium,[Ba],7440-39-3,20.0,
+10,B,Fe,,Fe+2,[Fe+2],Iron,Iron(2+),15438-31-0,Iron,[Fe],7439-89-6,19.0,
+11,B,Co,,Co+2,[Co+2],Cobolt,Cobolt(2+),22541-53-3,Cobolt,[Co],7440-48-4,15.0,
+12,B,Zn,,Zn+2,[Zn+2],Zink,Zink(2+),23713-49-7,Zink,[Zn],7440-66-6,14.0,
+13,B,Ni,,Ni+2,[Ni+2],Nickel,Nickel(2+),14701-22-5,Nickel,[Ni],7440-02-0,12.0,
+14,B,Eu,,Eu+2,[Eu+2],Europium,Europium(2+),16910-54-6,Europium,[Eu],7440-53-1,12.0,
+15,B,Te,,Te+4,[Te+4],Telurium,Telurium(4+),22537-55-9,Telurium,[Te],13494-80-9,11.0,
+16,B,Ca,,Ca+2,[Ca+2],Calcium,Calcium(2+),14127-61-8,Calcium,[Ca],7440-70-2,10.0,
+17,B,Mn,,Mn+2,[Mn+2],Manganese,Manganese(2+),16397-91-4,Manganese,[Mn],7439-96-5,10.0,
+18,B,Hg,,Hg+2,[Hg+2],Mercury,Mercury(2+),14302-87-5,Mercury,[Hg],7439-97-6,8.0,
+19,B,Pt,,Pt+4,[Pt+4],Platinum,Platinum(4+),22541-31-7,Platinum,[Pt],7440-06-04,7.0,
+20,B,Mg,,Mg+2,[Mg+2],Magnesium,Magnesium(2+),22537-22-0,Magnesium,[Mg],7439-95-4,6.0,
+21,B,La,,La+3,[La+3],Lanthanum,Lanthanum(3+),16096-89-2,Lanthanum,[La],7439-91-0,6.0,
+22,B,In,,In+3,[In+3],Indium,Indium(3+),22537-49-1,Indium,[In],7440-74-6,5.0,
+23,B,Tb,,Tb+3,[Tb+3],Terbium,Terbium(3+),22541-20-4,Terbium,[Tb],7440-27-9,4.0,
+24,B,Nb,,Nb+5,[Nb+5],Niobium,Niobium(5+),7440-03-01,Niobium,[Nb],7440-03-01,4.0,
+25,B,Ti,,Ti+4,[Ti+4],Titanium,Titanium(4+),16043-45-1,Titanium,[Ti],7440-32-6,3.0,
+26,B,Y,,Y+2,[Yt+2],Yttrium,Yttrium(2+),7440-65-5,Yttrium,[Y],7440-65-5,2.0,
+27,B,Al,,Al+3,[Al+3],Aluminium,Aluminium(3+),22537-23-1,Aluminium,[Al],7429-90-5,1.0,
+28,B,Sm,,Sm+3,[Sm+3],Samarium,Samarium(3+),22541-17-9,Samarium,[Sm],7440-19-9,1.0,
+29,B,Cr,,Cr+3,[Cr+3],Chromium,Chromium(3+),16065-83-1,Chromium,[Cr],7440-47-3,1.0,
+30,B,Au,,Au+,[Au+],Gold,Gold(+),20681-14-5,Gold,[Au],7440-57-5,1.0,
+31,B,Au,,Au+3,[Au+3],Gold,Gold(3+),16065-91-1,Gold,[Au],7440-57-5,1.0,
+1,X,I,,I-,[I-],Iodide,Iodide,20461-54-5,molecular iodine,II,7553-56-2,42324.0,
+2,X,Br,,Br-,[Br-],Bromide,Bromide,24959-67-9,molecular bromine,BrBr,7726-95-6,10764.0,
+3,X,Cl,,Cl-,[Cl-],Chloride,Chloride,16887-00-6,molecular chlorine,ClCl,7782-50-5,92.0,
+4,X,O,,O-2,[O-2],Oxide,Oxygen(2-),16833-27-5,molecular oxygen,O=O,7782-44-7,32.0,
+5,X,S,,S-2,[S-2],Sulfide,Sulfide,18496-25-8,Sulfur,[S],7704-34-9,26.0,
+6,X,SCN,,CNS-,C(#N)[S-],Thiocyanate,Thiocyanate,302-04-5,thiocyanic acid,C(#N)S,463-56-9,12.0,
+7,X,F,,F-,[F-],Flourie,Flouride,16984-48-8,molecular fluorine,FF,7782-41-4,12.0,
+8,X,PF6,,F6P-,F[P-](F)(F)(F)(F)F,Hexafluorophosphate,Hexafluorophosphate,16919-18-9,hydron;hexafluorophosphate,[H+].F[P-](F)(F)(F)(F)F,16940-81-1,11.0,
+9,X,BF4,,BF4-,[B-](F)(F)(F)F,Tetrafluoroborate,Tetrafluoroborate,14874-70-5,hydron;tetrafluoroborate,[H+].[B-](F)(F)(F)F,16872-11-0,9.0,

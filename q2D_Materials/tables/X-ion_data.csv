@@ -1,0 +1,10 @@
+ID,Abbreviation,Alternative_abbreviations,Molecular_formula,SMILE,Common_name,IUPAC_name,CAS,Parent_IUPAC,Parent_SMILE,Parent_CAS,Common_source_compound,Source_compound_CAS,Chemical_formula,Number_of_occurances
+1,I,,I-,[I-],Iodide,Iodide,20461-54-5,molecular iodine,II,7553-56-2,CH3NH3I,14965-49-2,I-,42324
+2,Br,,Br-,[Br-],Bromide,Bromide,24959-67-9,molecular bromine,BrBr,7726-95-6,CH3NH3Br,6876-37-5,Br-,10764
+3,Cl,,Cl-,[Cl-],Chloride,Chloride,16887-00-6,molecular chlorine,ClCl,7782-50-5,CH3NH3Cl,593-51-1,Cl-,92
+4,O,,O-2,[O-2],Oxide,Oxygen(2-),16833-27-5,molecular oxygen,O=O,7782-44-7,,,O-2,32
+5,S,,S-2,[S-2],Sulfide,Sulfide,18496-25-8,Sulfur,[S],7704-34-9,,,S-2,26
+6,SCN,,CNS-,C(#N)[S-],Thiocyanate,Thiocyanate,302-04-5,thiocyanic acid,C(#N)S,463-56-9,CH3NH3SCN,61540-63-4,CNS-,12
+7,F,,F-,[F-],Flourie,Flouride,16984-48-8,molecular fluorine,FF,7782-41-4,PbF2,7783-46-2,F-,12
+8,PF6,,F6P-,F[P-](F)(F)(F)(F)F,Hexafluorophosphate,Hexafluorophosphate,16919-18-9,hydron;hexafluorophosphate,[H+].F[P-](F)(F)(F)(F)F,16940-81-1,CH(NH2)2PF6,,F6P-,11
+9,BF4,,BF4-,[B-](F)(F)(F)F,Tetrafluoroborate,Tetrafluoroborate,14874-70-5,hydron;tetrafluoroborate,[H+].[B-](F)(F)(F)F,16872-11-0,CH3NH3BF4,,BF4-,9

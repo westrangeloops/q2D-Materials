@@ -23,6 +23,10 @@ try:
 except ImportError:
     q2D_analyzer_legacy = None
 
+# Import q2DStructure for structure creation
+from .structure import q2DStructure
+
 __all__ = [
     'q2D_analyzer',
+    'q2DStructure',
 ] 

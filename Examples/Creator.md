@@ -7,16 +7,21 @@ Complete guide to creating perovskite structures from simple bulk to complex mix
 ## Table of Contents
 
 1. [Getting Started](#getting-started)
-2. [Simple Bulk Perovskites](#simple-bulk-perovskites)
-3. [Bulk with Supercells](#bulk-with-supercells)
-4. [Double Perovskites](#double-perovskites)
-5. [Pattern-Based Mixed Compositions](#pattern-based-mixed-compositions)
-6. [2D Perovskites - Monolayer](#2d-perovskites---monolayer)
-7. [2D Perovskites - Ruddlesden-Popper (RP)](#2d-perovskites---ruddlesden-popper-rp)
-8. [2D Perovskites - Dion-Jacobson (DJ)](#2d-perovskites---dion-jacobson-dj)
-9. [Spacer Molecules](#spacer-molecules)
-10. [Complete Parameter Reference](#complete-parameter-reference)
-11. [Pattern-Based Mixing Guide](#pattern-based-mixing-guide)
+2. [Ion Recommender](#ion-recommender)
+3. [Simple Bulk Perovskites](#simple-bulk-perovskites)
+4. [Bulk with Supercells](#bulk-with-supercells)
+5. [Double Perovskites](#double-perovskites)
+6. [Pattern-Based Mixed Compositions](#pattern-based-mixed-compositions)
+7. [2D Perovskites - Monolayer](#2d-perovskites---monolayer)
+8. [2D Perovskites - Ruddlesden-Popper (RP)](#2d-perovskites---ruddlesden-popper-rp)
+9. [2D Perovskites - Dion-Jacobson (DJ)](#2d-perovskites---dion-jacobson-dj)
+10. [Spacer Molecules](#spacer-molecules)
+11. [Complete Parameter Reference](#complete-parameter-reference)
+12. [Pattern-Based Mixing Guide](#pattern-based-mixing-guide)
+13. [Advanced Examples](#advanced-examples)
+14. [Visualization](#visualization)
+15. [Saving Structures](#saving-structures)
+16. [Troubleshooting](#troubleshooting)
 
 ## Getting Started
 
@@ -35,16 +40,167 @@ pip install ase numpy rdkit
 ```python
 from q2D_Materials.core.creator import q2D_creator
 
-# Initialize creator with composition
-q2d = q2D_creator(B='Pb', X='I', A='MA')
+# Initialize empty creator
+q2d = q2D_creator()
 ```
 
-The `q2D_creator` class requires:
-- `B`: B-site cation (e.g., 'Pb', 'Sn', 'Ge')
-- `X`: X-site anion (e.g., 'I', 'Br', 'Cl')
-- `A`: A-site cation (e.g., 'Cs', 'MA', 'FA')
+The `q2D_creator` class is initialized without parameters. All composition parameters (`A_ions`, `B_ions`, `X_ions`) must be provided when calling `create_perovskite()`.
 
-These are the default values used when creating structures, but can be overridden with pattern-based mixing.
+## Ion Recommender
+
+The `recommend()` method helps you discover compatible ions for perovskite structures based on occurrence frequency in the perovskite database. This is especially useful when you know one component (X, B, or spacer) and want to find commonly used combinations.
+
+### Basic Usage
+
+```python
+q2d = q2D_creator()
+
+# Get recommendations based on X-site anion
+recommendations = q2d.recommend(X='Cl', top_n=5)
+print("Recommended B-site cations:", [r['abbreviation'] for r in recommendations['B']])
+print("Recommended A-site cations:", [r['abbreviation'] for r in recommendations['A']])
+print("Recommended spacers:", [r['abbreviation'] for r in recommendations['spacer']])
+```
+
+### Recommendation Based on X-Site Anion
+
+When you specify an X-site anion, the recommender suggests commonly used B-site cations, A-site cations, and spacers:
+
+```python
+# Get recommendations for Cl-based perovskites
+recs = q2d.recommend(X='Cl', top_n=10)
+
+# Access recommendations
+for b_ion in recs['B']:
+    print(f"{b_ion['abbreviation']}: {b_ion['common_name']} ({b_ion['occurrences']} occurrences)")
+
+# Output example:
+# Pb: Lead (42297.0 occurrences)
+# Sn: Tin (1223.0 occurrences)
+# Bi: Bismuth (366.0 occurrences)
+```
+
+### Recommendation Based on B-Site Cation
+
+When you specify a B-site cation, get recommendations for compatible X-site anions, A-site cations, and spacers:
+
+```python
+# Get recommendations for Pb-based perovskites
+recs = q2d.recommend(B='Pb', top_n=5)
+
+print("Compatible X-site anions:")
+for x_ion in recs['X']:
+    print(f"  {x_ion['abbreviation']}: {x_ion['common_name']} ({x_ion['occurrences']} occurrences)")
+```
+
+### Recommendation Based on Spacer
+
+When you specify a spacer molecule, get recommendations for A-site cations, B-site cations, and X-site anions:
+
+```python
+# Get recommendations for PEA (phenylethylammonium) spacer
+recs = q2d.recommend(spacer='PEA', top_n=5)
+
+print("Compatible A-site cations:", [r['abbreviation'] for r in recs['A']])
+print("Compatible B-site cations:", [r['abbreviation'] for r in recs['B']])
+print("Compatible X-site anions:", [r['abbreviation'] for r in recs['X']])
+```
+
+### Understanding Spacers vs A-Site Cations
+
+The recommender automatically distinguishes spacers from A-site cations based on molecular size:
+- **Spacers**: A-site ions with **>10 atoms** in their molecular formula (e.g., PEA, BA, AVA)
+- **A-site cations**: All A-site ions, including those that can also be spacers (≤10 atoms)
+
+```python
+recs = q2d.recommend(X='I', top_n=10)
+
+# A-site list includes all A-site cations (small and large)
+print("All A-site cations:", [r['abbreviation'] for r in recs['A']])
+# Output: ['MA', 'FA', 'Cs', 'BA', 'PEA', ...]
+
+# Spacer list includes only large molecules (>10 atoms)
+print("Spacers only:", [r['abbreviation'] for r in recs['spacer']])
+# Output: ['BA', 'PEA', 'AVA', 'HIA', 'PDMA', ...]
+```
+
+### Recommendation Parameters
+
+```python
+recommendations = q2d.recommend(
+    X='Cl',           # or B='Pb', or spacer='PEA' (at least one required)
+    top_n=10,         # Number of recommendations per category (default: 10)
+    min_occurrences=1 # Minimum occurrence count in database (default: 1)
+)
+```
+
+### Recommendation Output Format
+
+Each recommendation entry contains detailed information:
+
+```python
+recs = q2d.recommend(X='Cl', top_n=1)
+
+sample = recs['B'][0]
+print(sample)
+# {
+#     'abbreviation': 'Pb',
+#     'common_name': 'Lead',
+#     'occurrences': 42297.0,
+#     'molecular_formula': 'Pb+2',
+#     'smile': '[Pb+2]',
+#     'ion_type': 'B'
+# }
+```
+
+### Using Recommendations to Create Structures
+
+You can use recommendations directly in structure creation:
+
+```python
+# Get recommendations
+recs = q2d.recommend(X='Cl', top_n=3)
+
+# Use the top recommended B-site cation
+top_B = recs['B'][0]['abbreviation']  # e.g., 'Pb'
+top_A = recs['A'][0]['abbreviation']  # e.g., 'MA'
+
+# Create structure with recommended ions
+structure = q2d.create_perovskite(
+    'bulk',
+    A_ions=top_A,
+    B_ions=top_B,
+    X_ions='Cl',
+    supercell_size=(1, 1, 1)
+)
+```
+
+### Alternative Abbreviations
+
+The recommender supports alternative abbreviations and is case-insensitive:
+
+```python
+# All of these work:
+recs1 = q2d.recommend(X='cl')      # lowercase
+recs2 = q2d.recommend(X='CL')      # uppercase
+recs3 = q2d.recommend(spacer='pea') # lowercase
+recs4 = q2d.recommend(B='pb')      # lowercase
+
+# Alternative abbreviations also work (e.g., 'GU' for Guanidinium)
+recs5 = q2d.recommend(X='I', top_n=5)
+```
+
+### Filtering by Occurrence Count
+
+Filter out rare combinations by setting a minimum occurrence threshold:
+
+```python
+# Only show ions with at least 100 occurrences
+recs = q2d.recommend(X='Cl', top_n=10, min_occurrences=100)
+
+# This filters out less common combinations
+print("Well-established combinations:", [r['abbreviation'] for r in recs['B']])
+```
 
 ## Simple Bulk Perovskites
 
@@ -55,10 +211,12 @@ The simplest bulk perovskite structure:
 ```python
 from q2D_Materials.core.creator import q2D_creator
 
-q2d = q2D_creator(B='Pb', X='I', A='MA')
+q2d = q2D_creator()
 
 # Create single unit cell
-bulk = q2d.create_perovskite('bulk', supercell_size=(1, 1, 1))
+bulk = q2d.create_perovskite('bulk', 
+    A_ions='MA', B_ions='Pb', X_ions='I',
+    supercell_size=(1, 1, 1))
 from ase.io import write
 write('MAPbI3_unit_cell.vasp', bulk)
 ```
@@ -69,6 +227,7 @@ write('MAPbI3_unit_cell.vasp', bulk)
 # Specify B-X bond distance explicitly
 bulk = q2d.create_perovskite(
     'bulk',
+    A_ions='MA', B_ions='Pb', X_ions='I',
     supercell_size=(1, 1, 1),
     BX_dist=3.18  # Angstrom (auto-calculated if None)
 )
@@ -82,12 +241,16 @@ Create larger bulk structures:
 
 ```python
 # 2×2×2 supercell
-bulk_supercell = q2d.create_perovskite('bulk', supercell_size=(2, 2, 2))
+bulk_supercell = q2d.create_perovskite('bulk', 
+    A_ions='MA', B_ions='Pb', X_ions='I',
+    supercell_size=(2, 2, 2))
 from ase.io import write
 write('MAPbI3_2x2x2.vasp', bulk_supercell)
 
 # 3×3×3 supercell
-bulk_large = q2d.create_perovskite('bulk', supercell_size=(3, 3, 3))
+bulk_large = q2d.create_perovskite('bulk',
+    A_ions='MA', B_ions='Pb', X_ions='I',
+    supercell_size=(3, 3, 3))
 from ase.io import write
 write('MAPbI3_3x3x3.vasp', bulk_large)
 ```
@@ -96,7 +259,9 @@ write('MAPbI3_3x3x3.vasp', bulk_large)
 
 ```python
 # Non-cubic supercell
-bulk_rect = q2d.create_perovskite('bulk', supercell_size=(2, 3, 1))
+bulk_rect = q2d.create_perovskite('bulk',
+    A_ions='MA', B_ions='Pb', X_ions='I',
+    supercell_size=(2, 3, 1))
 from ase.io import write
 write('MAPbI3_2x3x1.vasp', bulk_rect)
 ```
@@ -109,6 +274,7 @@ Create alternating B-site cation structures:
 # Double perovskite with Pb and Sn
 double = q2d.create_perovskite(
     'bulk',
+    A_ions='MA', B_ions='Pb', X_ions='I',
     supercell_size=(2, 2, 2),  # Required for double perovskite
     Bp='Sn'  # Second B-site cation
 )
@@ -126,8 +292,9 @@ The double perovskite creates an alternating pattern of B and Bp cations.
 # Mix Cs, MA, and FA in a pattern
 mixed_A = q2d.create_perovskite(
     'bulk',
-    supercell_size=(2, 2, 2),  # 8 A-site positions
-    A_ions=['Cs', 'MA', 'FA', 'Cs', 'MA', 'FA', 'Cs', 'MA']  # Pattern for 8 positions
+    A_ions=['Cs', 'MA', 'FA', 'Cs', 'MA', 'FA', 'Cs', 'MA'],  # Pattern for 8 positions
+    B_ions='Pb', X_ions='I',
+    supercell_size=(2, 2, 2)  # 8 A-site positions
 )
 ```
 
@@ -137,8 +304,9 @@ mixed_A = q2d.create_perovskite(
 # Alternating Pb and Sn
 mixed_B = q2d.create_perovskite(
     'bulk',
-    supercell_size=(2, 2, 2),
-    B_ions=['Pb', 'Sn']  # Pattern cycles: Pb-Sn-Pb-Sn-...
+    A_ions='MA', X_ions='I',
+    B_ions=['Pb', 'Sn'],  # Pattern cycles: Pb-Sn-Pb-Sn-...
+    supercell_size=(2, 2, 2)
 )
 ```
 
@@ -148,8 +316,9 @@ mixed_B = q2d.create_perovskite(
 # Mixed halides: Br-I-I pattern
 mixed_X = q2d.create_perovskite(
     'bulk',
-    supercell_size=(1, 1, 2),  # 6 X-site positions
-    X_ions=['Br', 'I', 'I']  # Pattern cycles: Br-I-I-Br-I-I
+    A_ions='MA', B_ions='Pb',
+    X_ions=['Br', 'I', 'I'],  # Pattern cycles: Br-I-I-Br-I-I
+    supercell_size=(1, 1, 2)  # 6 X-site positions
 )
 ```
 
@@ -178,6 +347,7 @@ Single-layer 2D structures with vacuum. Monolayers support **flexible attachment
 ```python
 monolayer = q2d.create_perovskite(
     'monolayer',
+    A_ions='MA', B_ions='Pb', X_ions='I',
     spacer_molecule='[NH3+]CCCCC[NH3+]',  # Divalent spacer
     supercell=[1, 1, 1]
 )
@@ -191,6 +361,7 @@ write('MAPbI3_monolayer.vasp', monolayer)
 # Monolayer with top attachment only
 monolayer_top = q2d.create_perovskite(
     'monolayer',
+    A_ions='MA', B_ions='Pb', X_ions='I',
     spacer_molecule='[NH3+]CCCCC[NH3+]',
     supercell=[1, 1, 1],
     vacuum=12,
@@ -200,6 +371,7 @@ monolayer_top = q2d.create_perovskite(
 # Monolayer with bottom attachment only
 monolayer_bottom = q2d.create_perovskite(
     'monolayer',
+    A_ions='MA', B_ions='Pb', X_ions='I',
     spacer_molecule='[NH3+]CCCCC[NH3+]',
     supercell=[1, 1, 1],
     vacuum=12,
@@ -209,6 +381,7 @@ monolayer_bottom = q2d.create_perovskite(
 # Monolayer with both attachments (default)
 monolayer_both = q2d.create_perovskite(
     'monolayer',
+    A_ions='MA', B_ions='Pb', X_ions='I',
     spacer_molecule='[NH3+]CCCCC[NH3+]',
     supercell=[1, 1, 1],
     vacuum=12,
@@ -222,7 +395,10 @@ monolayer_both = q2d.create_perovskite(
 monolayer = q2d.create_perovskite(
     structure_type='monolayer',
     
-    # Required parameters
+    # Required composition parameters
+    A_ions='MA', B_ions='Pb', X_ions='I',
+    
+    # Required 2D parameters
     spacer_molecule='CN1C=NC2=C1C(=O)N(C(=O)N2C)CC[NH3+]',
     supercell=[1, 1, 1],
     
@@ -244,6 +420,7 @@ Monolayer structures can use atomic cations (like Cs, K, Rb) as spacers instead 
 # Monolayer structure with Cs as spacer
 monolayer_cs = q2d.create_perovskite(
     'monolayer',
+    A_ions='MA', B_ions='Pb', X_ions='I',
     spacer_molecule='Cs',  # Atomic cation
     supercell=[1, 1, 1],
     vacuum=12,
@@ -260,6 +437,7 @@ RP structures are **true two-layer structures** with organic spacers between ino
 ```python
 rp = q2d.create_perovskite(
     'RP',
+    A_ions='MA', B_ions='Pb', X_ions='I',
     spacer_molecule='[NH3+]CCCCC=O',  # SMILES string
     supercell=[1, 1, 2]  # [nx, ny, n_layers]
 )
@@ -270,11 +448,14 @@ write('MAPbI3_RP_n2.vasp', rp)
 ### RP with All Parameters
 
 ```python
-# Simple RP with default composition (uses initialization values)
+# RP structure with all parameters
 rp = q2d.create_perovskite(
     structure_type='RP',
     
-    # Required parameters
+    # Required composition parameters
+    A_ions='MA', B_ions='Pb', X_ions='I',
+    
+    # Required 2D parameters
     spacer_molecule='[NH3+]CCCCC=O',  # SMILES, XYZ file, or Atoms object
     supercell=[1, 1, 2],  # [nx, ny, n_layers]
     
@@ -284,11 +465,9 @@ rp = q2d.create_perovskite(
     
     # Optional parameters
     penet=0.3,  # Spacer penetration into layer (fraction of BX bond)
-    BX_dist=None  # Auto-calculated if None (uses Pb-I from initialization)
+    BX_dist=None  # Auto-calculated if None from B/X ions
 )
 ```
-
-**Note:** If you don't specify `A_ions`, `B_ions`, or `X_ions`, the structure uses the default values from initialization (`B='Pb'`, `X='I'`, `A='MA'`). Only provide pattern lists if you want mixed compositions.
 
 ### RP Structure Details
 
@@ -319,7 +498,7 @@ rp_mixed = q2d.create_perovskite(
 )
 ```
 
-**Important:** When you provide `A_ions`, `B_ions`, or `X_ions` as lists, the code treats them as patterns for mixed compositions. If you want to use the default composition from initialization, simply don't provide these parameters.
+**Important:** When you provide `A_ions`, `B_ions`, or `X_ions` as lists, the code treats them as patterns for mixed compositions. Provide single values (strings) for uniform compositions.
 
 ### RP with Atomic Spacers
 
@@ -329,6 +508,7 @@ RP structures can use atomic cations (like Cs, K, Rb) as spacers instead of mole
 # RP structure with Cs as spacer
 rp_cs = q2d.create_perovskite(
     'RP',
+    A_ions='MA', B_ions='Pb', X_ions='I',
     spacer_molecule='Cs',  # Atomic cation
     supercell=[1, 1, 2],
     spacer_distance=2.0
@@ -347,13 +527,19 @@ write('MAPbI3_RP_Cs.vasp', rp_cs)
 
 ```python
 # RP with Cs (ionic radius: 1.88 Å)
-rp_cs = q2d.create_perovskite('RP', spacer_molecule='Cs', supercell=[1, 1, 2])
+rp_cs = q2d.create_perovskite('RP', 
+    A_ions='MA', B_ions='Pb', X_ions='I',
+    spacer_molecule='Cs', supercell=[1, 1, 2])
 
 # RP with Rb (ionic radius: 1.72 Å)
-rp_rb = q2d.create_perovskite('RP', spacer_molecule='Rb', supercell=[1, 1, 2])
+rp_rb = q2d.create_perovskite('RP',
+    A_ions='MA', B_ions='Pb', X_ions='I',
+    spacer_molecule='Rb', supercell=[1, 1, 2])
 
 # RP with K (ionic radius: 1.64 Å)
-rp_k = q2d.create_perovskite('RP', spacer_molecule='K', supercell=[1, 1, 2])
+rp_k = q2d.create_perovskite('RP',
+    A_ions='MA', B_ions='Pb', X_ions='I',
+    spacer_molecule='K', supercell=[1, 1, 2])
 ```
 
 ## 2D Perovskites - Dion-Jacobson (DJ)
@@ -365,6 +551,7 @@ DJ structures have divalent organic spacers connecting adjacent layers.
 ```python
 dj = q2d.create_perovskite(
     'DJ',
+    A_ions='MA', B_ions='Pb', X_ions='I',
     spacer_molecule='[NH3+]CCCCC[NH3+]',  # Divalent spacer
     supercell=[1, 1, 2]
 )
@@ -378,14 +565,14 @@ write('MAPbI3_DJ_n2.vasp', dj)
 dj = q2d.create_perovskite(
     structure_type='DJ',
     
-    # Required parameters
+    # Required composition parameters
+    A_ions=['Cs', 'MA', 'FA', 'MA'],  # Pattern-based mixing
+    B_ions=['Pb', 'Sn'],  # Pattern-based mixing
+    X_ions=['Br', 'I'],  # Pattern-based mixing
+    
+    # Required 2D parameters
     spacer_molecule='[NH3+]CCCCC[NH3+]',  # SMILES, XYZ file, or Atoms object
     supercell=[2, 2, 2],  # [nx, ny, n_layers]
-    
-    # Pattern-based mixed compositions (optional)
-    A_ions=['Cs', 'MA', 'FA', 'MA'],
-    B_ions=['Pb', 'Sn'],
-    X_ions=['Br', 'I'],
     
     # Spacer penetration
     penet=0.3,  # Fraction of BX bond that spacer penetrates into layer
@@ -399,7 +586,7 @@ dj = q2d.create_perovskite(
     Bp='Sn',  # Second B-site cation
     
     # B-X bond distance
-    BX_dist=None  # Auto-calculated if None
+    BX_dist=None  # Auto-calculated if None from B/X ions
 )
 ```
 
@@ -409,6 +596,7 @@ dj = q2d.create_perovskite(
 # Rotate spacer molecules
 dj_rotated = q2d.create_perovskite(
     'DJ',
+    A_ions='MA', B_ions='Pb', X_ions='I',
     spacer_molecule='[NH3+]CCCCC[NH3+]',
     supercell=[1, 1, 2],
     Ap_Rx=15.0,  # 15° rotation around x-axis
@@ -427,6 +615,7 @@ Spacer molecules can be provided in multiple formats:
 # Using SMILES string (requires RDKit)
 dj = q2d.create_perovskite(
     'DJ',
+    A_ions='MA', B_ions='Pb', X_ions='I',
     spacer_molecule='[NH3+]CCCCC[NH3+]',  # Pentanediammonium
     supercell=[1, 1, 2]
 )
@@ -438,6 +627,7 @@ dj = q2d.create_perovskite(
 # Using XYZ file path
 dj = q2d.create_perovskite(
     'DJ',
+    A_ions='MA', B_ions='Pb', X_ions='I',
     spacer_molecule='spacer.xyz',  # Path to XYZ file
     supercell=[1, 1, 2]
 )
@@ -454,6 +644,7 @@ spacer = read('spacer.xyz')
 # Use directly
 dj = q2d.create_perovskite(
     'DJ',
+    A_ions='MA', B_ions='Pb', X_ions='I',
     spacer_molecule=spacer,  # ASE Atoms object
     supercell=[1, 1, 2]
 )
@@ -465,12 +656,14 @@ dj = q2d.create_perovskite(
 # Using atomic cations as spacers (for RP and monolayer)
 rp_cs = q2d.create_perovskite(
     'RP',
+    A_ions='MA', B_ions='Pb', X_ions='I',
     spacer_molecule='Cs',  # Atomic cation
     supercell=[1, 1, 2]
 )
 
 monolayer_cs = q2d.create_perovskite(
     'monolayer',
+    A_ions='MA', B_ions='Pb', X_ions='I',
     spacer_molecule='Cs',  # Atomic cation
     supercell=[1, 1, 1]
 )
@@ -484,6 +677,7 @@ For supercells with multiple spacer positions, you can provide a list:
 # Different spacers at different positions
 mixed_spacers = q2d.create_perovskite(
     'DJ',
+    A_ions='MA', B_ions='Pb', X_ions='I',
     spacer_molecule=[
         '[NH3+]CCCCC[NH3+]',  # First spacer
         'spacer2.xyz',        # Second spacer
@@ -501,9 +695,9 @@ mixed_spacers = q2d.create_perovskite(
 |-----------|------|-------------|---------|
 | `structure_type` | str | Must be `'bulk'` | Required |
 | `supercell_size` | tuple | `(nx, ny, nz)` - Supercell dimensions. Required for mixed compositions. | `(1, 1, 1)` |
-| `A_ions` | str/list | A-site cation(s). Single value or list pattern. | Uses `A` from initialization |
-| `B_ions` | str/list | B-site cation(s). Single value or list pattern. | Uses `B` from initialization |
-| `X_ions` | str/list | X-site anion(s). Single value or list pattern. | Uses `X` from initialization |
+| `A_ions` | str/list | **Required.** A-site cation(s). Single value or list pattern. | Required |
+| `B_ions` | str/list | **Required.** B-site cation(s). Single value or list pattern. | Required |
+| `X_ions` | str/list | **Required.** X-site anion(s). Single value or list pattern. | Required |
 | `Bp` | str | Second B-site cation for double perovskites. | `None` |
 | `BX_dist` | float | B-X bond distance in Angstrom (auto-calculated if None). | `None` |
 
@@ -514,9 +708,9 @@ mixed_spacers = q2d.create_perovskite(
 | `structure_type` | str | `'RP'`, `'DJ'`, or `'monolayer'` | Required |
 | `spacer_molecule` | str/Atoms/list | **Required**. Spacer molecule(s) as SMILES, XYZ file, Atoms object, or atomic cation (for RP/monolayer). | Required |
 | `supercell` | list | **Required**. `[nx, ny, n_layers]` where `n_layers` is number of octahedral layers. | Required |
-| `A_ions` | str/list | A-site cation(s) pattern. | Uses `A` from initialization |
-| `B_ions` | str/list | B-site cation(s) pattern. | Uses `B` from initialization |
-| `X_ions` | str/list | X-site anion(s) pattern. | Uses `X` from initialization |
+| `A_ions` | str/list | **Required.** A-site cation(s) pattern. | Required |
+| `B_ions` | str/list | **Required.** B-site cation(s) pattern. | Required |
+| `X_ions` | str/list | **Required.** X-site anion(s) pattern. | Required |
 | `penet` | float | Spacer penetration into inorganic layer (fraction of BX bond). | `0.3` |
 | `spacer_distance` | float | Vacuum gap between opposing spacers for RP (Å). | `2.0` |
 | `interlayer_penet` | float | Interlayer penetration for RP (fraction of molecule length). | `0.0` |
@@ -553,12 +747,13 @@ Pattern-based mixing assigns ions sequentially to positions. If the pattern list
 #### Example 1: Cycling Pattern
 
 ```python
-q2d = q2D_creator(B='Pb', X='I', A='MA')
+q2d = q2D_creator()
 
 # For 2×2×2 = 8 A-sites, pattern of 3 will cycle:
 # Cs-MA-FA-Cs-MA-FA-Cs-MA
 mixed = q2d.create_perovskite('bulk',
     A_ions=['Cs', 'MA', 'FA'],  # Pattern of 3
+    B_ions='Pb', X_ions='I',
     supercell_size=(2, 2, 2)  # 8 positions
 )
 ```
@@ -569,6 +764,7 @@ mixed = q2d.create_perovskite('bulk',
 # For 1×1×2 = 6 X-sites, pattern of 2 will cycle:
 # Br-I-Br-I-Br-I
 mixed_halides = q2d.create_perovskite('bulk',
+    A_ions='MA', B_ions='Pb',
     X_ions=['Br', 'I'],  # Pattern of 2
     supercell_size=(1, 1, 2)  # 6 positions
 )
@@ -581,6 +777,7 @@ mixed_halides = q2d.create_perovskite('bulk',
 # For 2×2×2 = 8 A-sites, provide 8 values
 exact = q2d.create_perovskite('bulk',
     A_ions=['Cs', 'MA', 'FA', 'Cs', 'MA', 'FA', 'Cs', 'MA'],  # 8 values
+    B_ions='Pb', X_ions='I',
     supercell_size=(2, 2, 2)  # 8 positions
 )
 ```
@@ -595,11 +792,11 @@ exact = q2d.create_perovskite('bulk',
 # Spacers: 1 × 2 × 2 × 2 = 8 positions
 
 dj_mixed = q2d.create_perovskite('DJ',
-    spacer_molecule='[NH3+]CCCCC[NH3+]',
-    supercell=[2, 2, 2],
     A_ions=['Cs', 'MA'],  # 2 values, cycles 4 times for 8 positions
     B_ions=['Pb', 'Sn'],  # 2 values, cycles 8 times for 16 positions
     X_ions=['Br', 'I'],   # 2 values, cycles 36 times for 72 positions
+    spacer_molecule='[NH3+]CCCCC[NH3+]',
+    supercell=[2, 2, 2]
 )
 ```
 
@@ -615,14 +812,14 @@ dj_mixed = q2d.create_perovskite('DJ',
 ### Example 1: Complex Mixed Bulk
 
 ```python
-q2d = q2D_creator(B='Pb', X='I', A='MA')
+q2d = q2D_creator()
 
 complex_bulk = q2d.create_perovskite(
     'bulk',
-    supercell_size=(3, 3, 3),  # 27 unit cells
     A_ions=['Cs', 'MA', 'FA'],  # Cycles 9 times
     B_ions=['Pb', 'Sn', 'Ge'],  # Cycles 9 times
     X_ions=['Br', 'I', 'Cl', 'I'],  # Cycles for 81 X-sites
+    supercell_size=(3, 3, 3),  # 27 unit cells
     BX_dist=3.18
 )
 from ase.io import write
@@ -635,11 +832,11 @@ write('complex_bulk.vasp', complex_bulk)
 # RP structure with Cs atomic spacer and mixed A/B/X sites
 rp_complex = q2d.create_perovskite(
     'RP',
-    spacer_molecule='Cs',  # Atomic cation
-    supercell=[2, 2, 2],
     A_ions=['Cs', 'MA'],
     B_ions=['Pb', 'Sn'],
     X_ions=['Br', 'I'],
+    spacer_molecule='Cs',  # Atomic cation
+    supercell=[2, 2, 2],
     spacer_distance=2.0
 )
 from ase.io import write
@@ -651,11 +848,11 @@ write('RP_Cs_mixed.vasp', rp_complex)
 ```python
 rp_complete = q2d.create_perovskite(
     'RP',
-    spacer_molecule='[NH3+]CCCCC=O',
-    supercell=[2, 2, 3],  # 3 layers
     A_ions=['Cs', 'MA'],
     B_ions=['Pb', 'Sn'],
     X_ions=['Br', 'I'],
+    spacer_molecule='[NH3+]CCCCC=O',
+    supercell=[2, 2, 3],  # 3 layers
     spacer_distance=2.5,  # Larger gap
     interlayer_penet=0.1,  # Interlayer penetration
     penet=0.25,  # Less penetration
@@ -671,6 +868,7 @@ write('RP_complete.vasp', rp_complete)
 # Compare monolayers with different attachment configurations
 monolayer_top = q2d.create_perovskite(
     'monolayer',
+    A_ions='MA', B_ions='Pb', X_ions='I',
     spacer_molecule='[NH3+]CCCCC[NH3+]',
     supercell=[1, 1, 1],
     vacuum=12,
@@ -679,6 +877,7 @@ monolayer_top = q2d.create_perovskite(
 
 monolayer_bottom = q2d.create_perovskite(
     'monolayer',
+    A_ions='MA', B_ions='Pb', X_ions='I',
     spacer_molecule='[NH3+]CCCCC[NH3+]',
     supercell=[1, 1, 1],
     vacuum=12,
@@ -687,6 +886,7 @@ monolayer_bottom = q2d.create_perovskite(
 
 monolayer_both = q2d.create_perovskite(
     'monolayer',
+    A_ions='MA', B_ions='Pb', X_ions='I',
     spacer_molecule='[NH3+]CCCCC[NH3+]',
     supercell=[1, 1, 1],
     vacuum=12,
