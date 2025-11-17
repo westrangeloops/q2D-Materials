@@ -19,14 +19,14 @@ class q2D_creator:
     -----
     All composition parameters (A_ions, B_ions, X_ions) must be provided when calling
     create_perovskite(). For 2D structures (RP, DJ, monolayer), you must also provide
-    the organic spacer molecule via the `spacer_molecule` parameter.
+    the spacer via the `spacer` parameter (can be a molecule or atomic cation).
     """
     
     def __init__(self):
         """Initialize an empty q2D_creator instance."""
         pass
     
-    def _load_spacer_molecule(self, spacer_input):
+    def _load_spacer(self, spacer_input):
         """
         Load spacer molecule(s) from XYZ file, SMILES string, atomic cation, or ASE Atoms object.
         
@@ -47,7 +47,7 @@ class q2D_creator:
         """
         # Handle list of spacers
         if isinstance(spacer_input, list):
-            return [self._load_spacer_molecule(sp) for sp in spacer_input]
+            return [self._load_spacer(sp) for sp in spacer_input]
         
         # If already ASE Atoms, use directly
         if isinstance(spacer_input, Atoms):
@@ -117,7 +117,7 @@ class q2D_creator:
             'bulk', 'RP', 'DJ', or 'monolayer'
         **kwargs : dict
             Structure-specific parameters:
-            - spacer_molecule (str/Atoms/list): Required for 2D. Can be:
+            - spacer (str/Atoms/list): Required for 2D. Can be:
               - Atomic cation string (e.g., 'Cs', 'K', 'Rb') for all 2D structures
               - Molecule as XYZ path, SMILES, or Atoms object
               - List for pattern-based mixed spacers
@@ -266,11 +266,16 @@ class q2D_creator:
                 **metadata
             )
         else:
-            # 2D structures require spacer molecule
-            if 'spacer_molecule' not in kwargs:
-                raise ValueError(f"spacer_molecule is required for {structure_type} structures")
+            # 2D structures require spacer
+            # Support both 'spacer' and 'spacer_molecule' for backward compatibility
+            if 'spacer' in kwargs:
+                spacer_input = kwargs['spacer']
+            elif 'spacer_molecule' in kwargs:
+                spacer_input = kwargs['spacer_molecule']
+            else:
+                raise ValueError(f"spacer is required for {structure_type} structures")
             
-            spacer = self._load_spacer_molecule(kwargs['spacer_molecule'])
+            spacer = self._load_spacer(spacer_input)
             supercell = kwargs.get('supercell')
             if supercell is None:
                 raise ValueError(f"supercell is required for {structure_type} structures (e.g., supercell=[1, 1, 1])")
@@ -329,7 +334,7 @@ class q2D_creator:
                 B_ions=B_ions,
                 X_ions=X_ions,
                 supercell_size=supercell,
-                spacer_molecule=kwargs['spacer_molecule'],  # Store original input, not processed
+                spacer=spacer_input,  # Store original input, not processed
                 **metadata
             )
     

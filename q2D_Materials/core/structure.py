@@ -31,13 +31,13 @@ class q2DStructure(Atoms):
         X-site anion(s) used in creation
     supercell_size : tuple, optional
         Supercell dimensions used in creation
-    spacer_molecule : str, Atoms, or list, optional
-        Spacer molecule(s) used for 2D structures
+    spacer : str, Atoms, or list, optional
+        Spacer(s) used for 2D structures (can be molecule or atomic cation)
     """
     
     def __init__(self, atoms, structure_type=None, BX_dist=None,
                  A_ions=None, B_ions=None, X_ions=None, supercell_size=None,
-                 spacer_molecule=None, **metadata):
+                 spacer=None, spacer_molecule=None, **metadata):
         """
         Initialize q2DStructure with Atoms and metadata.
         
@@ -57,8 +57,8 @@ class q2DStructure(Atoms):
             X-site anion(s) used in creation
         supercell_size : tuple, optional
             Supercell dimensions used in creation
-        spacer_molecule : str, Atoms, or list, optional
-            Spacer molecule(s) used for 2D structures
+        spacer : str, Atoms, or list, optional
+            Spacer(s) used for 2D structures (can be molecule or atomic cation)
         **metadata : dict
             Additional metadata to store
         """
@@ -90,7 +90,9 @@ class q2DStructure(Atoms):
         self.B_ions = B_ions
         self.X_ions = X_ions
         self.supercell_size = supercell_size
-        self.spacer_molecule = spacer_molecule
+        # Support both 'spacer' and 'spacer_molecule' for backward compatibility
+        self.spacer = spacer if spacer is not None else spacer_molecule
+        self.spacer_molecule = self.spacer  # Keep for backward compatibility
         
         # Store any additional metadata
         self._metadata = metadata
@@ -139,6 +141,7 @@ class q2DStructure(Atoms):
                     B_ions=self.B_ions,
                     X_ions=self.X_ions,
                     supercell_size=self.supercell_size,
+                    spacer=self.spacer,
                     spacer_molecule=self.spacer_molecule,
                     **self._metadata
                 )

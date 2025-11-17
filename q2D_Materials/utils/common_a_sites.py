@@ -15,6 +15,14 @@ import os
 import pandas as pd
 from ase.io import read
 
+# Try to import pymatgen for periodic table functionality
+try:
+    from pymatgen.core.periodic_table import Element
+    PYMATGEN_AVAILABLE = True
+except ImportError:
+    PYMATGEN_AVAILABLE = False
+    Element = None
+
 # Check if RDKit is available
 try:
     from rdkit import Chem
@@ -183,6 +191,8 @@ def _lookup_smiles_from_database(a_cation):
     """
     Look up SMILES string for an A-site cation from the CSV database.
     
+    Case-sensitive lookup: 'Ca' (Calcium) and 'CA' (azetidinium) are different.
+    
     Parameters
     ----------
     a_cation : str
@@ -195,14 +205,17 @@ def _lookup_smiles_from_database(a_cation):
     """
     _, lookup = _load_a_ion_database()
     
-    # Try exact match (case-insensitive)
-    a_cation_upper = a_cation.upper()
-    if a_cation_upper in lookup:
-        return lookup[a_cation_upper]
-    
-    # Try original case
+    # Try exact case match first (case-sensitive)
     if a_cation in lookup:
         return lookup[a_cation]
+    
+    # Only try uppercase if exact match fails
+    # This allows 'CA' to match but prevents 'Ca' from matching 'CA'
+    a_cation_upper = a_cation.upper()
+    if a_cation_upper in lookup and a_cation_upper != a_cation:
+        # Only use uppercase match if it's different from the original
+        # This prevents 'Ca' from matching 'CA' in the database
+        return lookup[a_cation_upper]
     
     return None
 
@@ -210,6 +223,8 @@ def _lookup_smiles_from_database(a_cation):
 def get_ionic_radius(site, name):
     """
     Get the ionic radius for a specific ion at a specific site.
+    
+    Uses hardcoded database first, then falls back to pymatgen if available.
     
     Parameters
     ----------
@@ -226,7 +241,7 @@ def get_ionic_radius(site, name):
     Raises
     ------
     ValueError
-        If the ion is not found in the database
+        If the ion is not found in the database and pymatgen fallback fails
     """
     site_dict = ionic_radii.get(site)
     if site_dict is None:
@@ -235,8 +250,68 @@ def get_ionic_radius(site, name):
     val = site_dict.get(name, None)
     if val is not None:
         return val
-    else:
-        raise ValueError(f"Ion '{name}' not found for site '{site}'")
+    
+    # Fallback to pymatgen (provides ionic radii - correct for perovskites)
+    if PYMATGEN_AVAILABLE:
+        try:
+            # Try to get ionic radius from pymatgen
+            # Note: pymatgen's ionic radii depend on coordination number and oxidation state
+            # We'll use a reasonable default coordination number based on the site
+            element = Element(name)
+            
+            # Try to get ionic radius with typical coordination numbers
+            # For perovskites: A-site typically 12-coordinated, B-site 6-coordinated, X-site 6-coordinated
+            coord_map = {"A": 12, "B": 6, "X": 6}
+            coordination = coord_map.get(site, 6)
+            
+            # Try common oxidation states for each site
+            # Note: pymatgen's ionic_radii[oxi_state] returns a FloatWithUnit, not a dict
+            if site == "A":
+                # A-site: typically +1 (alkali metals) or +2 (alkaline earth)
+                for oxi_state in [1, 2]:
+                    try:
+                        radius_obj = element.ionic_radii.get(oxi_state)
+                        if radius_obj is not None:
+                            # Convert FloatWithUnit to float (already in Angstroms)
+                            return float(radius_obj)
+                    except (KeyError, AttributeError, TypeError, ValueError):
+                        continue
+            elif site == "B":
+                # B-site: typically +2, +3, +4, or +5
+                for oxi_state in [2, 3, 4, 5]:
+                    try:
+                        radius_obj = element.ionic_radii.get(oxi_state)
+                        if radius_obj is not None:
+                            # Convert FloatWithUnit to float (already in Angstroms)
+                            return float(radius_obj)
+                    except (KeyError, AttributeError, TypeError, ValueError):
+                        continue
+            elif site == "X":
+                # X-site: typically -1 (halides: F-, Cl-, Br-, I-) or -2 (oxides: O^2-)
+                for oxi_state in [-1, -2]:
+                    try:
+                        radius_obj = element.ionic_radii.get(oxi_state)
+                        if radius_obj is not None:
+                            # Convert FloatWithUnit to float (already in Angstroms)
+                            return float(radius_obj)
+                    except (KeyError, AttributeError, TypeError, ValueError):
+                        continue
+            
+            # If no ionic radius found, try to get atomic radius as fallback
+            try:
+                atomic_radius = element.atomic_radius
+                if atomic_radius is not None:
+                    # Convert from pm to Angstroms (divide by 100)
+                    return atomic_radius / 100.0
+            except (AttributeError, TypeError):
+                pass
+                
+        except (ValueError, KeyError, AttributeError):
+            # Element not found or no radius data available
+            pass
+    
+    # If all fallbacks fail, raise error
+    raise ValueError(f"Ion '{name}' not found for site '{site}'")
 
 
 def create_a_site_molecule(a_cation):
@@ -292,9 +367,8 @@ def is_molecular_a_cation(a_cation):
     """
     Check if an A-site cation is molecular (requires SMILES) or atomic.
     
-    First checks the CSV database, then falls back to hardcoded data.
-    Atomic cations (like Cs, K, Rb) typically have SMILES like [Cs+], [K+], etc.
-    but are considered atomic for structure building purposes.
+    Case-sensitive: 'Ca' (Calcium, atomic) and 'CA' (azetidinium, molecular) are different.
+    Atomic elements are never treated as molecular, regardless of database entries.
     
     Parameters
     ----------
@@ -306,6 +380,27 @@ def is_molecular_a_cation(a_cation):
     bool
         True if molecular (has SMILES and is not a simple atomic ion), False if atomic
     """
+    # First, check if it's a valid atomic element symbol (case-sensitive)
+    # This prevents atomic elements from being matched as molecular cations
+    # Use pymatgen if available, otherwise fall back to common list
+    if PYMATGEN_AVAILABLE:
+        try:
+            # Try to create an Element object - this will raise ValueError if not a valid element
+            # Case-sensitive: 'Ca' is valid, 'CA' is not
+            Element(a_cation)
+            # If we get here, it's a valid element symbol - treat as atomic
+            return False
+        except (ValueError, KeyError):
+            # Not a valid element symbol, continue to check if it's molecular
+            pass
+    else:
+        # Fallback: check against common atomic A-site cations
+        # Common atomic A-site cations that should never be treated as molecular
+        atomic_a_cations = ['Cs', 'K', 'Rb', 'Na', 'Li', 'Ca', 'Sr', 'Ba', 'Mg']
+        # Check exact match (case-sensitive) first to avoid 'Ca' matching 'CA' (azetidinium)
+        if a_cation in atomic_a_cations:
+            return False
+    
     # Check if it's in the database
     smiles = _lookup_smiles_from_database(a_cation)
     if smiles:
@@ -356,6 +451,10 @@ def calculate_BX_distance(B_cation, X_anion):
     """
     Calculate the B-X bond distance based on ionic radii.
     
+    Adds a 0.20 Å buffer to ensure sufficient space for relaxation during structure optimization.
+    This buffer accounts for the fact that ionic radii are approximate and structures need
+    room to relax to their equilibrium positions.
+    
     Parameters
     ----------
     B_cation : str
@@ -366,12 +465,13 @@ def calculate_BX_distance(B_cation, X_anion):
     Returns
     -------
     float
-        B-X bond distance in Angstroms
+        B-X bond distance in Angstroms (r_B + r_X + 0.20 Å buffer)
     """
     try:
         r_B = get_ionic_radius("B", B_cation)
         r_X = get_ionic_radius("X", X_anion)
-        return r_B + r_X
+        # Add 0.20 Å buffer to ensure sufficient space for relaxation
+        return r_B + r_X + 0.20
     except ValueError as e:
         print(f"Error calculating B-X distance: {e}")
         raise

@@ -1174,44 +1174,115 @@ def create_2d_perovskite(Ap, A, B, X, supercell, structure_type='monolayer', BX_
         
         return structure
     
-    # For DJ and monolayer: attach spacers normally
-    structure = _attach_spacer(
-        Ap, layer, n_layers, lattice_vector_sizes, supercell_size,
-        attachment_end=attachment_end, penet=penet,
-        mol_len=mol_len if attachment_end == 'both' else None
-    )
-    
     # Calculate cell dimensions accounting for supercell size
     # IMPORTANT: Multiply x and y by supercell dimensions (nx, ny)
     cell_a = nx * lattice_vector_sizes[0]
     cell_b = ny * lattice_vector_sizes[1]
     
-    if structure_type == 'dj':
-        # DJ-specific cell calculation
-        if is_atomic:
-            # For atomic spacers: use 2 ionic radii for separation (top attachment only)
-            z_length = n_layers * lattice_vector_sizes[2] + 2 * atomic_separation
+    if structure_type == 'dj' and is_atomic:
+        # Special handling for DJ + atomic spacer: create symmetric structure with gaps
+        # Structure: lower slab -> gap (2 Å) -> spacer -> gap (2 Å) -> upper slab
+        
+        # Create lower slab (without spacers)
+        lower_slab = layer.copy()
+        
+        # Get the z-range of the lower slab
+        lower_slab_positions = lower_slab.get_positions()
+        lower_slab_min_z = np.min(lower_slab_positions[:, 2])
+        lower_slab_max_z = np.max(lower_slab_positions[:, 2])
+        lower_slab_height = lower_slab_max_z - lower_slab_min_z
+        
+        # Normalize lower slab to start at z=0
+        lower_slab.positions[:, 2] -= lower_slab_min_z
+        lower_slab_max_z_normalized = lower_slab_height
+        
+        # Gap size (2 Å as requested)
+        gap_size = 2.0
+        
+        # Position spacer in the middle
+        # Lower slab ends at: lower_slab_height
+        # Gap: 2 Å
+        # Spacer z-position: lower_slab_height + gap_size
+        spacer_z = lower_slab_height + gap_size
+        
+        # Create spacer atoms at the correct positions
+        # Get spacer positions from the original attachment logic
+        # But we'll position them manually
+        from .molecule_builder import add_atoms
+        spacer_structure = Atoms()
+        
+        # Get spacer symbol
+        if is_mixed_spacers:
+            spacer_symbol = Ap[0].get_chemical_symbols()[0]
         else:
-            # For molecular spacers: original formula
-            z_length = n_layers * lattice_vector_sizes[2] + (mol_len - lattice_vector_sizes[2] * penet)
+            spacer_symbol = Ap.get_chemical_symbols()[0]
+        
+        # Generate spacer positions (same pattern as _generate_attachment_positions)
+        # Use the same logic as _generate_attachment_positions
+        base_positions_frac = [[0.25, 0.75], [0.75, 0.25]]
+        lv0 = lattice_vector_sizes[0]
+        lv1 = lattice_vector_sizes[1]
+        for base_pos_frac in base_positions_frac:
+            for ix in range(nx):
+                for iy in range(ny):
+                    x = (base_pos_frac[0] + ix) * lv0
+                    y = (base_pos_frac[1] + iy) * lv1
+                    spacer_structure += Atoms(spacer_symbol, positions=[[x, y, spacer_z]])
+        
+        # Create upper slab by duplicating and shifting the lower slab
+        upper_slab = lower_slab.copy()
+        # Upper slab starts after: lower_slab_height + gap_size + spacer_height + gap_size
+        # For atomic spacers, spacer_height is essentially 0 (just the atom)
+        upper_slab_z_start = lower_slab_height + gap_size + gap_size
+        upper_slab.positions[:, 2] += upper_slab_z_start
+        
+        # Combine: lower slab + spacer + upper slab
+        structure = add_atoms(lower_slab, spacer_structure)
+        structure = add_atoms(structure, upper_slab)
+        
+        # Calculate total z_length - use exact positions without extra buffer
+        # Get all z positions to find the actual range
+        all_positions = structure.get_positions()
+        min_z = np.min(all_positions[:, 2])
+        max_z = np.max(all_positions[:, 2])
+        # Normalize to start at z=0 and set cell to exact size
+        structure.positions[:, 2] -= min_z
+        # Recalculate max_z after normalization
+        all_positions = structure.get_positions()
+        max_z_normalized = np.max(all_positions[:, 2])
+        # Set z_length to exactly match the structure height (no extra vacuum)
+        z_length = max_z_normalized
+        
         structure.cell = [cell_a, cell_b, z_length, 90, 90, 90]
     else:
-        # Monolayer: adjust z_length based on attachment type
-        if is_atomic:
-            # For atomic spacers: use 1 ionic radius for separation
-            if attachment_end == 'both':
-                z_length = n_layers * lattice_vector_sizes[2] + 2 * atomic_separation + vacuum
+        # For DJ with molecular spacers or monolayer: attach spacers normally
+        structure = _attach_spacer(
+            Ap, layer, n_layers, lattice_vector_sizes, supercell_size,
+            attachment_end=attachment_end, penet=penet,
+            mol_len=mol_len if attachment_end == 'both' else None
+        )
+        
+        if structure_type == 'dj':
+            # DJ-specific cell calculation for molecular spacers
+            z_length = n_layers * lattice_vector_sizes[2] + (mol_len - lattice_vector_sizes[2] * penet)
+            structure.cell = [cell_a, cell_b, z_length, 90, 90, 90]
+        elif structure_type == 'monolayer':
+            # Monolayer: adjust z_length based on attachment type
+            if is_atomic:
+                # For atomic spacers: use 1 ionic radius for separation
+                if attachment_end == 'both':
+                    z_length = n_layers * lattice_vector_sizes[2] + 2 * atomic_separation + vacuum
+                else:
+                    # Only one spacer (top or bottom)
+                    z_length = n_layers * lattice_vector_sizes[2] + atomic_separation + vacuum
             else:
-                # Only one spacer (top or bottom)
-                z_length = n_layers * lattice_vector_sizes[2] + atomic_separation + vacuum
-        else:
-            # For molecular spacers: original formulas
-            if attachment_end == 'both':
-                # Original calculation for monolayer (with vacuum)
-                z_length = n_layers * lattice_vector_sizes[2] + (2 * mol_len - lattice_vector_sizes[2] * penet) + vacuum
-            else:
-                # Only one spacer (top or bottom)
-                z_length = n_layers * lattice_vector_sizes[2] + (mol_len - .5 * lattice_vector_sizes[2] * penet) + vacuum
+                # For molecular spacers: original formulas
+                if attachment_end == 'both':
+                    # Original calculation for monolayer (with vacuum)
+                    z_length = n_layers * lattice_vector_sizes[2] + (2 * mol_len - lattice_vector_sizes[2] * penet) + vacuum
+                else:
+                    # Only one spacer (top or bottom)
+                    z_length = n_layers * lattice_vector_sizes[2] + (mol_len - .5 * lattice_vector_sizes[2] * penet) + vacuum
         
         # Center monolayer structure
         if structure_type == 'monolayer':
