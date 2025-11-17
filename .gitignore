@@ -45,3 +45,6 @@ venv/
 # OS
 .DS_Store
 Thumbs.db
+
+# Test output files
+*.vasp
