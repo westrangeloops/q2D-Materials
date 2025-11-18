@@ -1057,116 +1057,220 @@ def create_2d_perovskite(Ap, A, B, X, supercell, structure_type='monolayer', BX_
     
     # Handle RP structure separately - it requires two shifted layers
     if structure_type == 'rp':
-        # Create bottom layer with spacers attached
-        bottom_layer = _attach_spacer(
-            Ap, layer, n_layers, lattice_vector_sizes, supercell_size,
-            attachment_end='both', penet=penet,
-            mol_len=mol_len
-        )
-        
-        # Calculate z_length using appropriate formula
         if is_atomic:
-            # For atomic spacers: use 2 ionic radii for inter-slab separation
-            # Formula: 2 * (layer height) + 2 * ionic_radius
-            z_length = 2 * (n_layers * lattice_vector_sizes[2]) + 2 * atomic_separation + 0.5
+            # Special handling for RP + atomic spacer: create symmetric structure with gaps
+            # Structure: bottom slab -> gap -> spacer -> gap -> (middle) -> gap -> spacer -> gap -> top slab (rotated 90°)
+            
+            # Create bottom slab (without spacers)
+            bottom_slab = layer.copy()
+            
+            # Get the z-range of the bottom slab
+            bottom_slab_positions = bottom_slab.get_positions()
+            bottom_slab_min_z = np.min(bottom_slab_positions[:, 2])
+            bottom_slab_max_z = np.max(bottom_slab_positions[:, 2])
+            bottom_slab_height = bottom_slab_max_z - bottom_slab_min_z
+            
+            # Normalize bottom slab to start at z=0
+            bottom_slab.positions[:, 2] -= bottom_slab_min_z
+            bottom_slab_max_z_normalized = bottom_slab_height
+            
+            # Gap size (2 Å as for DJ)
+            gap_size = 2.0
+            
+            # Get spacer symbol
+            if is_mixed_spacers:
+                spacer_symbol = Ap[0].get_chemical_symbols()[0]
+            else:
+                spacer_symbol = Ap.get_chemical_symbols()[0]
+            
+            # Generate spacer positions (same pattern as _generate_attachment_positions)
+            base_positions_frac = [[0.25, 0.75], [0.75, 0.25]]
+            lv0 = lattice_vector_sizes[0]
+            lv1 = lattice_vector_sizes[1]
+            
+            # Create bottom spacers (below the bottom slab)
+            bottom_spacer_structure = Atoms()
+            bottom_spacer_z = -gap_size  # Gap below slab
+            for base_pos_frac in base_positions_frac:
+                for ix in range(nx):
+                    for iy in range(ny):
+                        x = (base_pos_frac[0] + ix) * lv0
+                        y = (base_pos_frac[1] + iy) * lv1
+                        bottom_spacer_structure += Atoms(spacer_symbol, positions=[[x, y, bottom_spacer_z]])
+            
+            # Create top spacers (above the bottom slab)
+            top_spacer_structure = Atoms()
+            top_spacer_z = bottom_slab_height + gap_size  # Gap above slab
+            for base_pos_frac in base_positions_frac:
+                for ix in range(nx):
+                    for iy in range(ny):
+                        x = (base_pos_frac[0] + ix) * lv0
+                        y = (base_pos_frac[1] + iy) * lv1
+                        top_spacer_structure += Atoms(spacer_symbol, positions=[[x, y, top_spacer_z]])
+            
+            # Combine bottom slab with its spacers
+            from .molecule_builder import add_atoms
+            bottom_layer = add_atoms(bottom_slab, bottom_spacer_structure)
+            bottom_layer = add_atoms(bottom_layer, top_spacer_structure)
+            
+            # Get the z-center of the original layer (without spacers) for rotation
+            layer_z_center = bottom_slab_height / 2.0
+            
+            # Create top layer by copying the bottom layer (with spacers)
+            top_layer = bottom_layer.copy()
+            
+            # Set cell dimensions
+            cell_a = nx * lattice_vector_sizes[0]
+            cell_b = ny * lattice_vector_sizes[1]
+            
+            # Calculate the height of bottom layer (with spacers)
+            bottom_layer_positions = bottom_layer.get_positions()
+            bottom_layer_min_z = np.min(bottom_layer_positions[:, 2])
+            bottom_layer_max_z = np.max(bottom_layer_positions[:, 2])
+            bottom_layer_height = bottom_layer_max_z - bottom_layer_min_z
+            
+            # Set cell for top_layer before rotation (make it large enough)
+            cell_z_for_rotation = bottom_layer_height * 2.0
+            top_layer.set_cell([cell_a, cell_b, cell_z_for_rotation, 90, 90, 90])
+            top_layer.pbc = [1, 1, 1]
+            
+            # Rotate top layer (with spacers) 90 degrees around Z axis
+            # Rotate around the cell center in x/y and the z-center of the original layer
+            rotation_center = [cell_a / 2.0, cell_b / 2.0, layer_z_center]
+            top_layer.rotate(90, 'z', center=rotation_center)
+            
+            # Calculate shift to position top layer above bottom layer with gap
+            # The top layer should start after: bottom_layer_max_z + gap_size
+            top_layer_positions_after_rotation = top_layer.get_positions()
+            top_layer_min_z_after_rotation = np.min(top_layer_positions_after_rotation[:, 2])
+            
+            # Shift top layer so it starts after bottom layer with gap
+            shift_amount = bottom_layer_max_z + gap_size - top_layer_min_z_after_rotation
+            top_layer.positions[:, 2] += shift_amount
+            
+            # Combine both layers
+            structure = add_atoms(bottom_layer, top_layer)
+            
+            # Calculate total z_length from actual positions
+            all_positions = structure.get_positions()
+            min_z = np.min(all_positions[:, 2])
+            max_z = np.max(all_positions[:, 2])
+            # Normalize to start at z=0
+            structure.positions[:, 2] -= min_z
+            # Recalculate max_z after normalization
+            all_positions = structure.get_positions()
+            max_z_normalized = np.max(all_positions[:, 2])
+            z_length = max_z_normalized
+            
+            # Set final cell dimensions for RP structure
+            structure.cell = [cell_a, cell_b, z_length, 90, 90, 90]
+            structure.pbc = [1, 1, 1]
         else:
-            # For molecular spacers: use RP formula with interlayer penetration
+            # For molecular spacers: use original logic
+            # Create bottom layer with spacers attached
+            bottom_layer = _attach_spacer(
+                Ap, layer, n_layers, lattice_vector_sizes, supercell_size,
+                attachment_end='both', penet=penet,
+                mol_len=mol_len
+            )
+            
+            # Calculate z_length using molecular formula
             # Formula: n * lattice_vector_sizes[2] * 2 + 2 * (2 * mol_len - 2 * .5 * lattice_vector_sizes[2] * penet - mol_len * interlayer_penet)
             if mol_len is None:
                 raise ValueError("mol_len cannot be None for molecular spacers in RP structures")
             z_length = n_layers * lattice_vector_sizes[2] * 2 + 2 * \
                 (2 * mol_len - 2 * .5 * lattice_vector_sizes[2] * penet - mol_len * interlayer_penet)
-        
-        # Calculate the inorganic layer height (without spacers)
-        # This is needed to correctly position the top layer
-        lv2_n = n_layers * lattice_vector_sizes[2]
-        BX_bond_length_z = 0.5 * lattice_vector_sizes[2]
-        penet_z = penet * BX_bond_length_z
-        
-        # Find where the bottom layer's inorganic layer ends (where top spacers attach)
-        # Top spacers attach at: lv2_n - penet_z (relative to layer start)
-        # But we need the absolute z-position
-        layer_z_positions = layer.get_positions()[:, 2]
-        layer_bottom_z = np.min(layer_z_positions)  # Bottom of inorganic layer
-        layer_top_z = np.max(layer_z_positions)     # Top of inorganic layer
-        inorganic_layer_height = layer_top_z - layer_bottom_z
-        
-        # The top spacers of the bottom layer extend upward from layer_top_z
-        # The bottom spacers of the top layer should connect to these
-        # So we need to shift the top layer so its bottom (where bottom spacers attach) aligns
-        # with the bottom layer's top (where top spacers attach)
-        
-        # Set cell dimensions
-        cell_a = nx * lattice_vector_sizes[0]
-        cell_b = ny * lattice_vector_sizes[1]
-        bottom_layer.set_cell([cell_a, cell_b, z_length / 2.0, 90, 90, 90])
-        bottom_layer.pbc = [1, 1, 1]
-        
-        # Create top layer by copying the entire bottom layer (with spacers at both ends)
-        top_layer = bottom_layer.copy()
-        
-        # Get the z-center of the original layer (without spacers) for rotation
-        # This ensures rotation happens around the correct geometric center
-        layer_z_center = (layer_bottom_z + layer_top_z) / 2.0
-        
-        # Set cell for top_layer before rotation
-        # Make cell large enough to contain all atoms after rotation (including molecules that extend beyond)
-        top_layer_z_positions = top_layer.get_positions()[:, 2]
-        top_layer_z_range = np.max(top_layer_z_positions) - np.min(top_layer_z_positions)
-        # Use a larger cell to avoid wrapping issues with molecules
-        cell_z_for_rotation = max(z_length / 2.0, top_layer_z_range * 2.0)
-        top_layer.set_cell([cell_a, cell_b, cell_z_for_rotation, 90, 90, 90])
-        top_layer.pbc = [1, 1, 1]
-        
-        # Rotate top layer (with spacers) 90 degrees around Z axis
-        # Rotate around the cell center in x/y and the z-center of the original layer
-        # When we rotate, both the layer AND the spacers rotate together, preserving relative positions
-        rotation_center = [cell_a / 2.0, cell_b / 2.0, layer_z_center]
-        top_layer.rotate(90, 'z', center=rotation_center)
-        
-        # CRITICAL: Do NOT wrap after rotation - wrapping breaks molecules by moving atoms individually
-        # Instead, we rely on the large cell size to contain all atoms
-        # The cell is large enough that atoms shouldn't go outside after rotation
-        
-        # Calculate the correct shift to position top layer above bottom layer
-        # The total structure height should equal z_length
-        # We shift the top layer so that: max(top_layer) - min(bottom_layer) = z_length
-        
-        # After rotation, find the actual z-positions
-        top_layer_z_after_rotation = top_layer.get_positions()[:, 2]
-        bottom_layer_z_positions = bottom_layer.get_positions()[:, 2]
-        
-        # Find the current z-range
-        bottom_layer_min_z = np.min(bottom_layer_z_positions)
-        bottom_layer_max_z = np.max(bottom_layer_z_positions)
-        top_layer_min_z = np.min(top_layer_z_after_rotation)
-        top_layer_max_z = np.max(top_layer_z_after_rotation)
-        
-        # Both layers have the same height (they're identical)
-        single_layer_height = bottom_layer_max_z - bottom_layer_min_z
-        
-        # The total structure height should be z_length
-        # So: (top_layer_max_z + shift) - bottom_layer_min_z = z_length
-        # Therefore: shift = z_length - (top_layer_max_z - bottom_layer_min_z)
-        # But we want: (top_layer_max_z + shift) - bottom_layer_min_z = z_length
-        # So: shift = z_length - top_layer_max_z + bottom_layer_min_z
-        
-        # Actually, simpler: shift so that the gap between layers matches the intended spacing
-        # The gap should be: z_length - 2 * single_layer_height (if layers don't overlap)
-        # But wait, z_length already accounts for both layers and spacing
-        
-        # Correct approach: shift so total height = z_length
-        # Current total if we don't shift: would be 2 * single_layer_height (if layers overlap)
-        # We need: (top_layer_max_z + shift) - bottom_layer_min_z = z_length
-        shift_amount = z_length - (top_layer_max_z - bottom_layer_min_z)
-        top_layer.positions[:, 2] += shift_amount
-        
-        # Combine both layers
-        structure = add_atoms(bottom_layer, top_layer)
-        
-        # Set final cell dimensions for RP structure
-        structure.cell = [cell_a, cell_b, z_length, 90, 90, 90]
-        structure.pbc = [1, 1, 1]
+            
+            # Calculate the inorganic layer height (without spacers)
+            # This is needed to correctly position the top layer
+            lv2_n = n_layers * lattice_vector_sizes[2]
+            BX_bond_length_z = 0.5 * lattice_vector_sizes[2]
+            penet_z = penet * BX_bond_length_z
+            
+            # Find where the bottom layer's inorganic layer ends (where top spacers attach)
+            # Top spacers attach at: lv2_n - penet_z (relative to layer start)
+            # But we need the absolute z-position
+            layer_z_positions = layer.get_positions()[:, 2]
+            layer_bottom_z = np.min(layer_z_positions)  # Bottom of inorganic layer
+            layer_top_z = np.max(layer_z_positions)     # Top of inorganic layer
+            inorganic_layer_height = layer_top_z - layer_bottom_z
+            
+            # The top spacers of the bottom layer extend upward from layer_top_z
+            # The bottom spacers of the top layer should connect to these
+            # So we need to shift the top layer so its bottom (where bottom spacers attach) aligns
+            # with the bottom layer's top (where top spacers attach)
+            
+            # Set cell dimensions
+            cell_a = nx * lattice_vector_sizes[0]
+            cell_b = ny * lattice_vector_sizes[1]
+            bottom_layer.set_cell([cell_a, cell_b, z_length / 2.0, 90, 90, 90])
+            bottom_layer.pbc = [1, 1, 1]
+            
+            # Create top layer by copying the entire bottom layer (with spacers at both ends)
+            top_layer = bottom_layer.copy()
+            
+            # Get the z-center of the original layer (without spacers) for rotation
+            # This ensures rotation happens around the correct geometric center
+            layer_z_center = (layer_bottom_z + layer_top_z) / 2.0
+            
+            # Set cell for top_layer before rotation
+            # Make cell large enough to contain all atoms after rotation (including molecules that extend beyond)
+            top_layer_z_positions = top_layer.get_positions()[:, 2]
+            top_layer_z_range = np.max(top_layer_z_positions) - np.min(top_layer_z_positions)
+            # Use a larger cell to avoid wrapping issues with molecules
+            cell_z_for_rotation = max(z_length / 2.0, top_layer_z_range * 2.0)
+            top_layer.set_cell([cell_a, cell_b, cell_z_for_rotation, 90, 90, 90])
+            top_layer.pbc = [1, 1, 1]
+            
+            # Rotate top layer (with spacers) 90 degrees around Z axis
+            # Rotate around the cell center in x/y and the z-center of the original layer
+            # When we rotate, both the layer AND the spacers rotate together, preserving relative positions
+            rotation_center = [cell_a / 2.0, cell_b / 2.0, layer_z_center]
+            top_layer.rotate(90, 'z', center=rotation_center)
+            
+            # CRITICAL: Do NOT wrap after rotation - wrapping breaks molecules by moving atoms individually
+            # Instead, we rely on the large cell size to contain all atoms
+            # The cell is large enough that atoms shouldn't go outside after rotation
+            
+            # Calculate the correct shift to position top layer above bottom layer
+            # The total structure height should equal z_length
+            # We shift the top layer so that: max(top_layer) - min(bottom_layer) = z_length
+            
+            # After rotation, find the actual z-positions
+            top_layer_z_after_rotation = top_layer.get_positions()[:, 2]
+            bottom_layer_z_positions = bottom_layer.get_positions()[:, 2]
+            
+            # Find the current z-range
+            bottom_layer_min_z = np.min(bottom_layer_z_positions)
+            bottom_layer_max_z = np.max(bottom_layer_z_positions)
+            top_layer_min_z = np.min(top_layer_z_after_rotation)
+            top_layer_max_z = np.max(top_layer_z_after_rotation)
+            
+            # Both layers have the same height (they're identical)
+            single_layer_height = bottom_layer_max_z - bottom_layer_min_z
+            
+            # The total structure height should be z_length
+            # So: (top_layer_max_z + shift) - bottom_layer_min_z = z_length
+            # Therefore: shift = z_length - (top_layer_max_z - bottom_layer_min_z)
+            # But we want: (top_layer_max_z + shift) - bottom_layer_min_z = z_length
+            # So: shift = z_length - top_layer_max_z + bottom_layer_min_z
+            
+            # Actually, simpler: shift so that the gap between layers matches the intended spacing
+            # The gap should be: z_length - 2 * single_layer_height (if layers don't overlap)
+            # But wait, z_length already accounts for both layers and spacing
+            
+            # Correct approach: shift so total height = z_length
+            # Current total if we don't shift: would be 2 * single_layer_height (if layers overlap)
+            # We need: (top_layer_max_z + shift) - bottom_layer_min_z = z_length
+            shift_amount = z_length - (top_layer_max_z - bottom_layer_min_z)
+            top_layer.positions[:, 2] += shift_amount
+            
+            # Combine both layers
+            structure = add_atoms(bottom_layer, top_layer)
+            
+            # Set final cell dimensions for RP structure
+            structure.cell = [cell_a, cell_b, z_length, 90, 90, 90]
+            structure.pbc = [1, 1, 1]
         
         # Wrap if requested
         if wrap:
