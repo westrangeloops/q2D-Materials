@@ -23,10 +23,15 @@ def create_twisted_bilayer(monolayer, m, n, interlayer_distance=11.0, vacuum=12.
     by a well-defined twist angle determined by the integers (m, n) according to the
     standard commensurate twist formula.
     
+    IMPORTANT: Twisting requires at least a 2x2 supercell in the XY plane. This is because
+    octahedral tilting patterns (Glazer notation) require multiple octahedra to be physically
+    meaningful. A single octahedron cannot exhibit a tilting pattern.
+    
     Parameters
     ----------
     monolayer : q2DStructure
         The monolayer structure to twist (must have structure_type='monolayer')
+        Must have at least 2x2 octahedra in the XY plane.
     m : int
         First integer parameter for twist angle calculation
     n : int
@@ -47,7 +52,7 @@ def create_twisted_bilayer(monolayer, m, n, interlayer_distance=11.0, vacuum=12.
     Raises
     ------
     ValueError
-        If structure_type is not 'monolayer'
+        If structure_type is not 'monolayer' or if supercell is smaller than 2x2
     ImportError
         If pymatgen is not available
     """
@@ -57,8 +62,20 @@ def create_twisted_bilayer(monolayer, m, n, interlayer_distance=11.0, vacuum=12.
             f"Current structure_type: {monolayer.structure_type}"
         )
     
+    # Validate minimum supercell size (2x2 octahedra minimum)
+    supercell_size = getattr(monolayer, 'supercell_size', None)
+    if supercell_size is not None:
+        if isinstance(supercell_size, (list, tuple)) and len(supercell_size) >= 2:
+            nx, ny = supercell_size[0], supercell_size[1]
+            if nx < 2 or ny < 2:
+                raise ValueError(
+                    f"Twisting requires at least a 2x2 supercell in the XY plane. "
+                    f"Current supercell_size={supercell_size}. "
+                    f"A single octahedron cannot be twisted - use supercell=[2, 2, n_layers] or larger."
+                )
+    
     try:
-        from pymatgen.core import Structure
+        from pymatgen.core import Structure, Lattice
         from pymatgen.io.ase import AseAtomsAdaptor
     except ImportError:
         raise ImportError(
@@ -72,6 +89,36 @@ def create_twisted_bilayer(monolayer, m, n, interlayer_distance=11.0, vacuum=12.
     # Convert ASE Atoms to pymatgen Structure directly
     adapter = AseAtomsAdaptor()
     monolayer_pmg = adapter.get_structure(monolayer)
+    
+    # Check for orthorhombic cell (a ≠ b) from Glazer tilting
+    # For twist to work with PBC, the cell needs to be approximately square in XY
+    cell_lengths = monolayer_pmg.lattice.lengths
+    a, b = cell_lengths[0], cell_lengths[1]
+    ortho_ratio = abs(a - b) / max(a, b)
+    
+    # For orthorhombic cells, we need to make the cell square before twisting
+    # by using the average lattice constant. This introduces small strains but
+    # ensures proper PBC compatibility after the twist.
+    ortho_tolerance = 0.01  # 1% deviation allowed without correction
+    
+    if ortho_ratio > ortho_tolerance:
+        # Cell is significantly orthorhombic - need to make it square
+        avg_a = (a + b) / 2.0
+        
+        # Create a new structure with squared cell
+        # Fractional coordinates remain the same, but cell is now square
+        old_lattice = monolayer_pmg.lattice
+        new_matrix = np.array([
+            [avg_a, 0, 0],
+            [0, avg_a, 0],
+            old_lattice.matrix[2]
+        ])
+        new_lattice = Lattice(new_matrix)
+        
+        # Get fractional coordinates and rebuild structure with new lattice
+        frac_coords = monolayer_pmg.frac_coords
+        species = [site.species for site in monolayer_pmg]
+        monolayer_pmg = Structure(new_lattice, species, frac_coords)
     
     # Calculate rotation matrix components (pre-calculate once)
     cost = (m**2 - n**2) / (m**2 + n**2)

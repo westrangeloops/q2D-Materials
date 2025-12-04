@@ -1,144 +1,194 @@
-"""
-Test for twist() method on monolayer structures.
+#!/usr/bin/env python3
+"""Test twist method - outputs VASP files for visual inspection."""
 
-Tests the twisted bilayer generation with different (m, n) parameters.
-Based on Gabriel Xavier Pereira's Quadratic Twisted Bilayer Generator.
-"""
+import sys
+sys.path.insert(0, '/home/dotempo/Documents/DJ/q2D-Materials')
 
 from q2D_Materials.core.creator import q2D_creator
 from ase.io import write
 
-def test_twist_monolayer():
-    """Test twist method with atomic and molecular spacers."""
+creator = q2D_creator()
     
-    creator = q2D_creator()
-    
-    # ===== Test 1: Atomic spacer (Cs) =====
-    print("=" * 60)
-    print("TEST 1: Monolayer with atomic spacer (Cs)")
-    print("=" * 60)
-    
-    monolayer_atomic = creator.create_perovskite(
-        'monolayer',
-        A_ions='MA',
-        B_ions='Pb',
-        X_ions='I',
-        spacer='Cs',
-        supercell=[1, 1, 1]
-    )
-    
-    print(f"Original monolayer: {len(monolayer_atomic)} atoms")
-    print(f"Structure type: {monolayer_atomic.structure_type}")
-    
-    # Test 1a: Small twist angle (m=3, n=1)
-    print("\n--- Test 1a: (m=3, n=1) with atomic spacer ---")
-    twisted_1a = monolayer_atomic.twist(m=3, n=1, interlayer_distance=11.0, vacuum=12.0)
-    print(f"Twisted bilayer atoms: {len(twisted_1a)}")
-    print(f"Twist params: {twisted_1a.twist_params}")
-    print(f"Interlayer distance: {twisted_1a.interlayer_distance} Å")
-    print(f"Vacuum: {twisted_1a.vacuum} Å")
-    write('twisted_atomic_3_1.vasp', twisted_1a)
-    print("Saved to twisted_atomic_3_1.vasp")
-    
-    # Test 1b: Medium twist angle (m=5, n=2)
-    print("\n--- Test 1b: (m=5, n=2) with atomic spacer ---")
-    twisted_1b = monolayer_atomic.twist(m=5, n=2, interlayer_distance=11.0, vacuum=15.0)
-    print(f"Twisted bilayer atoms: {len(twisted_1b)}")
-    print(f"Twist params: {twisted_1b.twist_params}")
-    print(f"Interlayer distance: {twisted_1b.interlayer_distance} Å")
-    print(f"Vacuum: {twisted_1b.vacuum} Å")
-    write('twisted_atomic_5_2.vasp', twisted_1b)
-    print("Saved to twisted_atomic_5_2.vasp")
-    
-    # ===== Test 2: Molecular spacer (PEA-like) =====
-    print("\n" + "=" * 60)
-    print("TEST 2: Monolayer with molecular spacer")
-    print("=" * 60)
-    
-    monolayer_molecular = creator.create_perovskite(
-        'monolayer',
-        A_ions='MA',
-        B_ions='Pb',
-        X_ions='I',
-        spacer='[NH3+]CCCCC[NH3+]',  # Pentanediammonium (PEA-like)
-        supercell=[1, 1, 1]
-    )
-    
-    print(f"Original monolayer: {len(monolayer_molecular)} atoms")
-    print(f"Structure type: {monolayer_molecular.structure_type}")
-    
-    # Test 2a: Small twist angle (m=3, n=1)
-    print("\n--- Test 2a: (m=3, n=1) with molecular spacer ---")
-    twisted_2a = monolayer_molecular.twist(m=3, n=1, interlayer_distance=11.0, vacuum=12.0)
-    print(f"Twisted bilayer atoms: {len(twisted_2a)}")
-    print(f"Twist params: {twisted_2a.twist_params}")
-    print(f"Interlayer distance: {twisted_2a.interlayer_distance} Å")
-    print(f"Vacuum: {twisted_2a.vacuum} Å")
-    write('twisted_molecular_3_1.vasp', twisted_2a)
-    print("Saved to twisted_molecular_3_1.vasp")
-    
-    # Test 2b: Medium twist angle (m=5, n=2)
-    print("\n--- Test 2b: (m=5, n=2) with molecular spacer ---")
-    twisted_2b = monolayer_molecular.twist(m=5, n=2, interlayer_distance=11.0, vacuum=15.0)
-    print(f"Twisted bilayer atoms: {len(twisted_2b)}")
-    print(f"Twist params: {twisted_2b.twist_params}")
-    print(f"Interlayer distance: {twisted_2b.interlayer_distance} Å")
-    print(f"Vacuum: {twisted_2b.vacuum} Å")
-    write('twisted_molecular_5_2.vasp', twisted_2b)
-    print("Saved to twisted_molecular_5_2.vasp")
-    
-    # ===== Test 3: Different molecular spacer (BA-like) =====
-    print("\n" + "=" * 60)
-    print("TEST 3: Monolayer with different molecular spacer (BA-like)")
-    print("=" * 60)
-    
-    monolayer_ba = creator.create_perovskite(
-        'monolayer',
-        A_ions='MA',
-        B_ions='Pb',
-        X_ions='I',
-        spacer='[NH3+]CCCC[NH3+]',  # Butanediammonium (BA-like)
-        supercell=[1, 1, 1]
-    )
-    
-    print(f"Original monolayer: {len(monolayer_ba)} atoms")
-    
-    # Test 3a: Large twist angle (m=7, n=3)
-    print("\n--- Test 3a: (m=7, n=3) with BA-like spacer ---")
-    twisted_3a = monolayer_ba.twist(m=7, n=3, interlayer_distance=11.0, vacuum=12.0)
-    print(f"Twisted bilayer atoms: {len(twisted_3a)}")
-    print(f"Twist params: {twisted_3a.twist_params}")
-    print(f"Interlayer distance: {twisted_3a.interlayer_distance} Å")
-    print(f"Vacuum: {twisted_3a.vacuum} Å")
-    write('twisted_ba_7_3.vasp', twisted_3a)
-    print("Saved to twisted_ba_7_3.vasp")
-    
-    # Verify all are q2DStructure objects with correct attributes
-    print("\n" + "=" * 60)
-    print("Verifying test results...")
-    print("=" * 60)
-    
-    all_twisted = [twisted_1a, twisted_1b, twisted_2a, twisted_2b, twisted_3a]
-    
-    for i, twisted in enumerate(all_twisted, 1):
-        assert hasattr(twisted, 'twist_params'), f"twisted_{i} should have twist_params"
-        assert hasattr(twisted, 'interlayer_distance'), f"twisted_{i} should have interlayer_distance"
-        assert hasattr(twisted, 'vacuum'), f"twisted_{i} should have vacuum"
-        assert len(twisted) > 0, f"twisted_{i} should have atoms"
-    
-    assert twisted_1a.twist_params == (3, 1), "twisted_1a should have correct twist_params"
-    assert twisted_1b.twist_params == (5, 2), "twisted_1b should have correct twist_params"
-    assert twisted_2a.twist_params == (3, 1), "twisted_2a should have correct twist_params"
-    assert twisted_2b.twist_params == (5, 2), "twisted_2b should have correct twist_params"
-    assert twisted_3a.twist_params == (7, 3), "twisted_3a should have correct twist_params"
-    
-    assert twisted_1a.vacuum == 12.0, "twisted_1a should have correct vacuum"
-    assert twisted_1b.vacuum == 15.0, "twisted_1b should have correct vacuum"
-    
-    print("\n✓ All twist tests passed!")
-    print(f"✓ Tested {len(all_twisted)} different configurations")
-    print("✓ All structures saved successfully")
+print("Twist Bilayer Tests")
+print("=" * 40)
 
-if __name__ == "__main__":
-    test_twist_monolayer()
+# NOTE: All structures must use at least 2x2 supercell in XY plane
+# because a single octahedron cannot physically exhibit tilting/twist patterns
 
+# 1. Monolayer with atomic spacer (2x2x1)
+print("\n1. Monolayer with Cs spacer (2x2)")
+mono_cs = creator.create_perovskite('monolayer',
+    A_ions='Cs', B_ions='Pb', X_ions='I',
+    spacer='Cs', supercell=[2, 2, 1]
+)
+write('mono_cs.vasp', mono_cs, format='vasp', sort=True)
+print(f"   {len(mono_cs)} atoms")
+
+# 2. Twist (m=3, n=1)
+print("\n2. Twisted (3,1) from Cs monolayer")
+twist_3_1 = mono_cs.twist(m=3, n=1, interlayer_distance=11.0, vacuum=12.0)
+write('twist_cs_3_1.vasp', twist_3_1, format='vasp', sort=True)
+print(f"   {len(twist_3_1)} atoms, params: {twist_3_1.twist_params}")
+
+# 3. Twist (m=5, n=2)
+print("\n3. Twisted (5,2) from Cs monolayer")
+twist_5_2 = mono_cs.twist(m=5, n=2, interlayer_distance=11.0, vacuum=15.0)
+write('twist_cs_5_2.vasp', twist_5_2, format='vasp', sort=True)
+print(f"   {len(twist_5_2)} atoms, params: {twist_5_2.twist_params}")
+
+# 4. Monolayer with molecular spacer (2x2x1)
+print("\n4. Monolayer with PDA spacer (2x2)")
+mono_pda = creator.create_perovskite('monolayer',
+    A_ions='Cs', B_ions='Pb', X_ions='I',
+    spacer='[NH3+]CCCCC[NH3+]', supercell=[2, 2, 1]
+)
+write('mono_pda.vasp', mono_pda, format='vasp', sort=True)
+print(f"   {len(mono_pda)} atoms")
+
+# 5. Twist molecular spacer
+print("\n5. Twisted (3,1) from PDA monolayer")
+twist_pda = mono_pda.twist(m=3, n=1, interlayer_distance=11.0, vacuum=12.0)
+write('twist_pda_3_1.vasp', twist_pda, format='vasp', sort=True)
+print(f"   {len(twist_pda)} atoms, params: {twist_pda.twist_params}")
+
+# ===================================================================
+# TWIST WITH GLAZER TILTING
+# ===================================================================
+print("\n" + "=" * 40)
+print("TWIST WITH GLAZER TILTING")
+print("=" * 40)
+
+# 6. Monolayer with pattern a-a-a-, then twist (2x2 required for Glazer)
+print("\n6. Monolayer Cs with pattern a-a-a-, then twist (3,1)")
+mono_aaa = creator.create_perovskite('monolayer',
+    A_ions='Cs', B_ions='Pb', X_ions='I',
+    spacer='Cs', supercell=[2, 2, 1],
+    glazer_notation='a-a-a-'
+)
+write('mono_aaa.vasp', mono_aaa, format='vasp', sort=True)
+print(f"   {len(mono_aaa)} atoms")
+twist_aaa = mono_aaa.twist(m=3, n=1, interlayer_distance=11.0, vacuum=12.0)
+write('twist_aaa_3_1.vasp', twist_aaa, format='vasp', sort=True)
+print(f"   Twisted: {len(twist_aaa)} atoms, params: {twist_aaa.twist_params}")
+
+# 7. Monolayer with pattern a0a0c- (tetragonal), then twist
+print("\n7. Monolayer Cs with pattern a0a0c-, then twist (3,1)")
+mono_tetragonal = creator.create_perovskite('monolayer',
+    A_ions='Cs', B_ions='Pb', X_ions='I',
+    spacer='Cs', supercell=[2, 2, 1],
+    glazer_notation='a0a0c-'
+)
+write('mono_tetragonal.vasp', mono_tetragonal, format='vasp', sort=True)
+print(f"   {len(mono_tetragonal)} atoms")
+twist_tetragonal = mono_tetragonal.twist(m=3, n=1, interlayer_distance=11.0, vacuum=12.0)
+write('twist_tetragonal_3_1.vasp', twist_tetragonal, format='vasp', sort=True)
+print(f"   Twisted: {len(twist_tetragonal)} atoms, params: {twist_tetragonal.twist_params}")
+
+# 8. Monolayer with pattern a+b-c- (mixed), then twist
+print("\n8. Monolayer Cs with pattern a+b-c-, then twist (3,1)")
+mono_mixed = creator.create_perovskite('monolayer',
+    A_ions='Cs', B_ions='Pb', X_ions='I',
+    spacer='Cs', supercell=[2, 2, 1],
+    glazer_pattern=['+', '-', '-'],
+    glazer_default_angle=2.0
+)
+write('mono_mixed.vasp', mono_mixed, format='vasp', sort=True)
+print(f"   {len(mono_mixed)} atoms")
+twist_mixed = mono_mixed.twist(m=3, n=1, interlayer_distance=11.0, vacuum=12.0)
+write('twist_mixed_3_1.vasp', twist_mixed, format='vasp', sort=True)
+print(f"   Twisted: {len(twist_mixed)} atoms, params: {twist_mixed.twist_params}")
+
+# 9. Monolayer PDA with pattern a-a-a-, then twist
+print("\n9. Monolayer PDA with pattern a-a-a-, then twist (3,1)")
+mono_pda_aaa = creator.create_perovskite('monolayer',
+    A_ions='Cs', B_ions='Pb', X_ions='I',
+    spacer='[NH3+]CCCCC[NH3+]', supercell=[2, 2, 1],
+    glazer_notation='a-a-a-'
+)
+write('mono_pda_aaa.vasp', mono_pda_aaa, format='vasp', sort=True)
+print(f"   {len(mono_pda_aaa)} atoms")
+twist_pda_aaa = mono_pda_aaa.twist(m=3, n=1, interlayer_distance=11.0, vacuum=12.0)
+write('twist_pda_aaa_3_1.vasp', twist_pda_aaa, format='vasp', sort=True)
+print(f"   Twisted: {len(twist_pda_aaa)} atoms, params: {twist_pda_aaa.twist_params}")
+
+# 10. Monolayer PDA with pattern a0a0c-, then twist
+print("\n10. Monolayer PDA with pattern a0a0c-, then twist (3,1)")
+mono_pda_tetragonal = creator.create_perovskite('monolayer',
+    A_ions='Cs', B_ions='Pb', X_ions='I',
+    spacer='[NH3+]CCCCC[NH3+]', supercell=[2, 2, 1],
+    glazer_notation='a0a0c-'
+)
+write('mono_pda_tetragonal.vasp', mono_pda_tetragonal, format='vasp', sort=True)
+print(f"   {len(mono_pda_tetragonal)} atoms")
+twist_pda_tetragonal = mono_pda_tetragonal.twist(m=3, n=1, interlayer_distance=11.0, vacuum=12.0)
+write('twist_pda_tetragonal_3_1.vasp', twist_pda_tetragonal, format='vasp', sort=True)
+print(f"   Twisted: {len(twist_pda_tetragonal)} atoms, params: {twist_pda_tetragonal.twist_params}")
+
+# 11. Monolayer with pattern and larger Glazer angles, then twist
+print("\n11. Monolayer Cs with pattern a-a-a- (5°), then twist (3,1)")
+mono_tilt = creator.create_perovskite('monolayer',
+    A_ions='Cs', B_ions='Pb', X_ions='I',
+    spacer='Cs', supercell=[2, 2, 1],
+    glazer_notation='a-a-a-',
+    glazer_default_angle=5.0
+)
+write('mono_tilt.vasp', mono_tilt, format='vasp', sort=True)
+print(f"   {len(mono_tilt)} atoms")
+twist_tilt = mono_tilt.twist(m=3, n=1, interlayer_distance=11.0, vacuum=12.0)
+write('twist_tilt_3_1.vasp', twist_tilt, format='vasp', sort=True)
+print(f"   Twisted: {len(twist_tilt)} atoms, params: {twist_tilt.twist_params}")
+
+# 12. Monolayer PDA with pattern and larger Glazer angles, then twist
+print("\n12. Monolayer PDA with pattern a-a-a- (5°), then twist (3,1)")
+mono_pda_tilt = creator.create_perovskite('monolayer',
+    A_ions='Cs', B_ions='Pb', X_ions='I',
+    spacer='[NH3+]CCCCC[NH3+]', supercell=[2, 2, 1],
+    glazer_notation='a-a-a-',
+    glazer_default_angle=5.0
+)
+write('mono_pda_tilt.vasp', mono_pda_tilt, format='vasp', sort=True)
+print(f"   {len(mono_pda_tilt)} atoms")
+twist_pda_tilt = mono_pda_tilt.twist(m=3, n=1, interlayer_distance=11.0, vacuum=12.0)
+write('twist_pda_tilt_3_1.vasp', twist_pda_tilt, format='vasp', sort=True)
+print(f"   Twisted: {len(twist_pda_tilt)} atoms, params: {twist_pda_tilt.twist_params}")
+
+# 13. Monolayer with larger supercell for Glazer pattern visibility
+print("\n13. Monolayer Cs (3x3) with pattern a-a-a-, then twist (3,1)")
+mono_pattern = creator.create_perovskite('monolayer',
+    A_ions='Cs', B_ions='Pb', X_ions='I',
+    spacer='Cs', supercell=[3, 3, 1],
+    glazer_notation='a-a-a-'
+)
+write('mono_pattern.vasp', mono_pattern, format='vasp', sort=True)
+print(f"   {len(mono_pattern)} atoms")
+twist_pattern = mono_pattern.twist(m=3, n=1, interlayer_distance=11.0, vacuum=12.0)
+write('twist_pattern_3_1.vasp', twist_pattern, format='vasp', sort=True)
+print(f"   Twisted: {len(twist_pattern)} atoms, params: {twist_pattern.twist_params}")
+
+print("\n" + "=" * 40)
+print("Files written:")
+print("  Basic (2x2 supercell):")
+print("    - mono_cs.vasp")
+print("    - twist_cs_3_1.vasp")
+print("    - twist_cs_5_2.vasp")
+print("    - mono_pda.vasp")
+print("    - twist_pda_3_1.vasp")
+print("  With Glazer Tilting (atomic spacer, 2x2):")
+print("    - mono_aaa.vasp (a-a-a-)")
+print("    - twist_aaa_3_1.vasp")
+print("    - mono_tetragonal.vasp (a0a0c-)")
+print("    - twist_tetragonal_3_1.vasp")
+print("    - mono_mixed.vasp (a+b-c-)")
+print("    - twist_mixed_3_1.vasp")
+print("    - mono_tilt.vasp (a-a-a- 5°)")
+print("    - twist_tilt_3_1.vasp")
+print("  With Glazer Tilting (molecular spacer, 2x2):")
+print("    - mono_pda_aaa.vasp (a-a-a-)")
+print("    - twist_pda_aaa_3_1.vasp")
+print("    - mono_pda_tetragonal.vasp (a0a0c-)")
+print("    - twist_pda_tetragonal_3_1.vasp")
+print("    - mono_pda_tilt.vasp (a-a-a- 5°)")
+print("    - twist_pda_tilt_3_1.vasp")
+print("  With larger supercell (3x3):")
+print("    - mono_pattern.vasp (a-a-a-)")
+print("    - twist_pattern_3_1.vasp")

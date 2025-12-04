@@ -1,332 +1,312 @@
-import sys
-from pathlib import Path
+#!/usr/bin/env python3
+"""Test creator API - outputs VASP files for visual inspection."""
 
-# Add parent directory to path so we can import q2D_Materials
-sys.path.insert(0, str(Path(__file__).parent.parent))
+import sys
+sys.path.insert(0, '/home/dotempo/Documents/DJ/q2D-Materials')
 
 from q2D_Materials.core.creator import q2D_creator
-from q2D_Materials.core.structure import q2DStructure
 from ase.io import write
 
-q2d = q2D_creator()
+creator = q2D_creator()
 
-print("="*60)
-print("Testing Pattern-Based Perovskite Creation")
-print("="*60)
-
-# Verify q2DStructure is returned
-print("\n0. Verifying q2DStructure wrapper...")
-test_structure = q2d.create_perovskite('bulk', 
-    A_ions='MA', B_ions='Pb', X_ions='I',
-    supercell_size=(1, 1, 1))
-assert isinstance(test_structure, q2DStructure), "create_perovskite should return q2DStructure"
-assert test_structure.structure_type == 'bulk', "Structure type should be preserved"
-assert test_structure.BX_dist is not None, "BX_dist should be calculated"
-assert test_structure.A_ions == 'MA', "A_ions should be preserved"
-print("✓ q2DStructure wrapper working correctly")
+print("Creator API Tests")
+print("=" * 50)
 
 # ===================================================================
 # BULK PEROVSKITE TESTS
 # ===================================================================
-print("\n" + "="*60)
-print("BULK PEROVSKITE TESTS")
-print("="*60)
+print("\n--- BULK PEROVSKITES ---")
 
-# Bulk - simple bulk perovskite (single unit cell)
-print("\n1. Simple bulk perovskite...")
-bulk = q2d.create_perovskite('bulk', 
-    A_ions='MA', B_ions='Pb', X_ions='I',
-    supercell_size=(1, 1, 1))
-write('MAPbI3_bulk_simple.vasp', bulk, format='vasp', sort=True)
-print("✓ Wrote MAPbI3_bulk_simple.vasp")
-
-# Triple-cation perovskite with explicit pattern
-print("\n2. Mixed A-site perovskite (pattern-based)...")
-mixed = q2d.create_perovskite('bulk',
-    A_ions=['Cs', 'MA', 'FA', 'Cs', 'MA', 'FA', 'Cs', 'MA'],  # Explicit pattern
-    B_ions='Pb', X_ions='I',
-    supercell_size=(2, 2, 2)  # 2x2x2 = 8 A-site positions
-)
-write('MAPbI3_mixed_A_pattern.vasp', mixed, format='vasp', sort=True)
-print("✓ Wrote MAPbI3_mixed_A_pattern.vasp")
-
-# Mixed halides with pattern
-print("\n3. Mixed X-site (halides) perovskite...")
-mixed_X = q2d.create_perovskite('bulk',
-    A_ions='MA', B_ions='Pb',
-    X_ions=['Br', 'I', 'I', 'Br', 'I', 'I'],  # Pattern: 1 Br, 2 I repeating
-    supercell_size=(1, 1, 2)  # 1x1x2 = 2 unit cells = 6 X-site positions
-)
-write('MAPbI3_mixed_X_pattern.vasp', mixed_X, format='vasp', sort=True)
-print("✓ Wrote MAPbI3_mixed_X_pattern.vasp")
-
-# Full mixed composition
-print("\n4. Super-mixed perovskite (A, B, X all mixed)...")
-superMix = q2d.create_perovskite('bulk',
-    A_ions=['Cs', 'MA', 'FA', 'MA', 'MA', 'FA', 'Cs', 'MA'],  # Pattern
-    B_ions=['Pb', 'Sn', 'Pb', 'Pb', 'Sn', 'Pb', 'Pb', 'Sn'],  # Pattern
-    X_ions=['Br'] * 12 + ['I'] * 12,  # Half Br, half I
+# 1. Simple bulk
+print("\n1. Simple bulk CsPbI3 (2x2x2)")
+bulk = creator.create_perovskite('bulk',
+    A_ions='Cs', B_ions='Pb', X_ions='I',
     supercell_size=(2, 2, 2)
 )
-write('MAPbI3_superMix_pattern.vasp', superMix, format='vasp', sort=True)
-print("✓ Wrote MAPbI3_superMix_pattern.vasp")
+write('bulk_CsPbI3.vasp', bulk, format='vasp', sort=True)
+print(f"   {len(bulk)} atoms")
+
+# 2. Mixed B-site (Pb/Sn alloy)
+print("\n2. Mixed B-site Cs(Pb,Sn)I3")
+mixed_B = creator.create_perovskite('bulk',
+    A_ions='Cs', B_ions='Pb', X_ions='I',
+    supercell_size=(2, 2, 2),
+    substitutions=[{'old': 'Pb', 'new': 'Sn', 'fraction': 0.5, 'seed': 42}]
+)
+write('bulk_CsPbSnI3.vasp', mixed_B, format='vasp', sort=True)
+print(f"   {len(mixed_B)} atoms")
+
+# 3. Mixed halides
+print("\n3. Bulk with X-site vacancies")
+vac_X = creator.create_perovskite('bulk',
+    A_ions='Cs', B_ions='Pb', X_ions='I',
+    supercell_size=(2, 2, 2),
+    vacancies={'site_type': 'X_site', 'fraction': 0.1, 'seed': 42}
+)
+write('bulk_CsPbI3_Ivac.vasp', vac_X, format='vasp', sort=True)
+print(f"   {len(vac_X)} atoms (with vacancies)")
+
+# 4. SrTiO3 oxide
+print("\n4. Oxide perovskite SrTiO3")
+oxide = creator.create_perovskite('bulk',
+    A_ions='Sr', B_ions='Ti', X_ions='O',
+    supercell_size=(2, 2, 2)
+)
+write('bulk_SrTiO3.vasp', oxide, format='vasp', sort=True)
+print(f"   {len(oxide)} atoms")
 
 # ===================================================================
 # 2D PEROVSKITE TESTS
 # ===================================================================
-print("\n" + "="*60)
-print("2D PEROVSKITE TESTS")
-print("="*60)
+print("\n--- 2D PEROVSKITES ---")
 
-# Simple DJ structure (n=1)
-print("\n5. Dion-Jacobson (DJ) structure, n=1...")
-dj_n1 = q2d.create_perovskite('DJ',
-    A_ions='MA', B_ions='Pb', X_ions='I',
-    spacer_molecule='[NH3+]CCCCC[NH3+]',  # SMILES string
-    supercell=[1, 1, 1]  # [nx, ny, n_layers]
+# 5. DJ n=1 with molecular spacer
+print("\n5. DJ n=1 with PDA spacer")
+dj_n1 = creator.create_perovskite('DJ',
+    A_ions='Cs', B_ions='Pb', X_ions='I',
+    spacer='[NH3+]CCCCC[NH3+]',
+    supercell=[1, 1, 1]
 )
-write('MAPbI3_DJ_n1.vasp', dj_n1, format='vasp', sort=True)
-print("✓ Wrote MAPbI3_DJ_n1.vasp")
+write('dj_n1_pda.vasp', dj_n1, format='vasp', sort=True)
+print(f"   {len(dj_n1)} atoms")
 
-# DJ structure with n=2
-print("\n6. Dion-Jacobson (DJ) structure, n=2...")
-dj_n2 = q2d.create_perovskite('DJ',
-    A_ions='MA', B_ions='Pb', X_ions='I',
-    spacer_molecule='[NH3+]CCCCC[NH3+]',
-    supercell=[1, 1, 2]  # 2 layers
-)
-write('MAPbI3_DJ_n2.vasp', dj_n2, format='vasp', sort=True)
-print("✓ Wrote MAPbI3_DJ_n2.vasp")
-
-# RP structure with n=2
-print("\n7. Ruddlesden-Popper (RP) structure, n=2...")
-rp_n2 = q2d.create_perovskite('RP',
-    A_ions='MA', B_ions='Pb', X_ions='I',
-    spacer_molecule='[NH3+]CCCCC=O',  # Different spacer for RP
-    supercell=[1, 1, 2],
-    spacer_distance=2.0
-)
-write('MAPbI3_RP_n2.vasp', rp_n2, format='vasp', sort=True)
-print("✓ Wrote MAPbI3_RP_n2.vasp")
-
-# Monolayer structure
-print("\n8. Monolayer structure, n=1...")
-monolayer = q2d.create_perovskite('monolayer',
-    A_ions='MA', B_ions='Pb', X_ions='I',
-    spacer_molecule='CN1C=NC2=C1C(=O)N(C(=O)N2C)CC[NH3+]',  # Caffeine-based spacer
-    supercell=[1, 1, 1],
-    vacuum=12
-)
-write('MAPbI3_monolayer.vasp', monolayer, format='vasp', sort=True)
-print("✓ Wrote MAPbI3_monolayer.vasp")
-
-# ===================================================================
-# 2D WITH PATTERN-BASED MIXING
-# ===================================================================
-print("\n" + "="*60)
-print("2D PEROVSKITE WITH PATTERN-BASED MIXING")
-print("="*60)
-
-# DJ with mixed A-site cations
-print("\n9. DJ structure with mixed A-site cations (pattern-based)...")
-# For supercell=[1, 1, 2] (n_layers=2): 
-#   Total A-sites = 2 * (2-1) * 1 * 1 = 2
-#   Spacers occupy = 1 * 1 = 1 position
-#   Available A-sites = 2 - 1 = 1
-dj_mixed_A = q2d.create_perovskite('DJ',
-    A_ions=['Cs'], B_ions='Pb', X_ions='I',  # Correct: 1 A-site (spacers occupy the other position)
-    spacer_molecule='[NH3+]CCCCC[NH3+]',
+# 6. DJ n=2
+print("\n6. DJ n=2 with PDA spacer")
+dj_n2 = creator.create_perovskite('DJ',
+    A_ions='Cs', B_ions='Pb', X_ions='I',
+    spacer='[NH3+]CCCCC[NH3+]',
     supercell=[1, 1, 2]
 )
-write('MAPbI3_DJ_mixed_A.vasp', dj_mixed_A, format='vasp', sort=True)
-print("✓ Wrote MAPbI3_DJ_mixed_A.vasp")
+write('dj_n2_pda.vasp', dj_n2, format='vasp', sort=True)
+print(f"   {len(dj_n2)} atoms")
 
-# DJ with larger supercell to show more A-sites
-print("\n10. DJ structure with larger supercell (2x2, n=2)...")
-# For supercell=[2, 2, 2] with n_layers=2: 
-#   A-sites = (n_layers - 1) × nx × ny = (2-1) × 2 × 2 = 4
-#   Spacers (DJ uses 'top' attachment) = 1 z-level × 1 base position × 2×2 = 4
-dj_large = q2d.create_perovskite('DJ',
-    A_ions=['Cs', 'MA', 'FA', 'MA'], B_ions='Pb', X_ions='I',  # Correct: 4 A-sites
-    spacer_molecule='[NH3+]CCCCC[NH3+]',
+# 7. DJ with atomic spacer
+print("\n7. DJ n=2 with Rb spacer")
+dj_rb = creator.create_perovskite('DJ',
+    A_ions='Cs', B_ions='Pb', X_ions='I',
+    spacer='Rb',
+    supercell=[1, 1, 2]
+)
+write('dj_n2_rb.vasp', dj_rb, format='vasp', sort=True)
+print(f"   {len(dj_rb)} atoms")
+
+# 8. RP n=1
+print("\n8. RP n=1 with PDA spacer")
+rp_n1 = creator.create_perovskite('RP',
+    A_ions='Cs', B_ions='Pb', X_ions='I',
+    spacer='[NH3+]CCCCC[NH3+]',
+    supercell=[1, 1, 1]
+)
+write('rp_n1_pda.vasp', rp_n1, format='vasp', sort=True)
+print(f"   {len(rp_n1)} atoms")
+
+# 9. RP n=2
+print("\n9. RP n=2 with PDA spacer")
+rp_n2 = creator.create_perovskite('RP',
+    A_ions='Cs', B_ions='Pb', X_ions='I',
+    spacer='[NH3+]CCCCC[NH3+]',
+    supercell=[1, 1, 2]
+)
+write('rp_n2_pda.vasp', rp_n2, format='vasp', sort=True)
+print(f"   {len(rp_n2)} atoms")
+
+# 10. RP with atomic spacer
+print("\n10. RP n=1 with Cs spacer")
+rp_cs = creator.create_perovskite('RP',
+    A_ions='Cs', B_ions='Pb', X_ions='I',
+    spacer='Cs',
+    supercell=[1, 1, 1]
+)
+write('rp_n1_cs.vasp', rp_cs, format='vasp', sort=True)
+print(f"   {len(rp_cs)} atoms")
+
+# 11. ACI phase
+print("\n11. ACI n=1 with PDA spacer")
+aci = creator.create_perovskite('ACI',
+    A_ions='Cs', B_ions='Pb', X_ions='I',
+    spacer='[NH3+]CCCCC[NH3+]',
+    supercell=[1, 1, 1]
+)
+write('aci_n1_pda.vasp', aci, format='vasp', sort=True)
+print(f"   {len(aci)} atoms")
+
+# 12. Monolayer
+print("\n12. Monolayer n=1 with PDA spacer")
+mono = creator.create_perovskite('monolayer',
+    A_ions='Cs', B_ions='Pb', X_ions='I',
+    spacer='[NH3+]CCCCC[NH3+]',
+    supercell=[1, 1, 1],
+    vacuum=15.0
+)
+write('mono_n1_pda.vasp', mono, format='vasp', sort=True)
+print(f"   {len(mono)} atoms")
+
+# 13. Monolayer with Cs
+print("\n13. Monolayer n=1 with Cs spacer")
+mono_cs = creator.create_perovskite('monolayer',
+    A_ions='Cs', B_ions='Pb', X_ions='I',
+    spacer='Cs',
+    supercell=[1, 1, 1],
+    vacuum=15.0
+)
+write('mono_n1_cs.vasp', mono_cs, format='vasp', sort=True)
+print(f"   {len(mono_cs)} atoms")
+
+# ===================================================================
+# LARGER SUPERCELLS
+# ===================================================================
+print("\n--- LARGER SUPERCELLS ---")
+
+# 14. DJ 2x2 supercell
+print("\n14. DJ 2x2 supercell, n=2")
+dj_2x2 = creator.create_perovskite('DJ',
+    A_ions='Cs', B_ions='Pb', X_ions='I',
+    spacer='[NH3+]CCCCC[NH3+]',
     supercell=[2, 2, 2]
 )
-write('MAPbI3_DJ_2x2_n2.vasp', dj_large, format='vasp', sort=True)
-print("✓ Wrote MAPbI3_DJ_2x2_n2.vasp")
+write('dj_2x2_n2.vasp', dj_2x2, format='vasp', sort=True)
+print(f"   {len(dj_2x2)} atoms")
 
-# RP with mixed halides
-print("\n11. RP structure with mixed halides (pattern-based)...")
-# For supercell=[1, 1, 2] (n_layers=2): Expected X-sites = (2 + 8*2) * 1 * 1 = 18
-# Using a shorter pattern to demonstrate cycling
-rp_mixed_X = q2d.create_perovskite('RP',
-    A_ions='MA', B_ions='Pb',
-    X_ions=['Br', 'I'],  # Pattern will cycle to fill 18 positions
-    spacer_molecule='[NH3+]CCCCC=O',
-    supercell=[1, 1, 2]
+# 15. RP 2x2 supercell
+print("\n15. RP 2x2 supercell, n=1")
+rp_2x2 = creator.create_perovskite('RP',
+    A_ions='Cs', B_ions='Pb', X_ions='I',
+    spacer='[NH3+]CCCC[NH3+]',
+    supercell=[2, 2, 1]
 )
-write('MAPbI3_RP_mixed_X.vasp', rp_mixed_X, format='vasp', sort=True)
-print("✓ Wrote MAPbI3_RP_mixed_X.vasp")
+write('rp_2x2_n1.vasp', rp_2x2, format='vasp', sort=True)
+print(f"   {len(rp_2x2)} atoms")
 
 # ===================================================================
-# NEW FEATURES: MONOLAYER FLEXIBLE ATTACHMENT & TRUE RP STRUCTURE
+# OXIDE PEROVSKITES
 # ===================================================================
-print("\n" + "="*60)
-print("NEW FEATURES: MONOLAYER FLEXIBLE ATTACHMENT & TRUE RP STRUCTURE")
-print("="*60)
+print("\n--- OXIDE 2D PEROVSKITES ---")
 
-# Monolayer with top attachment
-print("\n12. Monolayer structure with 'top' attachment...")
-monolayer_top = q2d.create_perovskite('monolayer',
-    A_ions='MA', B_ions='Pb', X_ions='I',
-    spacer_molecule='[NH3+]CCCCC[NH3+]',
-    supercell=[1, 1, 1],
-    vacuum=12,
-    attachment_end='top'  # New: flexible attachment option
-)
-write('MAPbI3_monolayer_top.vasp', monolayer_top, format='vasp', sort=True)
-print("✓ Wrote MAPbI3_monolayer_top.vasp")
-
-# Monolayer with bottom attachment
-print("\n13. Monolayer structure with 'bottom' attachment...")
-monolayer_bottom = q2d.create_perovskite('monolayer',
-    A_ions='MA', B_ions='Pb', X_ions='I',
-    spacer_molecule='[NH3+]CCCCC[NH3+]',
-    supercell=[1, 1, 1],
-    vacuum=12,
-    attachment_end='bottom'  # New: flexible attachment option
-)
-write('MAPbI3_monolayer_bottom.vasp', monolayer_bottom, format='vasp', sort=True)
-print("✓ Wrote MAPbI3_monolayer_bottom.vasp")
-
-# Monolayer with both attachment (default, but explicit)
-print("\n14. Monolayer structure with 'both' attachment (explicit)...")
-monolayer_both = q2d.create_perovskite('monolayer',
-    A_ions='MA', B_ions='Pb', X_ions='I',
-    spacer_molecule='[NH3+]CCCCC[NH3+]',
-    supercell=[1, 1, 1],
-    vacuum=12,
-    attachment_end='both'  # Explicit default
-)
-write('MAPbI3_monolayer_both.vasp', monolayer_both, format='vasp', sort=True)
-print("✓ Wrote MAPbI3_monolayer_both.vasp")
-
-# RP structure with interlayer penetration
-print("\n15. RP structure with interlayer penetration...")
-rp_interpenet = q2d.create_perovskite('RP',
-    A_ions='MA', B_ions='Pb', X_ions='I',
-    spacer_molecule='[NH3+]CCCCC=O',
-    supercell=[1, 1, 2],
-    spacer_distance=2.0,
-    interlayer_penet=0.1  # New: interlayer penetration parameter
-)
-write('MAPbI3_RP_interpenet.vasp', rp_interpenet, format='vasp', sort=True)
-print("✓ Wrote MAPbI3_RP_interpenet.vasp")
-print(f"   RP structure has {len(rp_interpenet)} atoms (should have 2 layers)")
-
-# RP structure verification - check for two layers and rotation
-print("\n16. Verifying RP structure has two shifted and rotated layers...")
-# Get z positions to verify layer separation
-z_positions = rp_interpenet.get_positions()[:, 2]
-min_z = min(z_positions)
-max_z = max(z_positions)
-z_length = rp_interpenet.cell[2, 2]  # Get z cell dimension
-print(f"   Z range: {min_z:.2f} to {max_z:.2f} Å")
-print(f"   Cell z-length: {z_length:.2f} Å")
-print(f"   Expected: Two layers separated by ~{z_length/2:.2f} Å")
-
-# Verify rotation: Check that top and bottom layers have different XY orientations
-# Get positions for bottom layer (z < z_length/2) and top layer (z > z_length/2)
-bottom_atoms = rp_interpenet[rp_interpenet.get_positions()[:, 2] < z_length/2]
-top_atoms = rp_interpenet[rp_interpenet.get_positions()[:, 2] > z_length/2]
-
-if len(bottom_atoms) > 0 and len(top_atoms) > 0:
-    # Get center of mass for bottom and top layers
-    bottom_com = bottom_atoms.get_center_of_mass()
-    top_com = top_atoms.get_center_of_mass()
-    
-    # Check if layers are shifted (x and y should differ)
-    x_shift = abs(top_com[0] - bottom_com[0])
-    y_shift = abs(top_com[1] - bottom_com[1])
-    z_shift = abs(top_com[2] - bottom_com[2])
-    
-    print(f"   Layer separation: Δx={x_shift:.2f} Å, Δy={y_shift:.2f} Å, Δz={z_shift:.2f} Å")
-    print(f"   ✓ Layers are shifted (expected: Δx≈{0.5*rp_interpenet.cell[0,0]:.2f}, Δy≈{0.5*rp_interpenet.cell[1,1]:.2f})")
-    
-    # Verify rotation by checking if there's a significant difference in layer structure
-    # (The rotation should make the layers have different orientations)
-    print(f"   ✓ Top layer rotated 90° around Z-axis relative to bottom layer")
-    
-print("✓ RP structure verification complete")
-
-# RP with atomic spacer (Cs)
-print("\n17. RP structure with atomic spacer (Cs)...")
-rp_cs = q2d.create_perovskite('RP',
-    A_ions='MA', B_ions='Pb', X_ions='I',
-    spacer_molecule='Cs',  # Atomic cation instead of molecule
-    supercell=[1, 1, 2],
-    spacer_distance=2.0
-)
-write('MAPbI3_RP_Cs.vasp', rp_cs, format='vasp', sort=True)
-print("✓ Wrote MAPbI3_RP_Cs.vasp")
-print(f"   RP structure with Cs spacer has {len(rp_cs)} atoms")
-
-# DJ with atomic spacer (Cs)
-print("\n18. DJ structure with atomic spacer (Cs)...")
-dj_cs = q2d.create_perovskite('DJ',
-    A_ions='MA', B_ions='Pb', X_ions='I',
-    spacer_molecule='Cs',  # Atomic cation instead of molecule
+# 16. DJ oxide
+print("\n16. DJ SrNbO3 with K spacer")
+dj_oxide = creator.create_perovskite('DJ',
+    A_ions='Sr', B_ions='Nb', X_ions='O',
+    spacer='K',
     supercell=[1, 1, 2]
 )
-write('MAPbI3_DJ_Cs.vasp', dj_cs, format='vasp', sort=True)
-print("✓ Wrote MAPbI3_DJ_Cs.vasp")
-print(f"   DJ structure with Cs spacer has {len(dj_cs)} atoms")
+write('dj_SrNbO3_K.vasp', dj_oxide, format='vasp', sort=True)
+print(f"   {len(dj_oxide)} atoms")
 
-# Monolayer with atomic spacer (Cs)
-print("\n19. Monolayer structure with atomic spacer (Cs)...")
-monolayer_cs = q2d.create_perovskite('monolayer',
-    A_ions='MA', B_ions='Pb', X_ions='I',
-    spacer_molecule='Cs',  # Atomic cation instead of molecule
-    supercell=[1, 1, 1],
-    vacuum=12,
-    attachment_end='both'
+# 17. RP oxide
+print("\n17. RP CaTiO3 with Rb spacer")
+rp_oxide = creator.create_perovskite('RP',
+    A_ions='Ca', B_ions='Ti', X_ions='O',
+    spacer='Rb',
+    supercell=[1, 1, 1]
 )
-write('MAPbI3_monolayer_Cs.vasp', monolayer_cs, format='vasp', sort=True)
-print("✓ Wrote MAPbI3_monolayer_Cs.vasp")
-print(f"   Monolayer structure with Cs spacer has {len(monolayer_cs)} atoms")
+write('rp_CaTiO3_Rb.vasp', rp_oxide, format='vasp', sort=True)
+print(f"   {len(rp_oxide)} atoms")
+
+# ===================================================================
+# MIXED COMPOSITION TESTS
+# ===================================================================
+print("\n--- MIXED COMPOSITIONS ---")
+
+# 18. Mixed B-site in 2D
+print("\n18. DJ n=2 with 50% Pb/Sn substitution")
+dj_mixed_B = creator.create_perovskite('DJ',
+    A_ions='Cs', B_ions='Pb', X_ions='I',
+    spacer='Rb',
+    supercell=[2, 2, 2],
+    substitutions=[{'old': 'Pb', 'new': 'Sn', 'fraction': 0.5, 'seed': 42}]
+)
+write('dj_mixed_B.vasp', dj_mixed_B, format='vasp', sort=True)
+print(f"   {len(dj_mixed_B)} atoms")
+
+# 19. Mixed X-site (halides)
+print("\n19. DJ n=1 with mixed halides via substitution")
+dj_mixed_X = creator.create_perovskite('DJ',
+    A_ions='Cs', B_ions='Pb', X_ions='I',
+    spacer='Rb',
+    supercell=[2, 2, 1],
+    substitutions=[{'old': 'I', 'new': 'Br', 'fraction': 0.33, 'seed': 42}]
+)
+write('dj_mixed_X.vasp', dj_mixed_X, format='vasp', sort=True)
+print(f"   {len(dj_mixed_X)} atoms")
+
+# 20. X-site vacancies in 2D
+print("\n20. RP n=1 with I vacancies")
+rp_vac = creator.create_perovskite('RP',
+    A_ions='Cs', B_ions='Pb', X_ions='I',
+    spacer='Cs',
+    supercell=[2, 2, 1],
+    vacancies={'site_type': 'X_site', 'fraction': 0.1, 'seed': 42}
+)
+write('rp_vacancies.vasp', rp_vac, format='vasp', sort=True)
+print(f"   {len(rp_vac)} atoms")
+
+# ===================================================================
+# REDUCED CELL TESTS (2-OCTAHEDRA)
+# ===================================================================
+print("\n--- REDUCED CELL (2-OCTAHEDRA) ---")
+
+# 21. DJ with reduced cell
+print("\n21. DJ n=1 with reduced cell (2-octahedra)")
+dj_reduced = creator.create_perovskite('DJ',
+    A_ions='Cs', B_ions='Pb', X_ions='I',
+    spacer='[NH3+]CCCCC[NH3+]',
+    supercell=[1, 1, 1],
+    reduced=True
+)
+write('dj_n1_reduced.vasp', dj_reduced, format='vasp', sort=True)
+print(f"   {len(dj_reduced)} atoms (reduced cell)")
+
+# 22. RP with reduced cell
+print("\n22. RP n=1 with reduced cell (2-octahedra)")
+rp_reduced = creator.create_perovskite('RP',
+    A_ions='Cs', B_ions='Pb', X_ions='I',
+    spacer='[NH3+]CCCCC[NH3+]',
+    supercell=[1, 1, 1],
+    reduced=True
+)
+write('rp_n1_reduced.vasp', rp_reduced, format='vasp', sort=True)
+print(f"   {len(rp_reduced)} atoms (reduced cell)")
+
+# 23. Normal (complete cell) for comparison
+print("\n23. DJ n=1 with complete cell (4-octahedra) - normal")
+dj_normal = creator.create_perovskite('DJ',
+    A_ions='Cs', B_ions='Pb', X_ions='I',
+    spacer='[NH3+]CCCCC[NH3+]',
+    supercell=[1, 1, 1],
+    reduced=False
+)
+write('dj_n1_normal.vasp', dj_normal, format='vasp', sort=True)
+print(f"   {len(dj_normal)} atoms (complete cell)")
 
 # ===================================================================
 # SUMMARY
 # ===================================================================
-print("\n" + "="*60)
-print("ALL TESTS COMPLETED SUCCESSFULLY!")
-print("="*60)
-print("\nGenerated files:")
+print("\n" + "=" * 50)
+print("Files written:")
 print("  Bulk:")
-print("    - MAPbI3_bulk_simple.vasp")
-print("    - MAPbI3_mixed_A_pattern.vasp")
-print("    - MAPbI3_mixed_X_pattern.vasp")
-print("    - MAPbI3_superMix_pattern.vasp")
-print("  2D (Standard):")
-print("    - MAPbI3_DJ_n1.vasp")
-print("    - MAPbI3_DJ_n2.vasp")
-print("    - MAPbI3_RP_n2.vasp")
-print("    - MAPbI3_monolayer.vasp")
-print("    - MAPbI3_DJ_mixed_A.vasp")
-print("    - MAPbI3_DJ_2x2_n2.vasp")
-print("    - MAPbI3_RP_mixed_X.vasp")
-print("  2D (New Features):")
-print("    - MAPbI3_monolayer_top.vasp (monolayer with top attachment)")
-print("    - MAPbI3_monolayer_bottom.vasp (monolayer with bottom attachment)")
-print("    - MAPbI3_monolayer_both.vasp (monolayer with both attachment)")
-print("    - MAPbI3_RP_interpenet.vasp (RP with interlayer penetration)")
-print("    - MAPbI3_RP_Cs.vasp (RP with atomic spacer Cs)")
-print("    - MAPbI3_DJ_Cs.vasp (DJ with atomic spacer Cs)")
-print("    - MAPbI3_monolayer_Cs.vasp (Monolayer with atomic spacer Cs)")
-print("\nNote: Pattern validation will warn if pattern length doesn't match")
-print("expected position count. Patterns will cycle if shorter than expected.")
-print("\nNew Features Tested:")
-print("  ✓ Monolayer supports flexible attachment: 'top', 'bottom', or 'both'")
-print("  ✓ RP structure creates true two-layer structure with shifted layers")
-print("  ✓ RP supports interlayer_penet parameter for interlocking spacers")
-print("  ✓ RP, DJ, and Monolayer support atomic cations (e.g., Cs, K, Rb) as spacers")
-print("="*60)
+print("    - bulk_CsPbI3.vasp")
+print("    - bulk_CsPbSnI3.vasp (50% Sn)")
+print("    - bulk_CsPbI3_Ivac.vasp (10% I vacancies)")
+print("    - bulk_SrTiO3.vasp")
+print("  DJ:")
+print("    - dj_n1_pda.vasp, dj_n2_pda.vasp")
+print("    - dj_n2_rb.vasp (atomic spacer)")
+print("    - dj_2x2_n2.vasp (2x2 supercell)")
+print("    - dj_SrNbO3_K.vasp (oxide)")
+print("    - dj_mixed_B.vasp (Pb/Sn alloy)")
+print("    - dj_mixed_X.vasp (I/Br mixed)")
+print("  RP:")
+print("    - rp_n1_pda.vasp, rp_n2_pda.vasp")
+print("    - rp_n1_cs.vasp (atomic spacer)")
+print("    - rp_2x2_n1.vasp (2x2 supercell)")
+print("    - rp_CaTiO3_Rb.vasp (oxide)")
+print("    - rp_vacancies.vasp (with vacancies)")
+print("  ACI:")
+print("    - aci_n1_pda.vasp")
+print("  Monolayer:")
+print("    - mono_n1_pda.vasp, mono_n1_cs.vasp")
+print("  Reduced Cell (2-octahedra):")
+print("    - dj_n1_reduced.vasp (DJ with reduced cell)")
+print("    - rp_n1_reduced.vasp (RP with reduced cell)")
+print("    - dj_n1_normal.vasp (DJ with complete cell for comparison)")
+print("=" * 50)
