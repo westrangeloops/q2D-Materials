@@ -1,0 +1,131 @@
+import sys
+from pathlib import Path
+
+# Add parent directory to path so we can import q2D_Materials
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from q2D_Materials.core.creator import q2D_creator
+from q2D_Materials.core.structure import q2DStructure
+from ase.io import write
+
+
+def main():
+    q2d = q2D_creator()
+
+    print("=" * 60)
+    print("Testing bulk perovskite creation (cubic/reduced templates)")
+    print("=" * 60)
+
+    # 0. Wrapper check (cubic)
+    print("\n0. Verifying q2DStructure wrapper (cubic)...")
+    test_structure = q2d.create_perovskite(
+        A_ions="MA", B_ions="Pb", X_ions="I", supercell_size=(1, 1, 1), template="cubic"
+    )
+    assert isinstance(test_structure, q2DStructure)
+    assert test_structure.structure_type == "bulk"
+    assert test_structure.BX_dist is not None
+    assert test_structure.A_ions == "MA"
+    print("✓ q2DStructure wrapper working (cubic)")
+
+    # 1. Simple bulk cubic
+    print("\n1. Simple bulk perovskite (cubic)...")
+    bulk_cubic = q2d.create_perovskite(
+        A_ions="MA", B_ions="Pb", X_ions="I", supercell_size=(1, 1, 1), template="cubic"
+    )
+    write("MAPbI3_bulk_simple_cubic.vasp", bulk_cubic, format="vasp", sort=True)
+    print("✓ Wrote MAPbI3_bulk_simple_cubic.vasp")
+
+    # 2. Simple bulk reduced
+    print("\n2. Simple bulk perovskite (reduced)...")
+    bulk_reduced = q2d.create_perovskite(
+        A_ions="MA", B_ions="Pb", X_ions="I", supercell_size=(1, 1, 1), template="reduced"
+    )
+    write("MAPbI3_bulk_simple_reduced.vasp", bulk_reduced, format="vasp", sort=True)
+    print("✓ Wrote MAPbI3_bulk_simple_reduced.vasp")
+
+    # 3. Mixed A-site pattern (cubic)
+    print("\n3. Mixed A-site perovskite (pattern, cubic)...")
+    mixed_a_cubic = q2d.create_perovskite(
+        A_ions=["Cs", "MA", "FA", "Cs", "MA", "FA", "Cs", "MA"],
+        B_ions="Pb",
+        X_ions="I",
+        supercell_size=(2, 2, 2),
+        template="cubic",
+    )
+    write("MAPbI3_mixed_A_pattern_cubic.vasp", mixed_a_cubic, format="vasp", sort=True)
+    print("✓ Wrote MAPbI3_mixed_A_pattern_cubic.vasp")
+
+    # 4. Mixed X-site pattern (reduced)
+    print("\n4. Mixed X-site perovskite (pattern, reduced)...")
+    mixed_x_reduced = q2d.create_perovskite(
+        A_ions="MA",
+        B_ions="Pb",
+        X_ions=["Br", "I", "I", "Br", "I", "I"],
+        supercell_size=(1, 1, 2),
+        template="reduced",
+    )
+    write("MAPbI3_mixed_X_pattern_reduced.vasp", mixed_x_reduced, format="vasp", sort=True)
+    print("✓ Wrote MAPbI3_mixed_X_pattern_reduced.vasp")
+
+    # 5. Fully mixed composition (reduced)
+    print("\n5. Super-mixed perovskite (A/B/X patterns, reduced)...")
+    super_mix_reduced = q2d.create_perovskite(
+        A_ions=["Cs", "MA", "FA", "MA", "MA", "FA", "Cs", "MA"],
+        B_ions=["Pb", "Sn", "Pb", "Pb", "Sn", "Pb", "Pb", "Sn"],
+        X_ions=["Br"] * 12 + ["I"] * 12,
+        supercell_size=(2, 2, 2),
+        template="reduced",
+    )
+    write("MAPbI3_superMix_pattern_reduced.vasp", super_mix_reduced, format="vasp", sort=True)
+    print("✓ Wrote MAPbI3_superMix_pattern_reduced.vasp")
+
+    # 6-10: Glazer tilts (cubic)
+    glazer_cases_cubic = [
+        ("cubic_glazer_a0a0c+", [0, 0, 3], ["0", "0", "+"], (1, 1, 1)),
+        ("cubic_glazer_a0b+b+", [0, 2, 2], ["0", "+", "+"], (1, 1, 1)),
+        ("cubic_glazer_a-a-a-", [2, 2, 2], ["-", "-", "-"], (2, 2, 2)),
+        ("cubic_glazer_a0b-c-", [0, 3, 3], ["0", "-", "-"], (2, 2, 1)),
+        ("cubic_glazer_a+b-c-", [4, 2, 2], ["+", "-", "-"], (2, 2, 2)),
+    ]
+    for name, angles, pattern, sc in glazer_cases_cubic:
+        print(f"\nGlazer cubic: {name} angles={angles} pattern={pattern} sc={sc}")
+        struct = q2d.create_perovskite(
+            A_ions="MA",
+            B_ions="Pb",
+            X_ions="I",
+            supercell_size=sc,
+            template="cubic",
+            glazer_angles=angles,
+            glazer_pattern=pattern,
+        )
+        write(f"{name}.vasp", struct, format="vasp", sort=True)
+        print(f"✓ Wrote {name}.vasp")
+
+    # 11-15: Glazer tilts (reduced)
+    glazer_cases_reduced = [
+        ("reduced_glazer_a0a0c+", [0, 0, 2], ["0", "0", "+"], (1, 1, 1)),
+        ("reduced_glazer_a0b+b+", [0, 1.5, 1.5], ["0", "+", "+"], (1, 1, 2)),
+        ("reduced_glazer_a-a-a-", [1.5, 1.5, 1.5], ["-", "-", "-"], (2, 2, 2)),
+        ("reduced_glazer_a0b-c-", [0, 2.5, 2.5], ["0", "-", "-"], (2, 2, 1)),
+        ("reduced_glazer_a+b-c-", [3, 2, 2], ["+", "-", "-"], (2, 2, 2)),
+    ]
+    for name, angles, pattern, sc in glazer_cases_reduced:
+        print(f"\nGlazer reduced: {name} angles={angles} pattern={pattern} sc={sc}")
+        struct = q2d.create_perovskite(
+            A_ions="MA",
+            B_ions="Pb",
+            X_ions="I",
+            supercell_size=sc,
+            template="reduced",
+            glazer_angles=angles,
+            glazer_pattern=pattern,
+        )
+        write(f"{name}.vasp", struct, format="vasp", sort=True)
+        print(f"✓ Wrote {name}.vasp")
+
+    print("\nAll bulk tests completed.")
+
+
+if __name__ == "__main__":
+    main()
+
