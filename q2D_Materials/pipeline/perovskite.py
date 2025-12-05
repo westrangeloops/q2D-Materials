@@ -5,11 +5,7 @@ This module wires templates -> base cell builder -> population to produce
 ASE Atoms objects. Currently only bulk is implemented here.
 """
 
-<<<<<<< HEAD
 from typing import List, Tuple, Optional, Dict
-=======
-from typing import List, Tuple, Optional, Dict
->>>>>>> 73e621b (Refine reduced template stacking and bulk pipeline)
 
 import numpy as np
 from ase import Atoms
@@ -122,7 +118,6 @@ def create_bulk_perovskite(
         BX_dist = auto_calculate_BX_distance(B_first, X_first)
 
     tpl = get_template(template)
-<<<<<<< HEAD
     cell_data = _build_positions(tpl, supercell_size, BX_dist)
     positions = cell_data["positions"]
 
@@ -143,4 +138,3 @@ def create_perovskite(structure_type="bulk", **kwargs):
     if stype == "bulk":
         return create_bulk_perovskite(**kwargs)
     raise NotImplementedError(f"{structure_type} creation is not implemented yet.")
-
