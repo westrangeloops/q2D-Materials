@@ -19,7 +19,7 @@ def main():
     # 0. Wrapper check (cubic)
     print("\n0. Verifying q2DStructure wrapper (cubic)...")
     test_structure = q2d.create_perovskite(
-        A_ions="MA", B_ions="Pb", X_ions="I", supercell_size=(1, 1, 1), template="cubic"
+        A_ions="MA", B_ions="Pb", X_ions="I", supercell=(1, 1, 1), template="cubic"
     )
     assert isinstance(test_structure, q2DStructure)
     assert test_structure.structure_type == "bulk"
@@ -30,7 +30,7 @@ def main():
     # 1. Simple bulk cubic
     print("\n1. Simple bulk perovskite (cubic)...")
     bulk_cubic = q2d.create_perovskite(
-        A_ions="MA", B_ions="Pb", X_ions="I", supercell_size=(1, 1, 1), template="cubic"
+        A_ions="MA", B_ions="Pb", X_ions="I", supercell=(1, 1, 1), template="cubic"
     )
     write("MAPbI3_bulk_simple_cubic.vasp", bulk_cubic, format="vasp", sort=True)
     print("✓ Wrote MAPbI3_bulk_simple_cubic.vasp")
@@ -38,10 +38,18 @@ def main():
     # 2. Simple bulk reduced
     print("\n2. Simple bulk perovskite (reduced)...")
     bulk_reduced = q2d.create_perovskite(
-        A_ions="MA", B_ions="Pb", X_ions="I", supercell_size=(1, 1, 1), template="reduced"
+        A_ions="MA", B_ions="Pb", X_ions="I", supercell=(1, 1, 1), template="reduced"
     )
     write("MAPbI3_bulk_simple_reduced.vasp", bulk_reduced, format="vasp", sort=True)
     print("✓ Wrote MAPbI3_bulk_simple_reduced.vasp")
+
+    # 2b. Simple bulk hexagonal
+    print("\n2b. Simple bulk perovskite (hexagonal)...")
+    bulk_hex = q2d.create_perovskite(
+        A_ions="MA", B_ions="Pb", X_ions="I", supercell=(1, 1, 1), template="hexagonal"
+    )
+    write("MAPbI3_bulk_simple_hexagonal.vasp", bulk_hex, format="vasp", sort=True)
+    print("✓ Wrote MAPbI3_bulk_simple_hexagonal.vasp")
 
     # 3. Mixed A-site pattern (cubic)
     print("\n3. Mixed A-site perovskite (pattern, cubic)...")
@@ -49,7 +57,7 @@ def main():
         A_ions=["Cs", "MA", "FA", "Cs", "MA", "FA", "Cs", "MA"],
         B_ions="Pb",
         X_ions="I",
-        supercell_size=(2, 2, 2),
+        supercell=(2, 2, 2),
         template="cubic",
     )
     write("MAPbI3_mixed_A_pattern_cubic.vasp", mixed_a_cubic, format="vasp", sort=True)
@@ -61,11 +69,23 @@ def main():
         A_ions="MA",
         B_ions="Pb",
         X_ions=["Br", "I", "I", "Br", "I", "I"],
-        supercell_size=(1, 1, 2),
+        supercell=(1, 1, 2),
         template="reduced",
     )
     write("MAPbI3_mixed_X_pattern_reduced.vasp", mixed_x_reduced, format="vasp", sort=True)
     print("✓ Wrote MAPbI3_mixed_X_pattern_reduced.vasp")
+
+    # 4b. Mixed X-site pattern (hexagonal)
+    print("\n4b. Mixed X-site perovskite (pattern, hexagonal)...")
+    mixed_x_hex = q2d.create_perovskite(
+        A_ions="MA",
+        B_ions="Pb",
+        X_ions=["Br", "I", "I", "Br", "I", "I", "Br", "I"],
+        supercell=(1, 1, 1),
+        template="hexagonal",
+    )
+    write("MAPbI3_mixed_X_pattern_hexagonal.vasp", mixed_x_hex, format="vasp", sort=True)
+    print("✓ Wrote MAPbI3_mixed_X_pattern_hexagonal.vasp")
 
     # 5. Fully mixed composition (reduced)
     print("\n5. Super-mixed perovskite (A/B/X patterns, reduced)...")
@@ -73,11 +93,23 @@ def main():
         A_ions=["Cs", "MA", "FA", "MA", "MA", "FA", "Cs", "MA"],
         B_ions=["Pb", "Sn", "Pb", "Pb", "Sn", "Pb", "Pb", "Sn"],
         X_ions=["Br"] * 12 + ["I"] * 12,
-        supercell_size=(2, 2, 2),
+        supercell=(2, 2, 2),
         template="reduced",
     )
     write("MAPbI3_superMix_pattern_reduced.vasp", super_mix_reduced, format="vasp", sort=True)
     print("✓ Wrote MAPbI3_superMix_pattern_reduced.vasp")
+
+    # 5b. Super-mixed composition (hexagonal)
+    print("\n5b. Super-mixed perovskite (A/B/X patterns, hexagonal)...")
+    super_mix_hexagonal = q2d.create_perovskite(
+        A_ions=["Cs", "MA", "FA", "MA", "MA", "FA", "Cs", "MA"],
+        B_ions=["Pb", "Sn", "Pb", "Pb", "Sn", "Pb", "Pb", "Sn"],
+        X_ions=["Br"] * 12 + ["I"] * 12,
+        supercell=(2, 2, 1),
+        template="hexagonal",
+    )
+    write("MAPbI3_superMix_pattern_hexagonal.vasp", super_mix_hexagonal, format="vasp", sort=True)
+    print("✓ Wrote MAPbI3_superMix_pattern_hexagonal.vasp")
 
     # 6-10: Glazer tilts (cubic)
     glazer_cases_cubic = [
@@ -93,7 +125,7 @@ def main():
             A_ions="MA",
             B_ions="Pb",
             X_ions="I",
-            supercell_size=sc,
+        supercell=sc,
             template="cubic",
             glazer_angles=angles,
             glazer_pattern=pattern,
@@ -115,7 +147,7 @@ def main():
             A_ions="MA",
             B_ions="Pb",
             X_ions="I",
-            supercell_size=sc,
+        supercell=sc,
             template="reduced",
             glazer_angles=angles,
             glazer_pattern=pattern,
