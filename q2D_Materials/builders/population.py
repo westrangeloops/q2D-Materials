@@ -19,7 +19,7 @@ from ..utils.molecule_builder import (
     translate_atoms,
     get_molecule_length
 )
-from ..utils.common_a_sites import get_ionic_radius, is_molecular_a_cation, get_a_site_object
+from ..utils.A_sites import get_ionic_radius, is_molecular_a_cation, get_a_site_object
 
 
 def normalize_a_site(A: Union[str, Atoms]) -> Union[str, Atoms]:

@@ -19,11 +19,7 @@ from q2D_Materials.builders.templates import (
 )
 from q2D_Materials.builders.population import populate_structure
 from q2D_Materials.builders.molecule_builder import com_to_origin
-from q2D_Materials.utils.glazer_tilting import (
-    apply_glazer_tilting_matrix,
-    glazer_notation_to_pattern,
-    calculate_angles_from_glazer_pattern,
-)
+# Glazer tilting functionality removed for minimal implementation
 from q2D_Materials.utils.A_sites import calculate_BX_distance
 
 
@@ -71,29 +67,15 @@ def _apply_glazer_if_any(
     glazer_angles: Optional[List[float]],
     glazer_pattern: Optional[List[str]],
 ) -> Tuple[Dict[str, List[List[float]]], np.ndarray, np.ndarray]:
-    """Apply Glazer tilt if requested, otherwise return inputs unchanged."""
+    """
+    Apply Glazer tilt if requested, otherwise return inputs unchanged.
+
+    Note: Glazer tilting functionality removed for minimal implementation.
+    """
     lattice_vec_sizes = np.linalg.norm(cell_matrix, axis=1)
 
-    if glazer_angles is None and glazer_pattern is None:
-        return positions, lattice_vec_sizes, cell_matrix
-
-    if glazer_pattern is not None and glazer_angles is None:
-        glazer_angles = calculate_angles_from_glazer_pattern(list(glazer_pattern))
-
-    pos_out, lv_out = apply_glazer_tilting_matrix(
-        position_matrix=positions,
-        lattice_vectors=tuple(lattice_vec_sizes.tolist()),
-        angles=list(glazer_angles) if glazer_angles is not None else None,
-        tilt_pattern=list(glazer_pattern) if glazer_pattern is not None else None,
-    )
-    new_cell_matrix = np.array(
-        [
-            [lv_out[0], 0.0, 0.0],
-            [0.0, lv_out[1], 0.0],
-            [0.0, 0.0, lv_out[2]],
-        ]
-    )
-    return pos_out, np.asarray(lv_out, dtype=float), new_cell_matrix
+    # Glazer tilting removed for minimal implementation
+    return positions, lattice_vec_sizes, cell_matrix
 
 
 def _populate(

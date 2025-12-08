@@ -1,18 +1,12 @@
-from ase.visualize import view
 from ..pipeline import create_bulk_perovskite, create_monolayer_perovskite, auto_calculate_BX_distance
 from .structure import q2DStructure
 
 
 class q2D_creator:
-    """
-    Minimal creator: only bulk perovskites using the new pipeline.
-    """
+    """Minimal creator for perovskite structures."""
 
     def __init__(self):
         pass
-
-    def view_structure(self, structure):
-        return view(structure)
 
     def create_perovskite(
         self,
@@ -30,26 +24,6 @@ class q2D_creator:
         vacuum: float = 10.0,
         layer_sequence=None,
     ):
-        """
-        Create a perovskite structure and wrap it in q2DStructure.
-        
-        Parameters
-        ----------
-        A_ions, B_ions, X_ions : str, list, or Atoms
-            Ions for A, B, and X sites
-        xy_expansion : tuple[int, int]
-            Expansion factors in X and Y directions within the layer plane.
-        template : str
-            Name of template; any JSON available in builders/data (e.g., 'cubic', 'reduced', or custom)
-        thickness : int
-            For monolayers: number of octahedra stacked in Z direction
-        structure_type : str
-            'bulk' or 'monolayer'
-        jahn_teller_dist : float
-            Optional elongation factor for c-axis in bulk cells (1.0 = none)
-        vacuum : float
-            Vacuum padding to add for monolayer cells (ignored for bulk)
-        """
         if BX_dist is None:
             B_first = B_ions[0] if isinstance(B_ions, list) else B_ions
             X_first = X_ions[0] if isinstance(X_ions, list) else X_ions
