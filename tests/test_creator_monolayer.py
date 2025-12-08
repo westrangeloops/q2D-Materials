@@ -95,11 +95,13 @@ def main():
     super_mix_reduced = q2d.create_perovskite(
         A_ions=["Cs", "MA", "FA", "MA", "MA", "FA", "Cs", "MA"],
         B_ions=["Pb", "Sn", "Pb", "Pb", "Sn", "Pb", "Pb", "Sn"],
+        spacer=["CN1C=NC2=C1C(=O)N(C(=O)N2C)CC[NH3+]", "CCCC[NH3+]"],
         X_ions=["Br"] * 12 + ["I"] * 12,
         xy_expansion=(2, 2),
         template="reduced",
         structure_type="monolayer",
         vacuum=vacuum,
+        thickness=2,
     )
     write("MAPbI3_monolayer_superMix_pattern_reduced.vasp", super_mix_reduced, format="vasp", sort=True)
     print("✓ Wrote MAPbI3_monolayer_superMix_pattern_reduced.vasp")

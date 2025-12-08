@@ -17,10 +17,14 @@ from q2D_Materials.builders.templates import (
     build_bulk_cell,
     build_structure_matrix,
 )
+from q2D_Materials.builders.glazer_tilting import apply_glazer_tilt
 from q2D_Materials.builders.population import populate_structure
 from q2D_Materials.builders.molecule_builder import com_to_origin
 # Glazer tilting functionality removed for minimal implementation
 from q2D_Materials.utils.A_sites import calculate_BX_distance
+from q2D_Materials.builders.population import normalize_a_site
+from q2D_Materials.utils.molecule_builder import smiles_to_ase_atoms
+from q2D_Materials.utils.A_sites import get_a_site_object, is_molecular_a_cation
 
 
 def get_template(template_name: str) -> str:
@@ -40,12 +44,54 @@ def auto_calculate_BX_distance(B: str, X: str) -> float:
         return 2.0
 
 
+def normalize_spacer(spacer):
+    """
+    Normalize spacer input to handle strings (SMILES or abbreviations) and Atoms objects.
+
+    Parameters
+    ----------
+    spacer : str or Atoms
+        Spacer molecule as SMILES string, abbreviation, or Atoms object
+
+    Returns
+    -------
+    Atoms
+        ASE Atoms object of the spacer molecule
+    """
+    if isinstance(spacer, Atoms):
+        return spacer.copy()
+
+    if isinstance(spacer, str):
+        # First try to treat as an A-site cation abbreviation
+        try:
+            normalized = get_a_site_object(spacer)
+            if isinstance(normalized, Atoms):
+                return normalized
+            # If it's a string (atomic cation), we still need to convert to Atoms
+            # For spacers, we expect molecular cations, so treat as SMILES
+        except (ValueError, ImportError):
+            pass
+
+        # Try to treat as raw SMILES string
+        try:
+            if smiles_to_ase_atoms is not None:
+                return smiles_to_ase_atoms(spacer)
+            else:
+                raise ValueError("RDKit not available for SMILES processing")
+        except Exception as e:
+            raise ValueError(f"Failed to parse spacer '{spacer}' as SMILES or abbreviation: {e}")
+
+    raise ValueError(f"Spacer must be a string (SMILES or abbreviation) or Atoms object, got {type(spacer)}")
+
+
 def _build_positions(
     template_name: str,
     BX_dist: float,
     jahn_teller_dist: float,
     layer_sequence: Optional[List[str] | str] = None,
     xy_expansion: Tuple[int, int] = (1, 1),
+    penetration: float = 0.0,
+    spacer_provided: bool = False,
 ) -> Dict[str, object]:
     """Select the correct builder for a template and return positions/lattice/cell for unit cell."""
     tpl_data = load_template(
@@ -53,6 +99,8 @@ def _build_positions(
         BX_dist=BX_dist,
         jahn_teller_dist=jahn_teller_dist,
         layer_sequence=layer_sequence,
+        penetration=penetration,
+        spacer_provided=spacer_provided,
     )
 
     return build_bulk_cell(
@@ -70,11 +118,29 @@ def _apply_glazer_if_any(
     """
     Apply Glazer tilt if requested, otherwise return inputs unchanged.
 
-    Note: Glazer tilting functionality removed for minimal implementation.
+    Glazer tilting applies octahedral rotations to X-sites about their nearest B-site centers,
+    following the specified angle and pattern parameters.
     """
     lattice_vec_sizes = np.linalg.norm(cell_matrix, axis=1)
 
-    # Glazer tilting removed for minimal implementation
+    # Apply Glazer tilting if angles and pattern are provided
+    if glazer_angles is not None and glazer_pattern is not None:
+        if len(glazer_angles) == 3 and len(glazer_pattern) == 3:
+            # Determine supercell size from cell_matrix dimensions
+            # The cell_matrix represents the supercell vectors
+            supercell_size = (1, 1, 1)  # Default for monolayers
+
+            # Apply Glazer tilting
+            tilted_positions, _, _ = apply_glazer_tilt(
+                position_matrix=positions,
+                lattice_vectors=tuple(lattice_vec_sizes),
+                supercell=supercell_size,
+                angles=glazer_angles,
+                tilt_pattern=glazer_pattern,
+                adjust_cell=True
+            )
+            return tilted_positions, lattice_vec_sizes, cell_matrix
+
     return positions, lattice_vec_sizes, cell_matrix
 
 
@@ -85,6 +151,7 @@ def _populate(
     A,
     B,
     X,
+    Ap_ions=None,
 ) -> Atoms:
     """Populate ions using the population toolchain."""
     positions_np = {site: np.asarray(coords, dtype=float) for site, coords in positions.items()}
@@ -94,6 +161,7 @@ def _populate(
         A_ions=A,
         B_ions=B,
         X_ions=X, # This must be expanded before being passed to the population toolchain in fact all of them is a good idea A, B, X, Ap must be expanded before being passed to the population toolchain
+        Ap_ions=Ap_ions,
     )
 
 
@@ -154,6 +222,8 @@ def create_monolayer_perovskite(
     thickness: int = 1,
     vacuum: float = 10.0,
     layer_sequence: Optional[List[str] | str] = None,
+    spacer: str | List[str] | Atoms = None,
+    penetration: float = 0.0,
 ) -> Atoms:
     """
     Build a monolayer perovskite using a chosen geometry template and populate it.
@@ -177,6 +247,8 @@ def create_monolayer_perovskite(
         jahn_teller_dist=jahn_teller_dist,
         layer_sequence=layer_sequence,
         xy_expansion=xy_expansion,
+        penetration=penetration,
+        spacer_provided=spacer is not None,
     )
     positions = cell_data["positions"]
     unit_cell_matrix = cell_data["unit_cell_matrix"]
@@ -188,7 +260,15 @@ def create_monolayer_perovskite(
         glazer_pattern,
     )
 
-    atoms = _populate(positions, lattice_vec_sizes, cell_matrix, A, B, X)
+    # Normalize spacer (Ap_ions) - spacers can be SMILES strings or abbreviations
+    Ap_ions = None
+    if spacer is not None:
+        if isinstance(spacer, list):
+            Ap_ions = [normalize_spacer(s) for s in spacer]
+        else:
+            Ap_ions = normalize_spacer(spacer)
+
+    atoms = _populate(positions, lattice_vec_sizes, cell_matrix, A, B, X, Ap_ions)
 
     # Add vacuum then center the slab symmetrically around mid-cell in Z
     add_vacuum(atoms, vacuum=vacuum)

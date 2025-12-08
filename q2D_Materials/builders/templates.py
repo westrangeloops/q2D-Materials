@@ -32,6 +32,8 @@ def load_template(
     BX_dist: float = 3.0,
     jahn_teller_dist: float = 1.0,
     layer_sequence: Optional[List[str] | str] = None,
+    penetration: float = 0.0,
+    spacer_provided: bool = False,
 ) -> Dict[str, object]:
     """
     Load template positions and lattice parameters from JSON file.
@@ -64,10 +66,16 @@ def load_template(
 
     _validate_template_data(data, template_name, json_path)
 
-    positions, n_layers = _build_layer_stack(
+    positions, n_layers, layer_seq = _build_layer_stack(
         data=data,
         layer_sequence=layer_sequence,
     )
+
+    # Apply spacer override if spacer is provided (converts external L1 A-sites to Ap-sites)
+    positions = apply_spacer_override(positions, layer_seq, spacer_provided)
+
+    # Apply penetration adjustment if specified
+    positions = apply_penetration(positions, layer_seq, penetration, BX_dist, jahn_teller_dist)
 
     multipliers = data.get("lattice_multipliers", [2.0, 2.0, 2.0])
     if len(multipliers) == 2:
@@ -211,6 +219,147 @@ def cell_matrix_from_parameters(
 PositionMatrix = Dict[str, List[List[float]]]
 
 
+# -----------------------------------------------------------------------------
+# Spacer override helpers
+# -----------------------------------------------------------------------------
+
+
+def apply_spacer_override(
+    positions: PositionMatrix,
+    layer_sequence: Optional[List[str]],
+    spacer_provided: bool,
+) -> PositionMatrix:
+    """
+    Convert ALL A-sites in external L1 layers to Ap-sites when spacer is provided.
+
+    This allows spacer molecules to completely replace regular A-ions in the first and last
+    L1 layers of monolayer structures. The spacers will be iterated through these positions.
+
+    Parameters
+    ----------
+    positions : PositionMatrix
+        Dictionary with site types ('A', 'B', 'X') and lists of [x, y, z] positions
+    layer_sequence : Optional[List[str]]
+        List of layer names (e.g., ["L1", "L2", "L1"])
+    spacer_provided : bool
+        Whether a spacer molecule was provided
+
+    Returns
+    -------
+    PositionMatrix
+        Modified positions with external L1 A-sites converted to Ap-sites
+    """
+    if not spacer_provided or layer_sequence is None or not positions.get("A"):
+        return positions
+
+    # Find first and last L1 layer indices
+    l1_indices = [i for i, layer in enumerate(layer_sequence) if layer == "L1"]
+    if not l1_indices:
+        return positions
+
+    first_l1_idx = l1_indices[0]
+    last_l1_idx = l1_indices[-1]
+
+    # Calculate number of layers
+    n_layers = len(layer_sequence)
+
+    # Create a copy of positions to modify
+    modified_positions = {site: [pos[:] for pos in coords] for site, coords in positions.items()}
+
+    # Ensure Ap key exists
+    if "Ap" not in modified_positions:
+        modified_positions["Ap"] = []
+
+    # Move ALL A-sites from external L1 layers to Ap-sites
+    a_positions = modified_positions["A"]
+    positions_to_move = []
+
+    for i, pos in enumerate(a_positions):
+        z = pos[2]
+        # Find which layer this Z coordinate corresponds to
+        layer_idx = round(z * n_layers)
+        layer_name = layer_sequence[layer_idx] if layer_idx < len(layer_sequence) else None
+
+        if layer_name == "L1" and (layer_idx == first_l1_idx or layer_idx == last_l1_idx):
+            # This A-site is in an external L1 layer, move it to Ap
+            positions_to_move.append(i)
+
+    # Move positions from A to Ap (in reverse order to maintain indices)
+    for i in reversed(positions_to_move):
+        pos = a_positions.pop(i)
+        modified_positions["Ap"].append(pos)
+
+    return modified_positions
+
+
+# -----------------------------------------------------------------------------
+# Penetration adjustment helpers
+# -----------------------------------------------------------------------------
+
+
+def apply_penetration(
+    positions: PositionMatrix,
+    layer_sequence: Optional[List[str]],
+    penetration: float,
+    BX_dist: float,
+    jahn_teller_dist: float = 1.0,
+) -> PositionMatrix:
+    """
+    Apply penetration adjustment to A-sites in first and last L1 layers.
+
+    Parameters
+    ----------
+    positions : PositionMatrix
+        Dictionary with site types ('A', 'B', 'X') and lists of [x, y, z] positions
+    layer_sequence : Optional[List[str]]
+        List of layer names (e.g., ["L1", "L2", "L1"])
+    penetration : float
+        Penetration value relative to BX_dist (e.g., 0.25 = 25% of BX_dist)
+    BX_dist : float
+        B-X bond distance in Angstroms
+    jahn_teller_dist : float
+        Jahn-Teller distortion factor
+
+    Returns
+    -------
+    PositionMatrix
+        Modified positions with penetration applied
+    """
+    if layer_sequence is None or penetration == 0.0 or not positions.get("A"):
+        return positions
+
+    # Calculate layer spacing in fractional coordinates
+    n_layers = len(layer_sequence)
+    dz = 1.0 / n_layers  # Fractional spacing between layers
+
+    # Calculate penetration in fractional coordinates
+    # Total c-length = BX_dist * jahn_teller_dist
+    # Penetration amount = penetration * BX_dist
+    # Fractional penetration = penetration_amount / total_c_length
+    fractional_penetration = penetration / jahn_teller_dist
+
+    # Create a copy of positions to modify
+    modified_positions = {site: [pos[:] for pos in coords] for site, coords in positions.items()}
+
+    # Group A-sites by their Z coordinates to identify which layer they belong to
+    a_positions = modified_positions["A"]
+    for i, pos in enumerate(a_positions):
+        z = pos[2]
+        # Find which layer this Z coordinate corresponds to
+        layer_idx = round(z * n_layers)
+        layer_name = layer_sequence[layer_idx] if layer_idx < len(layer_sequence) else None
+
+        if layer_name == "L1":
+            # Check if this is the first or last L1
+            l1_indices = [j for j, l in enumerate(layer_sequence) if l == "L1"]
+            if layer_idx == l1_indices[0]:  # First L1
+                a_positions[i][2] -= fractional_penetration
+            elif layer_idx == l1_indices[-1]:  # Last L1
+                a_positions[i][2] += fractional_penetration
+
+    return modified_positions
+
+
 def _add_terminal_sites(position_matrix: PositionMatrix, cell_matrix: np.ndarray) -> PositionMatrix:
     """
     Duplicate atoms that sit at the bottom face (z≈0) to the top face.
@@ -240,15 +389,28 @@ def _ensure_site_keys(position_matrix: PositionMatrix) -> PositionMatrix:
     return sites
 
 
-def _layers_to_positions(layers: List[List[List[float]]]) -> PositionMatrix:
+def _layers_to_positions(layers: List[List[List[float]]], layer_sequence: Optional[List[str]] = None) -> Tuple[PositionMatrix, Optional[List[str]]]:
     """
     Convert 2D layer definitions into 3D fractional positions stacked along c.
 
     Each layer entry is [site, x, y]. Layers are evenly spaced along z.
+
+    Parameters
+    ----------
+    layers : List[List[List[float]]]
+        List of layer definitions, each containing [site, x, y] entries
+    layer_sequence : Optional[List[str]]
+        Names of the layers (e.g., ["L1", "L2", "L1"])
+
+    Returns
+    -------
+    tuple
+        (positions, layer_sequence) where positions is PositionMatrix and
+        layer_sequence is the list of layer names for each layer
     """
     n_layers = len(layers)
     if n_layers == 0:
-        return {"A": [], "B": [], "X": []}
+        return {"A": [], "B": [], "X": []}, layer_sequence
 
     dz = 1.0 / n_layers
     positions: PositionMatrix = {"A": [], "B": [], "X": []}
@@ -259,7 +421,7 @@ def _layers_to_positions(layers: List[List[List[float]]]) -> PositionMatrix:
             site, x, y = entry
             positions[site].append([float(x), float(y), float(z)])
 
-    return positions
+    return positions, layer_sequence
 
 
 def _named_layers_to_layers(named_layers: Dict[str, List[List[float]]], sequence: Optional[List[str]]) -> List[List[List[float]]]:
@@ -297,7 +459,7 @@ def _normalize_layer_sequence(seq: Optional[List[str] | str]) -> Optional[List[s
 def _build_layer_stack(
     data: Dict,
     layer_sequence: Optional[List[str] | str],
-) -> Tuple[PositionMatrix, Optional[int]]:
+) -> Tuple[PositionMatrix, Optional[int], Optional[List[str]]]:
     """Resolve layers/named_layers and repeat by thickness."""
     layers = data.get("layers") or data.get("Layers")
     named_layers = data.get("named_layers") or data.get("NamedLayers")
@@ -305,18 +467,20 @@ def _build_layer_stack(
     # Resolve base layers list
     if layers is not None:
         base_layers = layers
+        seq = None  # No layer names for direct layer definitions
     elif named_layers is not None:
         seq = _normalize_layer_sequence(layer_sequence) or data.get("layer_sequence")
         base_layers = _named_layers_to_layers(named_layers, seq)
     else:
         # Fallback for legacy templates that still ship "positions"
         pos = {k: [list(p) for p in v] for k, v in data["positions"].items()}
-        return pos, None
+        return pos, None, None
 
     # layer_sequence already includes all repetitions, so use base_layers directly
     stacked_layers = base_layers
 
-    return _layers_to_positions(stacked_layers), len(stacked_layers)
+    positions, _ = _layers_to_positions(stacked_layers, seq)
+    return positions, len(stacked_layers), seq
 
 
 def _expand_xy(

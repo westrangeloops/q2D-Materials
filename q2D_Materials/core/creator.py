@@ -23,6 +23,8 @@ class q2D_creator:
         jahn_teller_dist=1.0,
         vacuum: float = 10.0,
         layer_sequence=None,
+        spacer=None,
+        penetration: float = 0.0,
     ):
         if BX_dist is None:
             B_first = B_ions[0] if isinstance(B_ions, list) else B_ions
@@ -56,6 +58,8 @@ class q2D_creator:
                 jahn_teller_dist=jahn_teller_dist,
                 vacuum=vacuum,
                 layer_sequence=layer_sequence,
+                spacer=spacer,
+                penetration=penetration,
             )
         else:
             raise ValueError(f"structure_type must be 'bulk' or 'monolayer', got '{structure_type}'")

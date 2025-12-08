@@ -17,9 +17,66 @@ from ..utils.molecule_builder import (
     add_atoms,
     end_to_origin,
     translate_atoms,
-    get_molecule_length
+    get_molecule_length,
+    com_to_origin
 )
 from ..utils.A_sites import get_ionic_radius, is_molecular_a_cation, get_a_site_object
+
+
+def place_spacer_at_location(atoms, r, attachment_end):
+    """
+    Place a spacer molecule with its NH3+ N atom at the location r.
+
+    Parameters
+    ----------
+    atoms : Atoms
+        Spacer molecule (already aligned with NH3+ at correct end)
+    r : array
+        Vector for the translation (3,)
+    attachment_end : str
+        'top' or 'bottom' - which end of molecule contains the NH3+ group
+
+    Returns
+    -------
+    mod_atoms : Atoms
+        The modified atoms object with NH3+ N atom at position r.
+    """
+    mod_atoms = atoms.copy()
+    symbols = mod_atoms.get_chemical_symbols()
+    positions = mod_atoms.positions
+
+    # Find NH3+ N atoms (N with 3 nearby H atoms)
+    n_indices = [i for i, s in enumerate(symbols) if s == 'N']
+    nh3_n_idx = None
+
+    if len(n_indices) == 1:
+        # Single N atom - assume it's NH3+
+        nh3_n_idx = n_indices[0]
+    else:
+        # Multiple N atoms - find the one that is part of NH3+ (has 3 nearby H)
+        h_indices = [i for i, s in enumerate(symbols) if s == 'H']
+        for n_idx in n_indices:
+            n_pos = positions[n_idx]
+            nearby_h_count = 0
+            for h_idx in h_indices:
+                h_pos = positions[h_idx]
+                dist = np.linalg.norm(n_pos - h_pos)
+                if dist < 1.2:  # N-H bond distance
+                    nearby_h_count += 1
+            if nearby_h_count == 3:
+                nh3_n_idx = n_idx
+                break
+
+    if nh3_n_idx is not None:
+        # Move the NH3+ N atom to the target position
+        n_pos = positions[nh3_n_idx]
+        translation = np.array(r) - n_pos
+        mod_atoms.positions += translation
+    else:
+        # Fallback: use COM placement
+        mod_atoms = place_atoms_at_location(mod_atoms, r)
+
+    return mod_atoms
 
 
 def normalize_a_site(A: Union[str, Atoms]) -> Union[str, Atoms]:
@@ -258,9 +315,23 @@ def populate_structure(
     # Add molecular A/Ap-sites (if any)
     for i, (mol, pos, site_type) in enumerate(molecular_atoms):
         if site_type in ['A', 'Ap']:
-            # Align and place molecule at the provided position
-            mol_aligned = align_ase_molecule_for_perovskite(mol.copy())
-            mol_placed = place_atoms_at_location(mol_aligned, pos)
+            # Determine attachment orientation and placement for spacers (Ap sites)
+            if site_type == 'Ap':
+                # For monolayer spacers, determine if position is in bottom or top half
+                z_center = (structure.cell[2][2]) / 2.0  # Cell height / 2
+                if pos[2] < z_center:
+                    # Bottom surface - NH3+ should point upward toward layer above
+                    attachment_end = 'top'  # NH3+ at top of molecule
+                else:
+                    # Top surface - NH3+ should point downward toward layer below
+                    attachment_end = 'bottom'  # NH3+ at bottom of molecule
+                mol_aligned = align_ase_molecule_for_perovskite(mol.copy(), attachment_end=attachment_end)
+                # Place NH3+ end at the attachment position
+                mol_placed = place_spacer_at_location(mol_aligned, pos, attachment_end)
+            else:
+                # Regular A-sites use COM placement
+                mol_aligned = align_ase_molecule_for_perovskite(mol.copy())
+                mol_placed = place_atoms_at_location(mol_aligned, pos)
             structure = add_atoms(structure, mol_placed)
     
     return structure
