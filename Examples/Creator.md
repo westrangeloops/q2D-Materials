@@ -2,7 +2,7 @@
 
 # q2D-Materials Creator Tutorial
 
-Complete guide to creating perovskite structures from simple bulk to complex mixed 2D structures.
+Complete guide to creating perovskite structures using the layer-based system with XY expansion.
 
 ## Table of Contents
 
@@ -44,7 +44,7 @@ from q2D_Materials.core.creator import q2D_creator
 q2d = q2D_creator()
 ```
 
-The `q2D_creator` class is initialized without parameters. All composition parameters (`A_ions`, `B_ions`, `X_ions`) must be provided when calling `create_perovskite()`.
+The `q2D_creator` class is initialized without parameters. All composition parameters (`A_ions`, `B_ions`, `X_ions`) must be provided when calling `create_perovskite()`. Use `xy_expansion` for in-plane tiling instead of internal supercell handling.
 
 ## Ion Recommender
 
@@ -214,9 +214,9 @@ from q2D_Materials.core.creator import q2D_creator
 q2d = q2D_creator()
 
 # Create single unit cell
-bulk = q2d.create_perovskite('bulk', 
+bulk = q2d.create_perovskite('bulk',
     A_ions='MA', B_ions='Pb', X_ions='I',
-    supercell_size=(1, 1, 1))
+    xy_expansion=(1, 1))
 from ase.io import write
 write('MAPbI3_unit_cell.vasp', bulk)
 ```
@@ -228,42 +228,58 @@ write('MAPbI3_unit_cell.vasp', bulk)
 bulk = q2d.create_perovskite(
     'bulk',
     A_ions='MA', B_ions='Pb', X_ions='I',
-    supercell_size=(1, 1, 1),
+    xy_expansion=(1, 1),
     BX_dist=3.18  # Angstrom (auto-calculated if None)
 )
 ```
 
-## Bulk with Supercells
+## Bulk with XY Expansion
 
-### Simple Supercell
+### Simple XY Expansion
 
-Create larger bulk structures:
+Create larger bulk structures by expanding in the XY plane:
 
 ```python
-# 2×2×2 supercell
-bulk_supercell = q2d.create_perovskite('bulk', 
+# 2×2 XY expansion
+bulk_expanded = q2d.create_perovskite('bulk',
     A_ions='MA', B_ions='Pb', X_ions='I',
-    supercell_size=(2, 2, 2))
+    xy_expansion=(2, 2))
 from ase.io import write
-write('MAPbI3_2x2x2.vasp', bulk_supercell)
+write('MAPbI3_2x2.vasp', bulk_expanded)
 
-# 3×3×3 supercell
+# 3×3 XY expansion
 bulk_large = q2d.create_perovskite('bulk',
     A_ions='MA', B_ions='Pb', X_ions='I',
-    supercell_size=(3, 3, 3))
+    xy_expansion=(3, 3))
 from ase.io import write
-write('MAPbI3_3x3x3.vasp', bulk_large)
+write('MAPbI3_3x3.vasp', bulk_large)
 ```
 
-### Rectangular Supercells
+### Rectangular XY Expansion
 
 ```python
-# Non-cubic supercell
+# Non-square XY expansion
 bulk_rect = q2d.create_perovskite('bulk',
     A_ions='MA', B_ions='Pb', X_ions='I',
-    supercell_size=(2, 3, 1))
+    xy_expansion=(2, 3))
 from ase.io import write
-write('MAPbI3_2x3x1.vasp', bulk_rect)
+write('MAPbI3_2x3.vasp', bulk_rect)
+```
+
+### Z-direction Expansion
+
+For expansion in the Z-direction (layer stacking), use ASE externally:
+
+```python
+# Create XY-expanded structure
+bulk_2d = q2d.create_perovskite('bulk',
+    A_ions='MA', B_ions='Pb', X_ions='I',
+    xy_expansion=(2, 2))
+
+# Expand in Z-direction using ASE
+bulk_3d = bulk_2d * (1, 1, 3)  # Creates 2×2×3 structure
+from ase.io import write
+write('MAPbI3_2x2x3.vasp', bulk_3d)
 ```
 
 ## Double Perovskites
@@ -275,7 +291,7 @@ Create alternating B-site cation structures:
 double = q2d.create_perovskite(
     'bulk',
     A_ions='MA', B_ions='Pb', X_ions='I',
-    supercell_size=(2, 2, 2),  # Required for double perovskite
+    xy_expansion=(2, 2),  # Required for double perovskite pattern
     Bp='Sn'  # Second B-site cation
 )
 from ase.io import write
@@ -294,7 +310,7 @@ mixed_A = q2d.create_perovskite(
     'bulk',
     A_ions=['Cs', 'MA', 'FA', 'Cs', 'MA', 'FA', 'Cs', 'MA'],  # Pattern for 8 positions
     B_ions='Pb', X_ions='I',
-    supercell_size=(2, 2, 2)  # 8 A-site positions
+    xy_expansion=(2, 2)  # 4 positions, pattern repeats 2×2×1 times
 )
 ```
 
@@ -306,7 +322,7 @@ mixed_B = q2d.create_perovskite(
     'bulk',
     A_ions='MA', X_ions='I',
     B_ions=['Pb', 'Sn'],  # Pattern cycles: Pb-Sn-Pb-Sn-...
-    supercell_size=(2, 2, 2)
+    xy_expansion=(2, 2)
 )
 ```
 
@@ -318,7 +334,7 @@ mixed_X = q2d.create_perovskite(
     'bulk',
     A_ions='MA', B_ions='Pb',
     X_ions=['Br', 'I', 'I'],  # Pattern cycles: Br-I-I-Br-I-I
-    supercell_size=(1, 1, 2)  # 6 X-site positions
+    xy_expansion=(1, 2)  # XY expansion for pattern repetition
 )
 ```
 
@@ -328,7 +344,7 @@ mixed_X = q2d.create_perovskite(
 # Mix all sites simultaneously
 mixed_all = q2d.create_perovskite(
     'bulk',
-    supercell_size=(2, 2, 2),
+    xy_expansion=(2, 2),
     A_ions=['Cs', 'MA', 'FA', 'Cs', 'MA', 'FA', 'Cs', 'MA'],
     B_ions=['Pb', 'Sn'],
     X_ions=['Br', 'I', 'I'],
@@ -349,7 +365,8 @@ monolayer = q2d.create_perovskite(
     'monolayer',
     A_ions='MA', B_ions='Pb', X_ions='I',
     spacer_molecule='[NH3+]CCCCC[NH3+]',  # Divalent spacer
-    supercell=[1, 1, 1]
+    xy_expansion=(1, 1),
+    thickness=1
 )
 from ase.io import write
 write('MAPbI3_monolayer.vasp', monolayer)
@@ -363,7 +380,8 @@ monolayer_top = q2d.create_perovskite(
     'monolayer',
     A_ions='MA', B_ions='Pb', X_ions='I',
     spacer_molecule='[NH3+]CCCCC[NH3+]',
-    supercell=[1, 1, 1],
+    xy_expansion=(1, 1),
+    thickness=1,
     vacuum=12,
     attachment_end='top'  # Attach only to top
 )
@@ -373,7 +391,8 @@ monolayer_bottom = q2d.create_perovskite(
     'monolayer',
     A_ions='MA', B_ions='Pb', X_ions='I',
     spacer_molecule='[NH3+]CCCCC[NH3+]',
-    supercell=[1, 1, 1],
+    xy_expansion=(1, 1),
+    thickness=1,
     vacuum=12,
     attachment_end='bottom'  # Attach only to bottom
 )
@@ -383,7 +402,8 @@ monolayer_both = q2d.create_perovskite(
     'monolayer',
     A_ions='MA', B_ions='Pb', X_ions='I',
     spacer_molecule='[NH3+]CCCCC[NH3+]',
-    supercell=[1, 1, 1],
+    xy_expansion=(1, 1),
+    thickness=1,
     vacuum=12,
     attachment_end='both'  # Attach to both top and bottom (default)
 )
@@ -394,18 +414,19 @@ monolayer_both = q2d.create_perovskite(
 ```python
 monolayer = q2d.create_perovskite(
     structure_type='monolayer',
-    
+
     # Required composition parameters
     A_ions='MA', B_ions='Pb', X_ions='I',
-    
+
     # Required 2D parameters
     spacer_molecule='CN1C=NC2=C1C(=O)N(C(=O)N2C)CC[NH3+]',
-    supercell=[1, 1, 1],
-    
+    xy_expansion=(1, 1),
+    thickness=1,
+
     # Monolayer-specific parameters
     vacuum=12,  # Vacuum thickness in Angstrom
     attachment_end='both',  # 'top', 'bottom', or 'both' (default: 'both')
-    
+
     # Optional parameters
     penet=0.3,
     BX_dist=None,
@@ -422,7 +443,8 @@ monolayer_cs = q2d.create_perovskite(
     'monolayer',
     A_ions='MA', B_ions='Pb', X_ions='I',
     spacer_molecule='Cs',  # Atomic cation
-    supercell=[1, 1, 1],
+    xy_expansion=(1, 1),
+    thickness=1,
     vacuum=12,
     attachment_end='both'  # Can be 'top', 'bottom', or 'both'
 )
@@ -439,7 +461,8 @@ rp = q2d.create_perovskite(
     'RP',
     A_ions='MA', B_ions='Pb', X_ions='I',
     spacer_molecule='[NH3+]CCCCC=O',  # SMILES string
-    supercell=[1, 1, 2]  # [nx, ny, n_layers]
+    xy_expansion=(1, 1),
+    thickness=2  # Number of octahedral layers
 )
 from ase.io import write
 write('MAPbI3_RP_n2.vasp', rp)
@@ -451,18 +474,19 @@ write('MAPbI3_RP_n2.vasp', rp)
 # RP structure with all parameters
 rp = q2d.create_perovskite(
     structure_type='RP',
-    
+
     # Required composition parameters
     A_ions='MA', B_ions='Pb', X_ions='I',
-    
+
     # Required 2D parameters
     spacer_molecule='[NH3+]CCCCC=O',  # SMILES, XYZ file, or Atoms object
-    supercell=[1, 1, 2],  # [nx, ny, n_layers]
-    
+    xy_expansion=(1, 1),
+    thickness=2,  # Number of octahedral layers
+
     # RP-specific parameters
     spacer_distance=2.0,  # Vacuum gap between opposing spacers (Å)
     interlayer_penet=0.0,  # Interlayer penetration as fraction of molecule length
-    
+
     # Optional parameters
     penet=0.3,  # Spacer penetration into layer (fraction of BX bond)
     BX_dist=None  # Auto-calculated if None from B/X ions
@@ -694,7 +718,7 @@ mixed_spacers = q2d.create_perovskite(
 | Parameter | Type | Description | Default |
 |-----------|------|-------------|---------|
 | `structure_type` | str | Must be `'bulk'` | Required |
-| `supercell_size` | tuple | `(nx, ny, nz)` - Supercell dimensions. Required for mixed compositions. | `(1, 1, 1)` |
+| `xy_expansion` | tuple | `(nx, ny)` - XY expansion factors within layer plane. Required for mixed compositions. | `(1, 1)` |
 | `A_ions` | str/list | **Required.** A-site cation(s). Single value or list pattern. | Required |
 | `B_ions` | str/list | **Required.** B-site cation(s). Single value or list pattern. | Required |
 | `X_ions` | str/list | **Required.** X-site anion(s). Single value or list pattern. | Required |
@@ -707,7 +731,8 @@ mixed_spacers = q2d.create_perovskite(
 |-----------|------|-------------|---------|
 | `structure_type` | str | `'RP'`, `'DJ'`, or `'monolayer'` | Required |
 | `spacer_molecule` | str/Atoms/list | **Required**. Spacer molecule(s) as SMILES, XYZ file, Atoms object, or atomic cation (for RP/monolayer). | Required |
-| `supercell` | list | **Required**. `[nx, ny, n_layers]` where `n_layers` is number of octahedral layers. | Required |
+| `xy_expansion` | tuple | **Required**. `(nx, ny)` - XY expansion factors within layer plane. | Required |
+| `thickness` | int | **Required**. Number of octahedral layers in Z direction. | Required |
 | `A_ions` | str/list | **Required.** A-site cation(s) pattern. | Required |
 | `B_ions` | str/list | **Required.** B-site cation(s) pattern. | Required |
 | `X_ions` | str/list | **Required.** X-site anion(s) pattern. | Required |
@@ -730,17 +755,19 @@ Pattern-based mixing assigns ions sequentially to positions. If the pattern list
 ### Understanding Position Counts
 
 **Bulk Perovskites:**
-- **A-sites**: `nx × ny × nz` positions
-- **B-sites**: `nx × ny × nz` positions  
-- **X-sites**: `3 × nx × ny × nz` positions (3 anions per unit cell)
+- **A-sites**: `nx × ny` positions (single layer expanded in XY)
+- **B-sites**: `nx × ny` positions
+- **X-sites**: `3 × nx × ny` positions (3 anions per unit cell)
 
 **2D Perovskites:**
-- **A-sites**: `(n_layers - 1) × 2 × nx × ny` positions (if n_layers > 1)
-- **B-sites**: `2 × n_layers × nx × ny` positions
-- **X-sites**: `(2 + 8 × n_layers) × nx × ny` positions
+- **A-sites**: `(thickness - 1) × 2 × nx × ny` positions (if thickness > 1)
+- **B-sites**: `2 × thickness × nx × ny` positions
+- **X-sites**: `(2 + 8 × thickness) × nx × ny` positions
 - **Spacers**: `len(z_levels) × 2 × nx × ny` positions
   - DJ: 1 z-level → `2 × nx × ny` positions
   - RP: 2 z-levels → `4 × nx × ny` positions
+
+Where `nx, ny = xy_expansion` and thickness controls Z-direction layering.
 
 ### Pattern Examples
 
@@ -749,24 +776,24 @@ Pattern-based mixing assigns ions sequentially to positions. If the pattern list
 ```python
 q2d = q2D_creator()
 
-# For 2×2×2 = 8 A-sites, pattern of 3 will cycle:
-# Cs-MA-FA-Cs-MA-FA-Cs-MA
+# For 2×2 XY expansion = 4 A-sites, pattern of 3 will cycle:
+# Cs-MA-FA-Cs
 mixed = q2d.create_perovskite('bulk',
     A_ions=['Cs', 'MA', 'FA'],  # Pattern of 3
     B_ions='Pb', X_ions='I',
-    supercell_size=(2, 2, 2)  # 8 positions
+    xy_expansion=(2, 2)  # 4 positions
 )
 ```
 
 #### Example 2: Alternating Pattern
 
 ```python
-# For 1×1×2 = 6 X-sites, pattern of 2 will cycle:
+# For 1×2 XY expansion = 6 X-sites, pattern of 2 will cycle:
 # Br-I-Br-I-Br-I
 mixed_halides = q2d.create_perovskite('bulk',
     A_ions='MA', B_ions='Pb',
     X_ions=['Br', 'I'],  # Pattern of 2
-    supercell_size=(1, 1, 2)  # 6 positions
+    xy_expansion=(1, 2)  # 6 X-site positions
 )
 ```
 
@@ -774,18 +801,18 @@ mixed_halides = q2d.create_perovskite('bulk',
 
 ```python
 # Pattern matches exactly with positions
-# For 2×2×2 = 8 A-sites, provide 8 values
+# For 2×2 XY expansion = 4 A-sites, provide 4 values
 exact = q2d.create_perovskite('bulk',
-    A_ions=['Cs', 'MA', 'FA', 'Cs', 'MA', 'FA', 'Cs', 'MA'],  # 8 values
+    A_ions=['Cs', 'MA', 'FA', 'Cs'],  # 4 values
     B_ions='Pb', X_ions='I',
-    supercell_size=(2, 2, 2)  # 8 positions
+    xy_expansion=(2, 2)  # 4 positions
 )
 ```
 
 #### Example 4: 2D Pattern Mixing
 
 ```python
-# For DJ with supercell=[2, 2, 2] and n_layers=2:
+# For DJ with xy_expansion=(2, 2) and thickness=2:
 # A-sites: (2-1) × 2 × 2 × 2 = 8 positions
 # B-sites: 2 × 2 × 2 × 2 = 16 positions
 # X-sites: (2 + 8 × 2) × 2 × 2 = 72 positions
@@ -796,7 +823,8 @@ dj_mixed = q2d.create_perovskite('DJ',
     B_ions=['Pb', 'Sn'],  # 2 values, cycles 8 times for 16 positions
     X_ions=['Br', 'I'],   # 2 values, cycles 36 times for 72 positions
     spacer_molecule='[NH3+]CCCCC[NH3+]',
-    supercell=[2, 2, 2]
+    xy_expansion=(2, 2),
+    thickness=2
 )
 ```
 
@@ -816,10 +844,10 @@ q2d = q2D_creator()
 
 complex_bulk = q2d.create_perovskite(
     'bulk',
-    A_ions=['Cs', 'MA', 'FA'],  # Cycles 9 times
-    B_ions=['Pb', 'Sn', 'Ge'],  # Cycles 9 times
-    X_ions=['Br', 'I', 'Cl', 'I'],  # Cycles for 81 X-sites
-    supercell_size=(3, 3, 3),  # 27 unit cells
+    A_ions=['Cs', 'MA', 'FA'],  # Cycles based on xy_expansion
+    B_ions=['Pb', 'Sn', 'Ge'],  # Cycles based on xy_expansion
+    X_ions=['Br', 'I', 'Cl', 'I'],  # Cycles for X-sites
+    xy_expansion=(3, 3),  # 9 positions for A/B sites
     BX_dist=3.18
 )
 from ase.io import write
@@ -836,7 +864,8 @@ rp_complex = q2d.create_perovskite(
     B_ions=['Pb', 'Sn'],
     X_ions=['Br', 'I'],
     spacer_molecule='Cs',  # Atomic cation
-    supercell=[2, 2, 2],
+    xy_expansion=(2, 2),
+    thickness=2,
     spacer_distance=2.0
 )
 from ase.io import write
@@ -852,7 +881,8 @@ rp_complete = q2d.create_perovskite(
     B_ions=['Pb', 'Sn'],
     X_ions=['Br', 'I'],
     spacer_molecule='[NH3+]CCCCC=O',
-    supercell=[2, 2, 3],  # 3 layers
+    xy_expansion=(2, 2),
+    thickness=3,  # 3 layers
     spacer_distance=2.5,  # Larger gap
     interlayer_penet=0.1,  # Interlayer penetration
     penet=0.25,  # Less penetration
@@ -870,7 +900,8 @@ monolayer_top = q2d.create_perovskite(
     'monolayer',
     A_ions='MA', B_ions='Pb', X_ions='I',
     spacer_molecule='[NH3+]CCCCC[NH3+]',
-    supercell=[1, 1, 1],
+    xy_expansion=(1, 1),
+    thickness=1,
     vacuum=12,
     attachment_end='top'
 )
@@ -879,7 +910,8 @@ monolayer_bottom = q2d.create_perovskite(
     'monolayer',
     A_ions='MA', B_ions='Pb', X_ions='I',
     spacer_molecule='[NH3+]CCCCC[NH3+]',
-    supercell=[1, 1, 1],
+    xy_expansion=(1, 1),
+    thickness=1,
     vacuum=12,
     attachment_end='bottom'
 )
@@ -888,7 +920,8 @@ monolayer_both = q2d.create_perovskite(
     'monolayer',
     A_ions='MA', B_ions='Pb', X_ions='I',
     spacer_molecule='[NH3+]CCCCC[NH3+]',
-    supercell=[1, 1, 1],
+    xy_expansion=(1, 1),
+    thickness=1,
     vacuum=12,
     attachment_end='both'
 )
