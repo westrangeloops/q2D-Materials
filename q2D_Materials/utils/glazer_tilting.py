@@ -131,9 +131,27 @@ def apply_glazer_tilting_matrix(
             rotated_bond = rotated_bond @ R.T
         X_new[i] = center_b + rotated_bond
 
+    # Apply PBC wrapping to keep atoms within the new cell
+    lattice_matrix = np.array([[new_lattice_vectors[0], 0, 0],
+                              [0, new_lattice_vectors[1], 0],
+                              [0, 0, new_lattice_vectors[2]]])
+
+    def wrap_positions(coords: np.ndarray) -> np.ndarray:
+        """Wrap cartesian coordinates into the cell defined by lattice_matrix."""
+        # Convert to fractional coordinates
+        frac_coords = np.linalg.solve(lattice_matrix.T, coords.T).T
+        # Wrap to [0, 1)
+        wrapped_frac = frac_coords - np.floor(frac_coords)
+        # Convert back to cartesian
+        return (lattice_matrix @ wrapped_frac.T).T
+
+    A_wrapped = wrap_positions(pos.get("A", np.zeros((0, 3), dtype=float)))
+    B_wrapped = wrap_positions(B_coords)
+    X_wrapped = wrap_positions(X_new)
+
     out = {
-        "A": pos.get("A", np.zeros((0, 3), dtype=float)).tolist(),
-        "B": B_coords.tolist(),
-        "X": X_new.tolist(),
+        "A": A_wrapped.tolist(),
+        "B": B_wrapped.tolist(),
+        "X": X_wrapped.tolist(),
     }
     return out, tuple(new_lattice_vectors.tolist())

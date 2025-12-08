@@ -8,6 +8,7 @@ q_builder, and population to create complete perovskite structures.
 from .perovskite import (
     create_perovskite,
     create_bulk_perovskite,
+    create_monolayer_perovskite,
     auto_calculate_BX_distance,
     get_template
 )
@@ -15,6 +16,7 @@ from .perovskite import (
 __all__ = [
     'create_perovskite',
     'create_bulk_perovskite',
+    'create_monolayer_perovskite',
     'auto_calculate_BX_distance',
     'get_template',
 ]

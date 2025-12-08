@@ -29,14 +29,14 @@ class q2DStructure(Atoms):
         B-site cation(s) used in creation
     X_ions : str or list, optional
         X-site anion(s) used in creation
-    supercell_size : tuple, optional
-        Supercell dimensions used in creation
+    xy_expansion : tuple, optional
+        XY expansion factors used in creation
     spacer : str, Atoms, or list, optional
         Spacer(s) used for 2D structures (can be molecule or atomic cation)
     """
     
     def __init__(self, atoms, structure_type=None, BX_dist=None,
-                 A_ions=None, B_ions=None, X_ions=None, supercell_size=None,
+                 A_ions=None, B_ions=None, X_ions=None, xy_expansion=None,
                  spacer=None, spacer_molecule=None, **metadata):
         """
         Initialize q2DStructure with Atoms and metadata.
@@ -55,8 +55,8 @@ class q2DStructure(Atoms):
             B-site cation(s) used in creation
         X_ions : str or list, optional
             X-site anion(s) used in creation
-        supercell_size : tuple, optional
-            Supercell dimensions used in creation
+        xy_expansion : tuple, optional
+            XY expansion factors used in creation
         spacer : str, Atoms, or list, optional
             Spacer(s) used for 2D structures (can be molecule or atomic cation)
         **metadata : dict
@@ -89,7 +89,7 @@ class q2DStructure(Atoms):
         self.A_ions = A_ions
         self.B_ions = B_ions
         self.X_ions = X_ions
-        self.supercell_size = supercell_size
+        self.xy_expansion = xy_expansion
         # Support both 'spacer' and 'spacer_molecule' for backward compatibility
         self.spacer = spacer if spacer is not None else spacer_molecule
         self.spacer_molecule = self.spacer  # Keep for backward compatibility
@@ -140,7 +140,7 @@ class q2DStructure(Atoms):
                     A_ions=self.A_ions,
                     B_ions=self.B_ions,
                     X_ions=self.X_ions,
-                    supercell_size=self.supercell_size,
+                    xy_expansion=self.xy_expansion,
                     spacer=self.spacer,
                     spacer_molecule=self.spacer_molecule,
                     **self._metadata
@@ -168,7 +168,7 @@ class q2DStructure(Atoms):
                 A_ions=self.A_ions,
                 B_ions=self.B_ions,
                 X_ions=self.X_ions,
-                supercell_size=self.supercell_size,
+                xy_expansion=self.xy_expansion,
                 spacer_molecule=self.spacer_molecule,
                 **self._metadata
             )
@@ -190,7 +190,7 @@ class q2DStructure(Atoms):
                 A_ions=self.A_ions,
                 B_ions=self.B_ions,
                 X_ions=self.X_ions,
-                supercell_size=self.supercell_size,
+                xy_expansion=self.xy_expansion,
                 spacer_molecule=self.spacer_molecule,
                 **self._metadata
             )
@@ -231,7 +231,7 @@ class q2DStructure(Atoms):
             A_ions=self.A_ions,
             B_ions=self.B_ions,
             X_ions=self.X_ions,
-            supercell_size=self.supercell_size,
+            xy_expansion=self.xy_expansion,
             spacer_molecule=self.spacer_molecule,
             **self._metadata
         )

@@ -46,22 +46,22 @@ def auto_calculate_BX_distance(B: str, X: str) -> float:
 
 def _build_positions(
     template_name: str,
-    thickness: int,
     BX_dist: float,
     jahn_teller_dist: float,
-    include_terminals: bool = False,
+    layer_sequence: Optional[List[str] | str] = None,
+    xy_expansion: Tuple[int, int] = (1, 1),
 ) -> Dict[str, object]:
     """Select the correct builder for a template and return positions/lattice/cell for unit cell."""
     tpl_data = load_template(
         template_name,
         BX_dist=BX_dist,
         jahn_teller_dist=jahn_teller_dist,
+        layer_sequence=layer_sequence,
     )
 
     return build_bulk_cell(
         tpl_data,
-        supercell=(1, 1, 1),
-        include_terminals=include_terminals,
+        xy_expansion=xy_expansion,
     )
 
 
@@ -119,62 +119,18 @@ def create_bulk_perovskite(
     A: str | List[str] | Atoms,
     B: str | List[str] | Atoms,
     X: str | List[str] | Atoms,
-    supercell: Tuple[int, int, int] = (1, 1, 1),
+    xy_expansion: Tuple[int, int] = (1, 1),
     BX_dist: float = None,
     template: str = "cubic",
     glazer_angles: Optional[List[float]] = None,
     glazer_pattern: Optional[List[str]] = None,
     jahn_teller_dist: float = 1.0,
     thickness: int = 1,
+    layer_sequence: Optional[List[str] | str] = None,
 ) -> Atoms:
     """
     Build a bulk perovskite using a chosen geometry template and populate it.
-    Creates a unit cell first, then applies ASE supercell multiplication.
-    """
-    if BX_dist is None:
-        B_first = B[0] if isinstance(B, (list, tuple)) else B
-        X_first = X[0] if isinstance(X, (list, tuple)) else X
-        BX_dist = auto_calculate_BX_distance(B_first, X_first)
-
-    tpl = get_template(template)
-    cell_data = _build_positions(
-        tpl, thickness=1, BX_dist=BX_dist, jahn_teller_dist=jahn_teller_dist,
-    )
-    positions = cell_data["positions"]
-    unit_cell_matrix = cell_data["unit_cell_matrix"]
-
-    positions, lattice_vec_sizes, cell_matrix = _apply_glazer_if_any(
-        positions,
-        unit_cell_matrix,
-        glazer_angles,
-        glazer_pattern,
-    )
-
-    atoms = _populate(positions, lattice_vec_sizes, cell_matrix, A, B, X)
-    
-    # Apply ASE supercell multiplication
-    if supercell != (1, 1, 1):
-        atoms = atoms * supercell
-    
-    return atoms
-
-def create_monolayer_perovskite(
-    A: str | List[str] | Atoms,
-    B: str | List[str] | Atoms,
-    X: str | List[str] | Atoms,
-    supercell: Tuple[int, int, int] = (1, 1, 1),
-    BX_dist: float = None,
-    template: str = "cubic",
-    glazer_angles: Optional[List[float]] = None,
-    glazer_pattern: Optional[List[str]] = None,
-    jahn_teller_dist: float = 1.0,
-    thickness: int = 1,
-    vacuum: float = 10.0,
-) -> Atoms:
-    """
-    Build a monolayer perovskite using a chosen geometry template and populate it.
-    Replace the X of terminal positions with the X of the spacer.
-    Creates a unit cell first, then applies ASE supercell multiplication.
+    Applies XY expansion within the layer plane.
     """
     if BX_dist is None:
         B_first = B[0] if isinstance(B, (list, tuple)) else B
@@ -184,10 +140,10 @@ def create_monolayer_perovskite(
     tpl = get_template(template)
     cell_data = _build_positions(
         tpl,
-        thickness=thickness,
         BX_dist=BX_dist,
         jahn_teller_dist=jahn_teller_dist,
-        include_terminals=True,
+        layer_sequence=layer_sequence,
+        xy_expansion=xy_expansion,
     )
     positions = cell_data["positions"]
     unit_cell_matrix = cell_data["unit_cell_matrix"]
@@ -201,9 +157,56 @@ def create_monolayer_perovskite(
 
     atoms = _populate(positions, lattice_vec_sizes, cell_matrix, A, B, X)
     
-    # Apply ASE supercell multiplication
-    if supercell != (1, 1, 1):
-        atoms = atoms * supercell
+    return atoms
+
+def create_monolayer_perovskite(
+    A: str | List[str] | Atoms,
+    B: str | List[str] | Atoms,
+    X: str | List[str] | Atoms,
+    xy_expansion: Tuple[int, int] = (1, 1),
+    BX_dist: float = None,
+    template: str = "cubic",
+    glazer_angles: Optional[List[float]] = None,
+    glazer_pattern: Optional[List[str]] = None,
+    jahn_teller_dist: float = 1.0,
+    thickness: int = 1,
+    vacuum: float = 10.0,
+    layer_sequence: Optional[List[str] | str] = None,
+) -> Atoms:
+    """
+    Build a monolayer perovskite using a chosen geometry template and populate it.
+    Replace the X of terminal positions with the X of the spacer.
+    Applies XY expansion within the layer plane.
+    """
+    if BX_dist is None:
+        B_first = B[0] if isinstance(B, (list, tuple)) else B
+        X_first = X[0] if isinstance(X, (list, tuple)) else X
+        BX_dist = auto_calculate_BX_distance(B_first, X_first)
+    
+    if layer_sequence is None:
+        layer_sequence = "-".join(["L1-L2"] * thickness) + "-L1"
+
+
+
+    tpl = get_template(template)
+    cell_data = _build_positions(
+        tpl,
+        BX_dist=BX_dist,
+        jahn_teller_dist=jahn_teller_dist,
+        layer_sequence=layer_sequence,
+        xy_expansion=xy_expansion,
+    )
+    positions = cell_data["positions"]
+    unit_cell_matrix = cell_data["unit_cell_matrix"]
+
+    positions, lattice_vec_sizes, cell_matrix = _apply_glazer_if_any(
+        positions,
+        unit_cell_matrix,
+        glazer_angles,
+        glazer_pattern,
+    )
+
+    atoms = _populate(positions, lattice_vec_sizes, cell_matrix, A, B, X)
 
     # Add vacuum then center the slab symmetrically around mid-cell in Z
     add_vacuum(atoms, vacuum=vacuum)

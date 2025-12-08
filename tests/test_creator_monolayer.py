@@ -23,7 +23,7 @@ def main():
         A_ions="MA",
         B_ions="Pb",
         X_ions="I",
-        supercell=(1, 1, 1),
+        xy_expansion=(1, 1),
         template="cubic",
         structure_type="monolayer",
         vacuum=vacuum,
@@ -40,7 +40,7 @@ def main():
         A_ions="MA",
         B_ions="Pb",
         X_ions="I",
-        supercell=(1, 1, 1),
+        xy_expansion=(1, 1),
         template="cubic",
         structure_type="monolayer",
         vacuum=vacuum,
@@ -54,7 +54,7 @@ def main():
         A_ions="MA",
         B_ions="Pb",
         X_ions="I",
-        supercell=(1, 1, 1),
+        xy_expansion=(1, 1),
         template="reduced",
         structure_type="monolayer",
         vacuum=vacuum,
@@ -68,7 +68,7 @@ def main():
         A_ions=["Cs", "MA", "FA", "Cs", "MA", "FA", "Cs", "MA"],
         B_ions="Pb",
         X_ions="I",
-        supercell=(2, 2, 2),
+        xy_expansion=(2, 2),
         template="cubic",
         structure_type="monolayer",
         vacuum=vacuum,
@@ -82,7 +82,7 @@ def main():
         A_ions="MA",
         B_ions="Pb",
         X_ions=["Br", "I", "I", "Br", "I", "I"],
-        supercell=(1, 1, 2),
+        xy_expansion=(1, 1),
         template="reduced",
         structure_type="monolayer",
         vacuum=vacuum,
@@ -96,7 +96,7 @@ def main():
         A_ions=["Cs", "MA", "FA", "MA", "MA", "FA", "Cs", "MA"],
         B_ions=["Pb", "Sn", "Pb", "Pb", "Sn", "Pb", "Pb", "Sn"],
         X_ions=["Br"] * 12 + ["I"] * 12,
-        supercell=(2, 2, 2),
+        xy_expansion=(2, 2),
         template="reduced",
         structure_type="monolayer",
         vacuum=vacuum,
@@ -107,10 +107,10 @@ def main():
     # 6-10: Glazer tilts (cubic)
     glazer_cases_cubic = [
         ("monolayer_cubic_glazer_a0a0c+", [0, 0, 3], ["0", "0", "+"], (1, 1, 1)),
-        ("monolayer_cubic_glazer_a0b+b+", [0, 2, 2], ["0", "+", "+"], (1, 1, 1)),
-        ("monolayer_cubic_glazer_a-a-a-", [2, 2, 2], ["-", "-", "-"], (2, 2, 2)),
-        ("monolayer_cubic_glazer_a0b-c-", [0, 3, 3], ["0", "-", "-"], (2, 2, 1)),
-        ("monolayer_cubic_glazer_a+b-c-", [4, 2, 2], ["+", "-", "-"], (2, 2, 2)),
+        ("monolayer_cubic_glazer_a0b+b+", [0, 2, 2], ["0", "+", "+"], (1, 1, 3)),
+        ("monolayer_cubic_glazer_a-a-a-", [2, 2, 2], ["-", "-", "-"], (2, 4, 2)),
+        ("monolayer_cubic_glazer_a0b-c-", [0, 3, 3], ["0", "-", "-"], (1, 1, 5)),
+        ("monolayer_cubic_glazer_a+b-c-", [4, 2, 2], ["+", "-", "-"], (2, 3, 2)),
     ]
     for name, angles, pattern, sc in glazer_cases_cubic:
         print(f"\nGlazer cubic monolayer: {name} angles={angles} pattern={pattern} sc={sc}")
@@ -118,12 +118,13 @@ def main():
             A_ions="MA",
             B_ions="Pb",
             X_ions="I",
-            supercell=sc,
+            xy_expansion=(sc[0], sc[1]),
             template="cubic",
             glazer_angles=angles,
             glazer_pattern=pattern,
             structure_type="monolayer",
             vacuum=vacuum,
+            thickness=sc[2],
         )
         write(f"{name}.vasp", struct, format="vasp", sort=True)
         print(f"✓ Wrote {name}.vasp")
@@ -133,8 +134,8 @@ def main():
         ("monolayer_reduced_glazer_a0a0c+", [0, 0, 2], ["0", "0", "+"], (1, 1, 1)),
         ("monolayer_reduced_glazer_a0b+b+", [0, 1.5, 1.5], ["0", "+", "+"], (1, 1, 2)),
         ("monolayer_reduced_glazer_a-a-a-", [1.5, 1.5, 1.5], ["-", "-", "-"], (2, 2, 2)),
-        ("monolayer_reduced_glazer_a0b-c-", [0, 2.5, 2.5], ["0", "-", "-"], (2, 2, 1)),
-        ("monolayer_reduced_glazer_a+b-c-", [3, 2, 2], ["+", "-", "-"], (2, 2, 2)),
+        ("monolayer_reduced_glazer_a0b-c-", [0, 2.5, 2.5], ["0", "-", "-"], (1, 1, 5)),
+        ("monolayer_reduced_glazer_a+b-c-", [3, 2, 2], ["+", "-", "-"], (1, 1, 3)),
     ]
     for name, angles, pattern, sc in glazer_cases_reduced:
         print(f"\nGlazer reduced monolayer: {name} angles={angles} pattern={pattern} sc={sc}")
@@ -142,12 +143,13 @@ def main():
             A_ions="MA",
             B_ions="Pb",
             X_ions="I",
-            supercell=sc,
+            xy_expansion=(sc[0], sc[1]),
             template="reduced",
             glazer_angles=angles,
             glazer_pattern=pattern,
             structure_type="monolayer",
             vacuum=vacuum,
+            thickness=sc[2],
         )
         write(f"{name}.vasp", struct, format="vasp", sort=True)
         print(f"✓ Wrote {name}.vasp")

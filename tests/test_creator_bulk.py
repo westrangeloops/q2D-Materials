@@ -19,7 +19,7 @@ def main():
     # 0. Wrapper check (cubic)
     print("\n0. Verifying q2DStructure wrapper (cubic)...")
     test_structure = q2d.create_perovskite(
-        A_ions="MA", B_ions="Pb", X_ions="I", supercell=(1, 1, 1), template="cubic"
+        A_ions="MA", B_ions="Pb", X_ions="I", xy_expansion=(1, 1), template="cubic"
     )
     assert isinstance(test_structure, q2DStructure)
     assert test_structure.structure_type == "bulk"
@@ -30,7 +30,7 @@ def main():
     # 1. Simple bulk cubic
     print("\n1. Simple bulk perovskite (cubic)...")
     bulk_cubic = q2d.create_perovskite(
-        A_ions="MA", B_ions="Pb", X_ions="I", supercell=(1, 1, 1), template="cubic"
+        A_ions="MA", B_ions="Pb", X_ions="I", xy_expansion=(1, 1), template="cubic"
     )
     write("MAPbI3_bulk_simple_cubic.vasp", bulk_cubic, format="vasp", sort=True)
     print("✓ Wrote MAPbI3_bulk_simple_cubic.vasp")
@@ -38,7 +38,7 @@ def main():
     # 2. Simple bulk reduced
     print("\n2. Simple bulk perovskite (reduced)...")
     bulk_reduced = q2d.create_perovskite(
-        A_ions="MA", B_ions="Pb", X_ions="I", supercell=(1, 1, 1), template="reduced"
+        A_ions="MA", B_ions="Pb", X_ions="I", xy_expansion=(1, 1), template="reduced"
     )
     write("MAPbI3_bulk_simple_reduced.vasp", bulk_reduced, format="vasp", sort=True)
     print("✓ Wrote MAPbI3_bulk_simple_reduced.vasp")
@@ -46,7 +46,7 @@ def main():
     # 2b. Simple bulk hexagonal
     print("\n2b. Simple bulk perovskite (hexagonal)...")
     bulk_hex = q2d.create_perovskite(
-        A_ions="MA", B_ions="Pb", X_ions="I", supercell=(1, 1, 1), template="hexagonal"
+        A_ions="MA", B_ions="Pb", X_ions="I", xy_expansion=(1, 1), template="hexagonal"
     )
     write("MAPbI3_bulk_simple_hexagonal.vasp", bulk_hex, format="vasp", sort=True)
     print("✓ Wrote MAPbI3_bulk_simple_hexagonal.vasp")
@@ -57,7 +57,7 @@ def main():
         A_ions=["Cs", "MA", "FA", "Cs", "MA", "FA", "Cs", "MA"],
         B_ions="Pb",
         X_ions="I",
-        supercell=(2, 2, 2),
+        xy_expansion=(2, 2),
         template="cubic",
     )
     write("MAPbI3_mixed_A_pattern_cubic.vasp", mixed_a_cubic, format="vasp", sort=True)
@@ -69,7 +69,7 @@ def main():
         A_ions="MA",
         B_ions="Pb",
         X_ions=["Br", "I", "I", "Br", "I", "I"],
-        supercell=(1, 1, 2),
+        xy_expansion=(1, 1),
         template="reduced",
     )
     write("MAPbI3_mixed_X_pattern_reduced.vasp", mixed_x_reduced, format="vasp", sort=True)
@@ -81,7 +81,7 @@ def main():
         A_ions="MA",
         B_ions="Pb",
         X_ions=["Br", "I", "I", "Br", "I", "I", "Br", "I"],
-        supercell=(1, 1, 1),
+        xy_expansion=(1, 1),
         template="hexagonal",
     )
     write("MAPbI3_mixed_X_pattern_hexagonal.vasp", mixed_x_hex, format="vasp", sort=True)
@@ -93,7 +93,7 @@ def main():
         A_ions=["Cs", "MA", "FA", "MA", "MA", "FA", "Cs", "MA"],
         B_ions=["Pb", "Sn", "Pb", "Pb", "Sn", "Pb", "Pb", "Sn"],
         X_ions=["Br"] * 12 + ["I"] * 12,
-        supercell=(2, 2, 2),
+        xy_expansion=(2, 2),
         template="reduced",
     )
     write("MAPbI3_superMix_pattern_reduced.vasp", super_mix_reduced, format="vasp", sort=True)
@@ -105,7 +105,7 @@ def main():
         A_ions=["Cs", "MA", "FA", "MA", "MA", "FA", "Cs", "MA"],
         B_ions=["Pb", "Sn", "Pb", "Pb", "Sn", "Pb", "Pb", "Sn"],
         X_ions=["Br"] * 12 + ["I"] * 12,
-        supercell=(2, 2, 1),
+        xy_expansion=(2, 2),
         template="hexagonal",
     )
     write("MAPbI3_superMix_pattern_hexagonal.vasp", super_mix_hexagonal, format="vasp", sort=True)
@@ -125,7 +125,7 @@ def main():
             A_ions="MA",
             B_ions="Pb",
             X_ions="I",
-        supercell=sc,
+        xy_expansion=(sc[0], sc[1]),
             template="cubic",
             glazer_angles=angles,
             glazer_pattern=pattern,
@@ -147,7 +147,7 @@ def main():
             A_ions="MA",
             B_ions="Pb",
             X_ions="I",
-        supercell=sc,
+        xy_expansion=(sc[0], sc[1]),
             template="reduced",
             glazer_angles=angles,
             glazer_pattern=pattern,
@@ -156,6 +156,26 @@ def main():
         print(f"✓ Wrote {name}.vasp")
 
     print("\nAll bulk tests completed.")
+    # Run the jagodinxky custom sequence example so the VASP file is emitted
+    test_jagodinxky_custom_sequence()
+
+
+def test_jagodinxky_custom_sequence():
+    q2d = q2D_creator()
+    seq = "AcBcAcBaCbAbCbAcBaCaBaCb"
+    struct = q2d.create_perovskite(
+        A_ions="Ca",
+        B_ions="Ti",
+        X_ions="O",
+        xy_expansion=(1, 1),
+        template="jagodinxky",
+        layer_sequence=seq,
+    )
+    assert isinstance(struct, q2DStructure)
+    assert struct.structure_type == "bulk"
+    assert struct.BX_dist is not None
+    write("CaTiO3_jagodinxky_custom.vasp", struct, format="vasp", sort=True)
+    print("✓ Wrote CaTiO3_jagodinxky_custom.vasp")
 
 
 if __name__ == "__main__":

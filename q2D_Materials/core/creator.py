@@ -19,7 +19,7 @@ class q2D_creator:
         A_ions,
         B_ions,
         X_ions,
-        supercell=(1, 1, 1),
+        xy_expansion=(1, 1),
         BX_dist=None,
         template="cubic",
         glazer_angles=None,
@@ -28,6 +28,7 @@ class q2D_creator:
         thickness=1,
         jahn_teller_dist=1.0,
         vacuum: float = 10.0,
+        layer_sequence=None,
     ):
         """
         Create a perovskite structure and wrap it in q2DStructure.
@@ -36,8 +37,8 @@ class q2D_creator:
         ----------
         A_ions, B_ions, X_ions : str, list, or Atoms
             Ions for A, B, and X sites
-        supercell : tuple[int, int, int]
-            Supercell dimensions (nx, ny, nz). Applied using ASE's supercell mechanism.
+        xy_expansion : tuple[int, int]
+            Expansion factors in X and Y directions within the layer plane.
         template : str
             Name of template; any JSON available in builders/data (e.g., 'cubic', 'reduced', or custom)
         thickness : int
@@ -59,19 +60,20 @@ class q2D_creator:
                 A=A_ions,
                 B=B_ions,
                 X=X_ions,
-                supercell=supercell,
+                xy_expansion=xy_expansion,
                 BX_dist=BX_dist,
                 template=template,
                 glazer_angles=glazer_angles,
                 glazer_pattern=glazer_pattern,
                 jahn_teller_dist=jahn_teller_dist,
+                layer_sequence=layer_sequence,
             )
         elif structure_type.lower() == "monolayer":
             atoms = create_monolayer_perovskite(
                 A=A_ions,
                 B=B_ions,
                 X=X_ions,
-                supercell=supercell,
+                xy_expansion=xy_expansion,
                 thickness=thickness,
                 BX_dist=BX_dist,
                 template=template,
@@ -79,6 +81,7 @@ class q2D_creator:
                 glazer_pattern=glazer_pattern,
                 jahn_teller_dist=jahn_teller_dist,
                 vacuum=vacuum,
+                layer_sequence=layer_sequence,
             )
         else:
             raise ValueError(f"structure_type must be 'bulk' or 'monolayer', got '{structure_type}'")
@@ -90,5 +93,5 @@ class q2D_creator:
             A_ions=A_ions,
             B_ions=B_ions,
             X_ions=X_ions,
-            supercell_size=supercell,  # Keep for backward compatibility
+            xy_expansion=xy_expansion,
         )
