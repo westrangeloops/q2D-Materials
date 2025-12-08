@@ -387,8 +387,7 @@ def build_bulk_cell(
 
     return {
         "positions": cartesian_positions,
-        "unit_cell_matrix": unit_cell_matrix,
-        "expanded_cell_matrix": xy_expanded_matrix,
+        "unit_cell_matrix": xy_expanded_matrix,
     }
 
 
