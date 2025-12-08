@@ -235,12 +235,18 @@ def apply_glazer_tilt(
         "B": [list(p) for p in position_matrix.get("B", [])],
         "X": rotated_x,
     }
+    # Preserve Ap sites (spacer attachment points) unchanged
+    if "Ap" in position_matrix:
+        positions_out["Ap"] = [list(p) for p in position_matrix.get("Ap", [])]
 
     # Optional cell adjustment: wrap positions back into the original supercell
     if adjust_cell:
         cell_len = lv * np.asarray(supercell, dtype=float)
         padding = np.maximum(cell_len * 1e-6, 1e-5)
         for k, plist in positions_out.items():
+            # Do not wrap Ap sites; keep their absolute placement for spacer attachment
+            if k == "Ap":
+                continue
             if not plist:
                 continue
             arr = np.asarray(plist, dtype=float)

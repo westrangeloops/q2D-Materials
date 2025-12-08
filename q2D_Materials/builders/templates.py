@@ -300,12 +300,16 @@ def apply_spacer_override(
 def apply_penetration(
     positions: PositionMatrix,
     layer_sequence: Optional[List[str]],
-    penetration: float,
+    penetration: float | List[float],
     BX_dist: float,
     jahn_teller_dist: float = 1.0,
 ) -> PositionMatrix:
     """
     Apply penetration adjustment to A-sites in first and last L1 layers.
+
+    Penetration can be a single float or a list of floats. When a list is
+    provided, values are cycled across the A-sites in the external L1 layers
+    in order (e.g., [0.1, -0.1] -> 0.1, -0.1, 0.1, ...).
 
     Parameters
     ----------
@@ -313,8 +317,8 @@ def apply_penetration(
         Dictionary with site types ('A', 'B', 'X') and lists of [x, y, z] positions
     layer_sequence : Optional[List[str]]
         List of layer names (e.g., ["L1", "L2", "L1"])
-    penetration : float
-        Penetration value relative to BX_dist (e.g., 0.25 = 25% of BX_dist)
+    penetration : float | list[float]
+        Penetration value(s) relative to BX_dist (e.g., 0.25 = 25% of BX_dist)
     BX_dist : float
         B-X bond distance in Angstroms
     jahn_teller_dist : float
@@ -328,34 +332,50 @@ def apply_penetration(
     if layer_sequence is None or penetration == 0.0 or not positions.get("A"):
         return positions
 
+    # Normalize penetration to a list for cycling
+    if isinstance(penetration, (int, float)):
+        pen_list = [float(penetration)]
+    else:
+        pen_list = [float(p) for p in penetration] if penetration else [0.0]
+    if not pen_list:
+        return positions
+
     # Calculate layer spacing in fractional coordinates
     n_layers = len(layer_sequence)
-    dz = 1.0 / n_layers  # Fractional spacing between layers
-
-    # Calculate penetration in fractional coordinates
-    # Total c-length = BX_dist * jahn_teller_dist
-    # Penetration amount = penetration * BX_dist
-    # Fractional penetration = penetration_amount / total_c_length
-    fractional_penetration = penetration / jahn_teller_dist
 
     # Create a copy of positions to modify
     modified_positions = {site: [pos[:] for pos in coords] for site, coords in positions.items()}
 
-    # Group A-sites by their Z coordinates to identify which layer they belong to
-    a_positions = modified_positions["A"]
-    for i, pos in enumerate(a_positions):
-        z = pos[2]
-        # Find which layer this Z coordinate corresponds to
-        layer_idx = round(z * n_layers)
-        layer_name = layer_sequence[layer_idx] if layer_idx < len(layer_sequence) else None
+    # Indices of first and last L1 layers
+    l1_indices = [j for j, l in enumerate(layer_sequence) if l == "L1"]
+    if not l1_indices:
+        return positions
+    first_l1_idx = l1_indices[0]
+    last_l1_idx = l1_indices[-1]
 
-        if layer_name == "L1":
-            # Check if this is the first or last L1
-            l1_indices = [j for j, l in enumerate(layer_sequence) if l == "L1"]
-            if layer_idx == l1_indices[0]:  # First L1
-                a_positions[i][2] -= fractional_penetration
-            elif layer_idx == l1_indices[-1]:  # Last L1
-                a_positions[i][2] += fractional_penetration
+    # Apply to A-sites and Ap-sites (spacer sites) if present
+    for site_label in ["A", "Ap"]:
+        if site_label not in modified_positions:
+            continue
+        site_positions = modified_positions[site_label]
+        for i, pos in enumerate(site_positions):
+            z = pos[2]
+            # Find which layer this Z coordinate corresponds to
+            layer_idx = round(z * n_layers)
+            layer_name = layer_sequence[layer_idx] if layer_idx < len(layer_sequence) else None
+
+            # Select penetration value for this site (cycled)
+            pen_value = pen_list[i % len(pen_list)]
+            # Absolute shift in Å: pen_value * BX_dist * jahn_teller_dist
+            # Convert to fractional z by dividing by total c-length (BX_dist * n_layers * jahn_teller_dist)
+            # => fractional_penetration = pen_value / n_layers
+            fractional_penetration = pen_value / n_layers
+
+            if layer_name == "L1":
+                if layer_idx == first_l1_idx:  # First L1 -> move downward
+                    site_positions[i][2] -= fractional_penetration
+                elif layer_idx == last_l1_idx:  # Last L1 -> move upward
+                    site_positions[i][2] += fractional_penetration
 
     return modified_positions
 
@@ -382,8 +402,11 @@ def _add_terminal_sites(position_matrix: PositionMatrix, cell_matrix: np.ndarray
 
 
 def _ensure_site_keys(position_matrix: PositionMatrix) -> PositionMatrix:
-    """Copy a position matrix and guarantee A/B/X keys exist."""
+    """Copy a position matrix and guarantee A/B/X keys exist, preserve Ap if present."""
     sites: PositionMatrix = {"A": [], "B": [], "X": []}
+    if "Ap" in position_matrix:
+        sites["Ap"] = []
+
     for key, vals in position_matrix.items():
         sites[key] = [list(pos) for pos in vals]
     return sites

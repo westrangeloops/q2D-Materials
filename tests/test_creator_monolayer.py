@@ -102,6 +102,9 @@ def main():
         structure_type="monolayer",
         vacuum=vacuum,
         thickness=2,
+        penetration=[-0.3, 0.5],
+        glazer_angles=[0, 0, 3],
+        glazer_pattern=["0", "0", "+"],
     )
     write("MAPbI3_monolayer_superMix_pattern_reduced.vasp", super_mix_reduced, format="vasp", sort=True)
     print("✓ Wrote MAPbI3_monolayer_superMix_pattern_reduced.vasp")
