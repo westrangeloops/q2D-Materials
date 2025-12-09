@@ -1,4 +1,4 @@
-![q2D-Materials Logo](Logos/SVC_logo.png)
+![q2D-Materials Logo](Logos/logo.png)
 
 # q2D-Materials: Quasi-2D Perovskite Structure Generation
 
@@ -24,97 +24,94 @@ pip install ase numpy rdkit
 
 ```python
 from q2D_Materials.core.creator import q2D_creator
+from ase.io import write
 
-# Initialize empty creator
 q2d = q2D_creator()
 
-# Create a structure (all composition parameters required)
-bulk = q2d.create_perovskite('bulk',
-    A_ions='MA', B_ions='Pb', X_ions='I',
-    supercell_size=(1, 1, 1))
+bulk = q2d.create_perovskite(
+    structure_type="bulk",
+    A_ions="MA", B_ions="Pb", X_ions="I",
+    xy_expansion=(1, 1),          # tiling in xy
+    template="cubic",             # geometry choice
+)
 
-# You can use any way to save or modify it with ase:
-from ase.io import write
-write("MAPbI3.vasp", bulk) # Cif, Vasp, etc ...
+write("MAPbI3.vasp", bulk, sort=True)
 ```
 
 ## Examples
 
-### Bulk Perovskite with All Parameters
+### Bulk Perovskite with All Parameters (current API)
 
 ![Bulk Perovskite Structure](Logos/BULK.png)
 
 ```python
 from q2D_Materials.core.creator import q2D_creator
+from ase.io import write
 
-# Initialize empty creator
 q2d = q2D_creator()
 
-# Create bulk perovskite with all available parameters
 bulk = q2d.create_perovskite(
-    structure_type='bulk',
-    
-    # Required composition parameters
-    A_ions=['Cs', 'MA', 'FA', 'Cs', 'MA', 'FA', 'Cs', 'MA'],  # 8 positions
-    B_ions=['Pb', 'Sn'],  # Alternating pattern
-    X_ions=['Br', 'I', 'I'],  # Pattern cycles: Br-I-I-Br-I-I-...
-    
-    # Supercell size (required for mixed compositions, optional for uniform)
-    supercell_size=(2, 2, 2),  # (nx, ny, nz)
-    
-    # Double perovskite
-    Bp='Sn',  # Second B-site cation (creates alternating B/Bp pattern)
-    
-    # B-X bond distance
-    BX_dist=3.18  # Angstrom (auto-calculated from ionic radii if None)
+    structure_type="bulk",
+    A_ions=['Cs', 'MA', 'FA', 'Cs', 'MA', 'FA', 'Cs', 'MA'],  # pattern cycles over A-sites
+    B_ions=['Pb', 'Sn'],                                      # alternating B/B'
+    X_ions=['Br', 'I', 'I'],                                  # pattern cycles over X-sites
+    xy_expansion=(2, 2),                                      # tiling in-plane
+    template="cubic",
+    Bp='Sn',                                                  # optional second B-site
+    BX_dist=3.18,                                             # override bond length if desired
 )
 
-# Save structure
-from ase.io import write
-write('MAPbI3_bulk_complete.vasp', bulk)
+write('MAPbI3_bulk_complete.vasp', bulk, sort=True)
 ```
 
-### Ruddlesden-Popper (RP) Structure with All Parameters
-
-![RP Perovskite Structure](Logos/RP.png)
+### Monolayer (key differences)
 
 ```python
 from q2D_Materials.core.creator import q2D_creator
+from ase.io import write
 
-# Initialize empty creator
 q2d = q2D_creator()
 
-# Create RP structure with all available parameters
-rp = q2d.create_perovskite(
-    structure_type='RP',
-    
-    # Required composition parameters
-    A_ions=['Cs', 'MA', 'FA', 'MA'],  # Pattern for A-site cations
-    B_ions=['Pb', 'Sn'],  # Pattern for B-site cations
-    X_ions=['Br', 'I'],  # Pattern for X-site anions
-    
-    # Required 2D parameters
-    spacer_molecule='[NH3+]CCCCC=O',  # SMILES, XYZ file, or Atoms object
-    supercell=[1, 1, 2],  # [nx, ny, n_layers] where n_layers is octahedral layers
-
-    # Spacer penetration
-    penet=0.3,  # Fraction of BX bond that spacer penetrates into layer
-    
-    # B-X bond distance
-    BX_dist=None  # Auto-calculated if None from B/X ions
+mono = q2d.create_perovskite(
+    structure_type="monolayer",
+    A_ions="MA", B_ions="Pb", X_ions="I",
+    xy_expansion=(1, 1),
+    template="cubic",
+    thickness=2,            # repeats layer_sequence along c
+    vacuum=15.0,            # Å of vacuum padding
+    spacer=None,            # or a SMILES / Atoms for Ap-sites
+    penetration=0.0,        # shift external A/Ap sites along z (fraction of BX)
 )
 
-# Save structure
+write('MAPbI3_mono.vasp', mono, sort=True)
+```
+
+### Twist (two monolayers, one angle)
+
+```python
+from q2D_Materials.core.creator import q2D_creator
 from ase.io import write
-write('MAPbI3_RP_complete.vasp', rp)
+
+q2d = q2D_creator()
+
+mono1 = q2d.create_perovskite(structure_type="monolayer", A_ions="MA", B_ions="Pb", X_ions="I", xy_expansion=(1,1), template="cubic", vacuum=12.0)
+mono2 = q2d.create_perovskite(structure_type="monolayer", A_ions="FA", B_ions="Sn", X_ions="Br", xy_expansion=(1,1), template="cubic", vacuum=12.0)
+
+bilayer = q2d.twist(
+    monolayers=[mono1, mono2],
+    twist_angles=[(3, 1)],        # (m, n) tuple sets the angle
+    interlayer_distances=[8.0],   # Å gap
+    vacuum=12.0,
+)
+
+write('twisted_bilayer.vasp', bilayer, sort=True)
 ```
 
 ## Supported Structure Types
 
-- **Bulk**: 3D perovskite structures with optional supercells and mixed compositions
-- **RP (Ruddlesden-Popper)**: 2D layered structures with organic spacers
-- **DJ (Dion-Jacobson)**: 2D layered structures with divalent organic spacers
-- **Monolayer**: Single-layer 2D structures with vacuum support adsorbates and rotations.
+- **Bulk**: 3D perovskites (tiling via `xy_expansion`, optional `Bp`, Glazer tilts)
+- **Monolayer**: 2D slabs with `thickness`, `vacuum`, `spacer`, `penetration`
+- **Twist**: Build twisted stacks from monolayers via `twist(...)`
 
 ## Ion Recommender
 
@@ -132,7 +129,7 @@ print(recommendations['spacer'])  # Top 5 spacers
 
 ## Documentation
 
-For a detailed tutorials and detailed parameter reference, see [Examples/Creator.md](Examples/Creator.md).
+For tutorials and examples, see the `Examples/` folder (Creator, Templates, Glazer, Jagodzinski, Monolayer, Twist).
 
 ## License
 

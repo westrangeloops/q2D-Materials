@@ -47,6 +47,8 @@ def auto_calculate_BX_distance(B: str, X: str) -> float:
 def normalize_spacer(spacer):
     """
     Normalize spacer input to handle strings (SMILES or abbreviations) and Atoms objects.
+    
+    Supports both atomic spacers (e.g., "Cs", "Rb", "K") and molecular spacers (SMILES strings).
 
     Parameters
     ----------
@@ -56,7 +58,7 @@ def normalize_spacer(spacer):
     Returns
     -------
     Atoms
-        ASE Atoms object of the spacer molecule
+        ASE Atoms object of the spacer molecule or atom
     """
     if isinstance(spacer, Atoms):
         return spacer.copy()
@@ -67,8 +69,27 @@ def normalize_spacer(spacer):
             normalized = get_a_site_object(spacer)
             if isinstance(normalized, Atoms):
                 return normalized
-            # If it's a string (atomic cation), we still need to convert to Atoms
-            # For spacers, we expect molecular cations, so treat as SMILES
+            # If it's a string (atomic cation), convert to Atoms object
+            if isinstance(normalized, str):
+                # Check if it's a valid atomic element symbol
+                # Use pymatgen if available for robust validation
+                try:
+                    from pymatgen.core.periodic_table import Element
+                    try:
+                        Element(normalized)
+                        # Valid element symbol - create Atoms object
+                        return Atoms(normalized, positions=[[0, 0, 0]])
+                    except (ValueError, KeyError):
+                        # Not a valid element symbol, continue to SMILES parsing
+                        pass
+                except ImportError:
+                    # Fallback: check common atomic A-site cations
+                    atomic_spacers = ['Cs', 'K', 'Rb', 'Na', 'Li', 'Ca', 'Sr', 'Ba', 'Mg']
+                    if normalized in atomic_spacers:
+                        return Atoms(normalized, positions=[[0, 0, 0]])
+                    # Also check simple pattern: 1-2 chars, first uppercase
+                    if len(normalized) <= 2 and normalized[0].isupper():
+                        return Atoms(normalized, positions=[[0, 0, 0]])
         except (ValueError, ImportError):
             pass
 
