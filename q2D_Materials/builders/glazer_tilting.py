@@ -1,7 +1,7 @@
 """
 Glazer-style octahedral tilting applied to position matrices (no ASE atoms).
 
-Given cartesian positions (as produced by base_cell_builder) and lattice vectors,
+Given cartesian positions (as produced by templates.build_bulk_cell) and lattice vectors,
 apply per-axis small rotations to X-site positions about their nearest B-site
 center, following a Glazer tilt pattern.
 """
@@ -170,7 +170,7 @@ def apply_glazer_tilt(
     Parameters
     ----------
     position_matrix : dict
-        Cartesion positions with keys 'A','B','X' (output of base_cell_builder).
+        Cartesian positions with keys 'A','B','X' (output of templates.build_bulk_cell).
     lattice_vectors : (float, float, float)
         Lattice vector lengths (a, b, c) for the underlying unit cell.
     supercell : (int, int, int)
