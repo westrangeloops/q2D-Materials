@@ -73,17 +73,20 @@ def _deduplicate_positions_pbc(
     return [u.tolist() for u in unique]
 
 
-def _kvecs_from_pattern(angles: List[float], tilt_pattern: List[str]) -> List[np.ndarray]:
-    """Build k-vectors (phase) per Glazer sign."""
+def _kvecs_from_pattern(
+    angles: List[float], tilt_pattern: List[str]
+) -> Tuple[List[np.ndarray], List[float]]:
+    """Build k-vectors (phase) per Glazer sign, returning adjusted angles."""
     if len(angles) != 3 or len(tilt_pattern) != 3:
         raise ValueError("angles and tilt_pattern must have length 3")
+    angles_adj = list(angles)
     kvecs = []
     for i, pat in enumerate(tilt_pattern):
-        ang = angles[i]
+        ang = angles_adj[i]
         if ang == 0.0 and pat != "0":
             pat = "0"
         if pat == "0" and ang != 0.0:
-            angles[i] = 0.0
+            angles_adj[i] = 0.0
         if pat == "0":
             kvecs.append(np.array([0, 0, 0], dtype=int))
         elif pat == "+":
@@ -94,7 +97,7 @@ def _kvecs_from_pattern(angles: List[float], tilt_pattern: List[str]) -> List[np
             kvecs.append(np.array([1, 1, 1], dtype=int))
         else:
             raise ValueError("tilt_pattern entries must be '+', '-', or '0'")
-    return kvecs
+    return kvecs, angles_adj
 
 
 def _adjust_network_connectivity(
@@ -187,7 +190,7 @@ def apply_glazer_tilt(
     lv = np.asarray(lattice_vectors, dtype=float)
     nx, ny, nz = supercell
     cell_len = lv * np.asarray(supercell, dtype=float)
-    kvecs = _kvecs_from_pattern(angles, tilt_pattern)
+    kvecs, angles_eff = _kvecs_from_pattern(angles, tilt_pattern)
 
     # Build cell index -> B positions for nearest-center lookup
     b_cells: Dict[Tuple[int, int, int], List[np.ndarray]] = {}
@@ -217,10 +220,10 @@ def apply_glazer_tilt(
         shift = np.array([ix, iy, iz], dtype=int)
         rot_total = np.eye(3)
         for ax, axis_name in enumerate(["x", "y", "z"]):
-            if angles[ax] == 0.0:
+            if angles_eff[ax] == 0.0:
                 continue
             phase = (-1) ** int(np.dot(shift, kvecs[ax]))
-            ang_signed = angles[ax] * phase
+            ang_signed = angles_eff[ax] * phase
             rot_total = _rotation_matrix(axis_name, ang_signed) @ rot_total
 
         rel = xvec - b_center
