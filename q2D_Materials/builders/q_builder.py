@@ -1,7 +1,7 @@
 """
 Lightweight container and helpers for structure matrices.
 
-QBuilderOutput mirrors the minimal fields consumed by population.populate_structure.
+QBuilderOutput mirrors the minimal fields consumed by populate.populate_structure.
 """
 
 from dataclasses import dataclass

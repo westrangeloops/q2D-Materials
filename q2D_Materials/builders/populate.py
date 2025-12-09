@@ -165,19 +165,27 @@ def assign_ions_to_sites(
                 assignments.append(('A', ion, pos))
 
     # Assign Ap-site positions (optional spacers)
+    # "HOLE" string in Ap_ions list or as single value creates holes (skip assignment for that position)
     if Ap_ions is not None and len(Ap_positions) > 0:
         if isinstance(Ap_ions, list):
             for i, pos in enumerate(Ap_positions):
                 ion = Ap_ions[i % len(Ap_ions)]
+                if isinstance(ion, str) and ion.upper() == "HOLE":
+                    continue  # Skip this position - creates a hole
                 if isinstance(ion, Atoms):
                     ion = ion.copy()
                 assignments.append(('Ap', ion, pos))
         else:
-            for pos in Ap_positions:
-                ion = Ap_ions
-                if isinstance(ion, Atoms):
-                    ion = ion.copy()
-                assignments.append(('Ap', ion, pos))
+            # Single spacer value - check if it's "HOLE"
+            if isinstance(Ap_ions, str) and Ap_ions.upper() == "HOLE":
+                # Skip all positions - creates holes everywhere
+                pass
+            else:
+                for pos in Ap_positions:
+                    ion = Ap_ions
+                    if isinstance(ion, Atoms):
+                        ion = ion.copy()
+                    assignments.append(('Ap', ion, pos))
     
     # Assign B-site positions
     if len(B_positions) > 0:

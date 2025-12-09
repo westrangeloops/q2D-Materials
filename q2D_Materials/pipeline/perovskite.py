@@ -5,185 +5,20 @@ This module wires templates -> base cell builder -> population to produce
 ASE Atoms objects. Currently only bulk is implemented here.
 """
 
-from typing import List, Tuple, Optional, Dict
+from typing import List, Tuple, Optional
 
-import numpy as np
 from ase import Atoms
 from ase.build import add_vacuum
 
-from q2D_Materials.builders.templates import (
-    load_template,
-    available_templates,
-    build_bulk_cell,
-    build_structure_matrix,
+from q2D_Materials.pipeline.common import (
+    apply_glazer_tilting,
+    build_cell_positions,
+    default_layer_sequence,
+    get_template,
+    normalize_spacer,
+    populate_positions,
+    resolve_BX_distance,
 )
-from q2D_Materials.builders.glazer_tilting import apply_glazer_tilt
-from q2D_Materials.builders.population import populate_structure
-from q2D_Materials.builders.molecule_builder import com_to_origin
-# Glazer tilting functionality removed for minimal implementation
-from q2D_Materials.utils.A_sites import calculate_BX_distance
-from q2D_Materials.builders.population import normalize_a_site
-from q2D_Materials.utils.molecule_builder import smiles_to_ase_atoms
-from q2D_Materials.utils.A_sites import get_a_site_object, is_molecular_a_cation
-
-
-def get_template(template_name: str) -> str:
-    """Return a template name, validating it exists (based on available JSONs)."""
-    name = template_name.lower()
-    valid = available_templates()
-    if name not in valid:
-        raise ValueError(f"template must be one of {valid}")
-    return name
-
-
-def auto_calculate_BX_distance(B: str, X: str) -> float:
-    """Calculate BX distance from ionic radii data with a small fallback."""
-    try:
-        return calculate_BX_distance(B, X)
-    except ValueError:
-        return 2.0
-
-
-def normalize_spacer(spacer):
-    """
-    Normalize spacer input to handle strings (SMILES or abbreviations) and Atoms objects.
-    
-    Supports both atomic spacers (e.g., "Cs", "Rb", "K") and molecular spacers (SMILES strings).
-
-    Parameters
-    ----------
-    spacer : str or Atoms
-        Spacer molecule as SMILES string, abbreviation, or Atoms object
-
-    Returns
-    -------
-    Atoms
-        ASE Atoms object of the spacer molecule or atom
-    """
-    if isinstance(spacer, Atoms):
-        return spacer.copy()
-
-    if isinstance(spacer, str):
-        # First try to treat as an A-site cation abbreviation
-        try:
-            normalized = get_a_site_object(spacer)
-            if isinstance(normalized, Atoms):
-                return normalized
-            # If it's a string (atomic cation), convert to Atoms object
-            if isinstance(normalized, str):
-                # Check if it's a valid atomic element symbol
-                # Use pymatgen if available for robust validation
-                try:
-                    from pymatgen.core.periodic_table import Element
-                    try:
-                        Element(normalized)
-                        # Valid element symbol - create Atoms object
-                        return Atoms(normalized, positions=[[0, 0, 0]])
-                    except (ValueError, KeyError):
-                        # Not a valid element symbol, continue to SMILES parsing
-                        pass
-                except ImportError:
-                    # Fallback: check common atomic A-site cations
-                    atomic_spacers = ['Cs', 'K', 'Rb', 'Na', 'Li', 'Ca', 'Sr', 'Ba', 'Mg']
-                    if normalized in atomic_spacers:
-                        return Atoms(normalized, positions=[[0, 0, 0]])
-                    # Also check simple pattern: 1-2 chars, first uppercase
-                    if len(normalized) <= 2 and normalized[0].isupper():
-                        return Atoms(normalized, positions=[[0, 0, 0]])
-        except (ValueError, ImportError):
-            pass
-
-        # Try to treat as raw SMILES string
-        try:
-            if smiles_to_ase_atoms is not None:
-                return smiles_to_ase_atoms(spacer)
-            else:
-                raise ValueError("RDKit not available for SMILES processing")
-        except Exception as e:
-            raise ValueError(f"Failed to parse spacer '{spacer}' as SMILES or abbreviation: {e}")
-
-    raise ValueError(f"Spacer must be a string (SMILES or abbreviation) or Atoms object, got {type(spacer)}")
-
-
-def _build_positions(
-    template_name: str,
-    BX_dist: float,
-    jahn_teller_dist: float,
-    layer_sequence: Optional[List[str] | str] = None,
-    xy_expansion: Tuple[int, int] = (1, 1),
-    penetration: float = 0.0,
-    spacer_provided: bool = False,
-) -> Dict[str, object]:
-    """Select the correct builder for a template and return positions/lattice/cell for unit cell."""
-    tpl_data = load_template(
-        template_name,
-        BX_dist=BX_dist,
-        jahn_teller_dist=jahn_teller_dist,
-        layer_sequence=layer_sequence,
-        penetration=penetration,
-        spacer_provided=spacer_provided,
-    )
-
-    return build_bulk_cell(
-        tpl_data,
-        xy_expansion=xy_expansion,
-    )
-
-
-def _apply_glazer_if_any(
-    positions: Dict[str, List[List[float]]],
-    cell_matrix: np.ndarray,
-    glazer_angles: Optional[List[float]],
-    glazer_pattern: Optional[List[str]],
-) -> Tuple[Dict[str, List[List[float]]], np.ndarray, np.ndarray]:
-    """
-    Apply Glazer tilt if requested, otherwise return inputs unchanged.
-
-    Glazer tilting applies octahedral rotations to X-sites about their nearest B-site centers,
-    following the specified angle and pattern parameters.
-    """
-    lattice_vec_sizes = np.linalg.norm(cell_matrix, axis=1)
-
-    # Apply Glazer tilting if angles and pattern are provided
-    if glazer_angles is not None and glazer_pattern is not None:
-        if len(glazer_angles) == 3 and len(glazer_pattern) == 3:
-            # Determine supercell size from cell_matrix dimensions
-            # The cell_matrix represents the supercell vectors
-            supercell_size = (1, 1, 1)  # Default for monolayers
-
-            # Apply Glazer tilting
-            tilted_positions, _, _ = apply_glazer_tilt(
-                position_matrix=positions,
-                lattice_vectors=tuple(lattice_vec_sizes),
-                supercell=supercell_size,
-                angles=glazer_angles,
-                tilt_pattern=glazer_pattern,
-                adjust_cell=True
-            )
-            return tilted_positions, lattice_vec_sizes, cell_matrix
-
-    return positions, lattice_vec_sizes, cell_matrix
-
-
-def _populate(
-    positions: Dict[str, List[List[float]]],
-    lattice_vec_sizes: np.ndarray,
-    cell_matrix: np.ndarray,
-    A,
-    B,
-    X,
-    Ap_ions=None,
-) -> Atoms:
-    """Populate ions using the population toolchain."""
-    positions_np = {site: np.asarray(coords, dtype=float) for site, coords in positions.items()}
-    matrix = build_structure_matrix(positions_np, lattice_vec_sizes, cell_vectors=cell_matrix)
-    return populate_structure(
-        matrix=matrix,
-        A_ions=A,
-        B_ions=B,
-        X_ions=X, # This must be expanded before being passed to the population toolchain in fact all of them is a good idea A, B, X, Ap must be expanded before being passed to the population toolchain
-        Ap_ions=Ap_ions,
-    )
 
 
 def create_bulk_perovskite(
@@ -203,13 +38,9 @@ def create_bulk_perovskite(
     Build a bulk perovskite using a chosen geometry template and populate it.
     Applies XY expansion within the layer plane.
     """
-    if BX_dist is None:
-        B_first = B[0] if isinstance(B, (list, tuple)) else B
-        X_first = X[0] if isinstance(X, (list, tuple)) else X
-        BX_dist = auto_calculate_BX_distance(B_first, X_first)
-
+    BX_dist = resolve_BX_distance(B, X, BX_dist)
     tpl = get_template(template)
-    cell_data = _build_positions(
+    cell_data = build_cell_positions(
         tpl,
         BX_dist=BX_dist,
         jahn_teller_dist=jahn_teller_dist,
@@ -219,14 +50,14 @@ def create_bulk_perovskite(
     positions = cell_data["positions"]
     unit_cell_matrix = cell_data["unit_cell_matrix"]
 
-    positions, lattice_vec_sizes, cell_matrix = _apply_glazer_if_any(
+    positions, lattice_vec_sizes, cell_matrix = apply_glazer_tilting(
         positions,
         unit_cell_matrix,
         glazer_angles,
         glazer_pattern,
     )
 
-    atoms = _populate(positions, lattice_vec_sizes, cell_matrix, A, B, X)
+    atoms = populate_positions(positions, lattice_vec_sizes, cell_matrix, A, B, X)
     
     return atoms
 
@@ -245,24 +76,18 @@ def create_monolayer_perovskite(
     layer_sequence: Optional[List[str] | str] = None,
     spacer: str | List[str] | Atoms = None,
     penetration: float = 0.0,
+    attachment_end: Optional[str] = None,
 ) -> Atoms:
     """
     Build a monolayer perovskite using a chosen geometry template and populate it.
     Replace the X of terminal positions with the X of the spacer.
     Applies XY expansion within the layer plane.
     """
-    if BX_dist is None:
-        B_first = B[0] if isinstance(B, (list, tuple)) else B
-        X_first = X[0] if isinstance(X, (list, tuple)) else X
-        BX_dist = auto_calculate_BX_distance(B_first, X_first)
-    
-    if layer_sequence is None:
-        layer_sequence = "-".join(["L1-L2"] * thickness) + "-L1"
-
-
+    BX_dist = resolve_BX_distance(B, X, BX_dist)
+    layer_sequence = default_layer_sequence(layer_sequence, thickness)
 
     tpl = get_template(template)
-    cell_data = _build_positions(
+    cell_data = build_cell_positions(
         tpl,
         BX_dist=BX_dist,
         jahn_teller_dist=jahn_teller_dist,
@@ -274,7 +99,7 @@ def create_monolayer_perovskite(
     positions = cell_data["positions"]
     unit_cell_matrix = cell_data["unit_cell_matrix"]
 
-    positions, lattice_vec_sizes, cell_matrix = _apply_glazer_if_any(
+    positions, lattice_vec_sizes, cell_matrix = apply_glazer_tilting(
         positions,
         unit_cell_matrix,
         glazer_angles,
@@ -282,14 +107,24 @@ def create_monolayer_perovskite(
     )
 
     # Normalize spacer (Ap_ions) - spacers can be SMILES strings or abbreviations
+    # "HOLE" string in lists or as single value creates holes (unpopulated Ap positions)
     Ap_ions = None
     if spacer is not None:
         if isinstance(spacer, list):
-            Ap_ions = [normalize_spacer(s) for s in spacer]
+            Ap_ions = []
+            for s in spacer:
+                if isinstance(s, str) and s.upper() == "HOLE":
+                    Ap_ions.append("HOLE")  # Keep "HOLE" to create unpopulated positions
+                else:
+                    Ap_ions.append(normalize_spacer(s))
         else:
-            Ap_ions = normalize_spacer(spacer)
+            # Check if single spacer value is "HOLE"
+            if isinstance(spacer, str) and spacer.upper() == "HOLE":
+                Ap_ions = "HOLE"
+            else:
+                Ap_ions = normalize_spacer(spacer)
 
-    atoms = _populate(positions, lattice_vec_sizes, cell_matrix, A, B, X, Ap_ions)
+    atoms = populate_positions(positions, lattice_vec_sizes, cell_matrix, A, B, X, Ap_ions)
 
     # Add vacuum then center the slab symmetrically around mid-cell in Z
     add_vacuum(atoms, vacuum=vacuum)
@@ -311,4 +146,6 @@ def create_perovskite(structure_type="bulk", **kwargs):
         return create_bulk_perovskite(**kwargs)
     if stype == "monolayer":
         return create_monolayer_perovskite(**kwargs)
+    if stype == "bilayer":
+        return create_bilayer_perovskite(**kwargs)
     raise NotImplementedError(f"{structure_type} creation is not implemented yet.")

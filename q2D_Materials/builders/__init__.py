@@ -6,7 +6,7 @@ populated structure matrices and eventually ASE Atoms objects.
 """
 
 from .q_builder import QBuilderOutput, calculate_lattice_vectors, build_structure_matrix
-from .population import (
+from .populate import (
     normalize_a_site, assign_ions_to_sites, populate_structure, attach_spacers
 )
 

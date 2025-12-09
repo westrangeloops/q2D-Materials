@@ -36,6 +36,7 @@ mono2 = q2d.create_perovskite(
 
 ### When you add spacers and penetration
 - Provide `spacer="CCCC[NH3+]"` (SMILES) or a list; external L1 A-sites become Ap-sites and get populated by spacers.
+- `spacer=None` (default): No Ap-sites are created. External L1 A-sites remain as regular A-sites and get populated with A-ions (not left as holes).
 - `penetration` is a float or list (fractions of `BX_dist`) cycling over external A/Ap sites; positive moves out, negative moves in.
 
 ### Practical tips
