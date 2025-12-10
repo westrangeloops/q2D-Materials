@@ -11,10 +11,10 @@ import numpy as np
 from ase import Atoms
 
 from q2D_Materials.builders.templates import (
-    load_template,
     available_templates,
-    build_bulk_cell,
+    build_floor_schema,
     build_structure_matrix,
+    flatten_floor_schema,
 )
 from q2D_Materials.builders.glazer_tilting import apply_glazer_tilt
 from q2D_Materials.builders.populate import populate_structure
@@ -107,6 +107,56 @@ def normalize_spacer(spacer):
     raise ValueError(f"Spacer must be a string (SMILES or abbreviation) or Atoms object, got {type(spacer)}")
 
 
+def calculate_max_dj_spacer_nn_distance(dj_spacer: Optional[List]) -> Optional[float]:
+    """
+    Calculate the maximum N-N distance from dj_spacer molecules.
+    
+    Parameters
+    ----------
+    dj_spacer : Optional[List]
+        List of double spacer molecules (Atoms objects or strings)
+        
+    Returns
+    -------
+    Optional[float]
+        Maximum N-N distance in Angstroms, or None if no valid molecules found.
+        Returns None if dj_spacer is None or empty, or if all are atomic spacers.
+    """
+    if dj_spacer is None or len(dj_spacer) == 0:
+        return None
+    
+    from q2D_Materials.builders.spacer import calculate_double_spacer_nh3_distance
+    from q2D_Materials.pipeline.common import normalize_spacer
+    
+    max_nn_distance = 0.0
+    has_molecular_spacer = False
+    
+    for ds in dj_spacer:
+        if isinstance(ds, str):
+            # Normalize string to Atoms
+            try:
+                ds_atoms = normalize_spacer(ds)
+            except:
+                continue
+        elif isinstance(ds, Atoms):
+            ds_atoms = ds
+        else:
+            continue
+        
+        # Check if atomic (single atom)
+        if len(ds_atoms) == 1:
+            continue  # Skip atomic spacers for N-N distance calculation
+        
+        has_molecular_spacer = True
+        nn_dist = calculate_double_spacer_nh3_distance(ds_atoms)
+        if nn_dist > max_nn_distance:
+            max_nn_distance = nn_dist
+    
+    if has_molecular_spacer and max_nn_distance > 0:
+        return max_nn_distance
+    return None
+
+
 def build_cell_positions(
     template_name: str,
     BX_dist: float,
@@ -115,21 +165,72 @@ def build_cell_positions(
     xy_expansion: Tuple[int, int] = (1, 1),
     penetration: float = 0.0,
     spacer_provided: bool = False,
+    attachment_end: Optional[str] = None,
+    dj_spacer_nn_distance: Optional[float] = None,
 ) -> Dict[str, object]:
-    """Select the correct builder for a template and return positions/lattice/cell for unit cell."""
-    tpl_data = load_template(
-        template_name,
+    """
+    Build floor schema then flatten to site-indexed positions.
+
+    Penetration and spacer_provided are retained for signature compatibility
+    but no longer alter the template geometry in this refactor.
+    """
+    schema = build_floor_schema(
+        template_name=template_name,
         BX_dist=BX_dist,
         jahn_teller_dist=jahn_teller_dist,
         layer_sequence=layer_sequence,
-        penetration=penetration,
-        spacer_provided=spacer_provided,
+        xy_expansion=xy_expansion,
+        dj_spacer_nn_distance=dj_spacer_nn_distance,
     )
 
-    return build_bulk_cell(
-        tpl_data,
-        xy_expansion=xy_expansion,
-    )
+    if spacer_provided and attachment_end:
+        _apply_attachment_end_ap(schema, attachment_end)
+
+    positions, site_labels = flatten_floor_schema(schema)
+    cell_matrix = schema.cell
+    lattice_vec_sizes = np.linalg.norm(cell_matrix, axis=1)
+
+    if penetration != 0.0:
+        from q2D_Materials.builders.populate import apply_penetration_offsets
+
+        positions = apply_penetration_offsets(positions, penetration, BX_dist=BX_dist)
+
+    return {
+        "schema": schema,
+        "positions": positions,
+        "site_labels": site_labels,
+        "unit_cell_matrix": cell_matrix,
+        "lattice_vec_sizes": lattice_vec_sizes,
+    }
+
+
+def _apply_attachment_end_ap(schema, attachment_end: str) -> None:
+    """
+    Convert A sites on selected floors to Ap based on attachment_end ('bottom', 'top', 'both').
+    """
+    if attachment_end is None:
+        return
+
+    end = attachment_end.lower()
+    keys = list(schema.floors.keys())
+    if not keys:
+        return
+
+    floors_to_convert: List[str] = []
+    if end in ("bottom", "bot"):
+        floors_to_convert.append(keys[0])
+    elif end == "top":
+        floors_to_convert.append(keys[-1])
+    elif end == "both":
+        floors_to_convert.extend([keys[0], keys[-1]])
+    else:
+        return
+
+    for fk in floors_to_convert:
+        entries = schema.floors.get(fk, [])
+        for entry in entries:
+            if entry and entry[0] == "A":
+                entry[0] = "Ap"
 
 
 def apply_glazer_tilting(
@@ -145,6 +246,7 @@ def apply_glazer_tilting(
     following the specified angle and pattern parameters.
     """
     lattice_vec_sizes = np.linalg.norm(cell_matrix, axis=1)
+    original_positions = positions
 
     if glazer_angles is not None and glazer_pattern is not None:
         if len(glazer_angles) == 3 and len(glazer_pattern) == 3:
@@ -158,9 +260,13 @@ def apply_glazer_tilting(
                 tilt_pattern=glazer_pattern,
                 adjust_cell=True
             )
+            # Preserve site types not modified by the tilting routine (e.g., A/Ap/S#)
+            for site, coords in original_positions.items():
+                if site not in tilted_positions:
+                    tilted_positions[site] = coords
             return tilted_positions, lattice_vec_sizes, cell_matrix
 
-    return positions, lattice_vec_sizes, cell_matrix
+    return original_positions, lattice_vec_sizes, cell_matrix
 
 
 def populate_positions(
@@ -171,6 +277,8 @@ def populate_positions(
     B,
     X,
     Ap_ions=None,
+    dj_spacer=None,
+    site_labels=None,
 ) -> Atoms:
     """Populate ions using the population toolchain."""
     positions_np = {site: np.asarray(coords, dtype=float) for site, coords in positions.items()}
@@ -181,13 +289,28 @@ def populate_positions(
         B_ions=B,
         X_ions=X,
         Ap_ions=Ap_ions,
+        dj_spacer=dj_spacer,
+        site_labels=site_labels,
     )
 
 
-def default_layer_sequence(layer_sequence: Optional[str], thickness: int) -> str:
-    """Return the default layer sequence for a given monolayer thickness if not provided."""
+def default_layer_sequence(layer_sequence: Optional[str | List[str]], thickness: int, structure_type: str = "monolayer") -> str:
+    """Return the default layer sequence for a given thickness if not provided."""
     if layer_sequence is None:
-        return "-".join(["L1-L2"] * thickness) + "-L1"
+        if structure_type.lower() == "bulk":
+            return "-".join(["L1-L2"] * thickness) + "-L1"
+        else:
+            return "-".join(["L1-L2"] * thickness) + "-L1"
+    elif isinstance(layer_sequence, str) and layer_sequence.upper() == "DJ":
+        # DJ keyword: (L1-L2) * thickness + "-M1-M2" for bulk
+        if structure_type.lower() == "bulk" and thickness > 1:
+            base_sequence = "-".join(["L1-L2"] * thickness)
+            return f"{base_sequence}-M1-M1"
+        elif structure_type.lower() == "bulk" and thickness == 1:
+            return "L2-M1-M1"
+        else:
+            # For monolayer, just use the base sequence
+            return "-".join(["L1-L2"] * thickness) + "-L1"
     else:
         return layer_sequence
 

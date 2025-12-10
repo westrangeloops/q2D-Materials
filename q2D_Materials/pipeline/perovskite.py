@@ -33,12 +33,30 @@ def create_bulk_perovskite(
     jahn_teller_dist: float = 1.0,
     thickness: int = 1,
     layer_sequence: Optional[List[str] | str] = None,
+    dj_spacer: Optional[List[str | Atoms]] = None,
 ) -> Atoms:
     """
     Build a bulk perovskite using a chosen geometry template and populate it.
     Applies XY expansion within the layer plane.
     """
     BX_dist = resolve_BX_distance(B, X, BX_dist)
+    layer_sequence = default_layer_sequence(layer_sequence, thickness, structure_type="bulk")
+    
+    # Normalize dj_spacer early to calculate N-N distances
+    dj_spacer_normalized = None
+    dj_spacer_nn_distance = None
+    if dj_spacer is not None:
+        dj_spacer_normalized = []
+        for ds in dj_spacer:
+            if isinstance(ds, Atoms):
+                dj_spacer_normalized.append(ds.copy())
+            else:
+                dj_spacer_normalized.append(normalize_spacer(ds))
+        
+        # Calculate maximum N-N distance from dj_spacer molecules
+        from q2D_Materials.pipeline.common import calculate_max_dj_spacer_nn_distance
+        dj_spacer_nn_distance = calculate_max_dj_spacer_nn_distance(dj_spacer_normalized)
+    
     tpl = get_template(template)
     cell_data = build_cell_positions(
         tpl,
@@ -46,6 +64,7 @@ def create_bulk_perovskite(
         jahn_teller_dist=jahn_teller_dist,
         layer_sequence=layer_sequence,
         xy_expansion=xy_expansion,
+        dj_spacer_nn_distance=dj_spacer_nn_distance,
     )
     positions = cell_data["positions"]
     unit_cell_matrix = cell_data["unit_cell_matrix"]
@@ -57,7 +76,15 @@ def create_bulk_perovskite(
         glazer_pattern,
     )
 
-    atoms = populate_positions(positions, lattice_vec_sizes, cell_matrix, A, B, X)
+    # Get site_labels if available
+    site_labels = cell_data.get("site_labels", {})
+    
+    # Normalize dj_spacer for population
+    dj_spacer_for_populate = None
+    if dj_spacer_normalized is not None:
+        dj_spacer_for_populate = dj_spacer_normalized
+    
+    atoms = populate_positions(positions, lattice_vec_sizes, cell_matrix, A, B, X, dj_spacer=dj_spacer_for_populate, site_labels=site_labels)
     
     return atoms
 
@@ -77,6 +104,7 @@ def create_monolayer_perovskite(
     spacer: str | List[str] | Atoms = None,
     penetration: float = 0.0,
     attachment_end: Optional[str] = None,
+    dj_spacer: Optional[List[str | Atoms]] = None,
 ) -> Atoms:
     """
     Build a monolayer perovskite using a chosen geometry template and populate it.
@@ -84,7 +112,22 @@ def create_monolayer_perovskite(
     Applies XY expansion within the layer plane.
     """
     BX_dist = resolve_BX_distance(B, X, BX_dist)
-    layer_sequence = default_layer_sequence(layer_sequence, thickness)
+    layer_sequence = default_layer_sequence(layer_sequence, thickness, structure_type="monolayer")
+
+    # Normalize dj_spacer early to calculate N-N distances
+    dj_spacer_normalized = None
+    dj_spacer_nn_distance = None
+    if dj_spacer is not None:
+        dj_spacer_normalized = []
+        for ds in dj_spacer:
+            if isinstance(ds, Atoms):
+                dj_spacer_normalized.append(ds.copy())
+            else:
+                dj_spacer_normalized.append(normalize_spacer(ds))
+        
+        # Calculate maximum N-N distance from dj_spacer molecules
+        from q2D_Materials.pipeline.common import calculate_max_dj_spacer_nn_distance
+        dj_spacer_nn_distance = calculate_max_dj_spacer_nn_distance(dj_spacer_normalized)
 
     tpl = get_template(template)
     cell_data = build_cell_positions(
@@ -95,8 +138,11 @@ def create_monolayer_perovskite(
         xy_expansion=xy_expansion,
         penetration=penetration,
         spacer_provided=spacer is not None,
+        attachment_end=attachment_end,
+        dj_spacer_nn_distance=dj_spacer_nn_distance,
     )
     positions = cell_data["positions"]
+    site_labels = cell_data.get("site_labels", {})
     unit_cell_matrix = cell_data["unit_cell_matrix"]
 
     positions, lattice_vec_sizes, cell_matrix = apply_glazer_tilting(
@@ -124,7 +170,9 @@ def create_monolayer_perovskite(
             else:
                 Ap_ions = normalize_spacer(spacer)
 
-    atoms = populate_positions(positions, lattice_vec_sizes, cell_matrix, A, B, X, Ap_ions)
+    # dj_spacer_normalized already calculated above
+
+    atoms = populate_positions(positions, lattice_vec_sizes, cell_matrix, A, B, X, Ap_ions, dj_spacer=dj_spacer_normalized, site_labels=site_labels)
 
     # Add vacuum then center the slab symmetrically around mid-cell in Z
     add_vacuum(atoms, vacuum=vacuum)

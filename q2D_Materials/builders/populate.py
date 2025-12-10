@@ -10,6 +10,7 @@ from ase import Atoms
 from typing import Union, List, Tuple, Dict, Optional
 
 from .q_builder import QBuilderOutput
+from .templates import FloorSchema, flatten_floor_schema
 from ..utils.molecule_builder import (
     align_ase_molecule_for_perovskite,
     center_of_mass_correction,
@@ -108,114 +109,279 @@ def normalize_a_site(A: Union[str, Atoms]) -> Union[str, Atoms]:
     return A
 
 
+def apply_penetration_offsets(
+    positions: Dict[str, np.ndarray],
+    penetration: float | List[float] = 0.0,
+    BX_dist: float | None = None,
+) -> Dict[str, np.ndarray]:
+    """
+    Shift Ap (per-site, cycling) and S# (uniform) z by ± BX_dist * penetration.
+
+    Bottom Ap/S# shift downward; top Ap/S# shift upward. Sites not at min/max z
+    are left unchanged.
+    """
+    if penetration == 0.0:
+        return positions
+    if BX_dist is None:
+        return positions
+
+    if isinstance(penetration, (list, tuple, np.ndarray)):
+        pen_list = [float(x) for x in np.asarray(penetration, dtype=float).flatten().tolist()]
+        if not pen_list:
+            return positions
+    else:
+        pen_list = [float(penetration)]
+
+    all_z: List[float] = []
+    for site, coords in positions.items():
+        if site == "Ap" or (site.startswith("S") and len(site) > 1 and site[1:].isdigit()):
+            if len(coords) > 0:
+                all_z.extend(np.array(coords, dtype=float)[:, 2].tolist())
+    if not all_z:
+        return positions
+    z_min = min(all_z)
+    z_max = max(all_z)
+    tol = 1e-6
+
+    out: Dict[str, np.ndarray] = {}
+    for site, coords in positions.items():
+        arr = np.array(coords, dtype=float, copy=True)
+        if site == "Ap":
+            for i in range(arr.shape[0]):
+                mag = pen_list[i % len(pen_list)] * BX_dist
+                if arr[i, 2] <= z_min + tol:
+                    arr[i, 2] -= mag
+                elif arr[i, 2] >= z_max - tol:
+                    arr[i, 2] += mag
+        elif site.startswith("S") and len(site) > 1 and site[1:].isdigit():
+            mag = pen_list[0] * BX_dist
+            for i in range(arr.shape[0]):
+                if arr[i, 2] <= z_min + tol:
+                    arr[i, 2] -= mag
+                elif arr[i, 2] >= z_max - tol:
+                    arr[i, 2] += mag
+        out[site] = arr
+    return out
+
+
+def populate_from_floor_schema(
+    schema: FloorSchema,
+    A_ions: Union[str, Atoms, List],
+    B_ions: Union[str, List],
+    X_ions: Union[str, List],
+    Ap_ions: Optional[Union[str, Atoms, List]] = None,
+    dj_spacer: Optional[List[Union[str, Atoms]]] = None,
+    penetration: float = 0.0,
+    BX_dist: float | None = None,
+) -> Atoms:
+    """
+    Populate directly from a floor schema (numbered floors with cartesian coords).
+    """
+    positions, site_labels = flatten_floor_schema(schema)
+    positions = apply_penetration_offsets(positions, penetration, BX_dist=BX_dist)
+    lattice_vec_sizes = np.linalg.norm(schema.cell, axis=1)
+    matrix = QBuilderOutput(
+        positions=positions,
+        lattice_vector_sizes=lattice_vec_sizes,
+        cell_vectors=schema.cell,
+    )
+    return populate_structure(
+        matrix=matrix,
+        A_ions=A_ions,
+        B_ions=B_ions,
+        X_ions=X_ions,
+        Ap_ions=Ap_ions,
+        dj_spacer=dj_spacer,
+        site_labels=site_labels,
+    )
+
+
 def assign_ions_to_sites(
     position_template: Dict[str, np.ndarray],
     A_ions: Union[str, Atoms, List],
     B_ions: Union[str, List],
     X_ions: Union[str, List],
     Ap_ions: Optional[Union[str, Atoms, List]] = None,
-) -> List[Tuple[str, Union[str, Atoms], np.ndarray]]:
+    dj_spacer: Optional[List[Union[str, Atoms]]] = None,
+    site_labels: Optional[Dict[str, List[str]]] = None,
+) -> List[Tuple[str, Union[str, Atoms], np.ndarray, str]]:
     """
-    Assign ions to positions using explicit patterns.
+    Assign ions to positions using explicit patterns with site label metadata.
     
     This function assigns ions to positions based on explicit patterns provided by the user.
     If a single ion is provided, it's used for all positions of that type.
     If a list is provided, ions are assigned sequentially, cycling if the list is shorter.
+    Processes positions in layer-by-layer order (sorted by z-coordinate).
+    Maintains Ap override: Ap positions take precedence over A positions.
     
     Parameters
     ----------
     position_template : dict
-        Dictionary with site types ('A', 'B', 'X') and numpy arrays of positions
+        Dictionary with site types ('A', 'B', 'X', 'Ap', 'S1', 'S2', etc.) and numpy arrays of positions
     A_ions : str/Atoms or list[str/Atoms]
         A-site ion(s). Single value or list pattern.
     B_ions : str or list[str]
         B-site ion(s). Single value or list pattern.
     X_ions : str or list[str]
         X-site ion(s). Single value or list pattern.
+    Ap_ions : optional
+        Ap-site spacer(s). Single value or list pattern.
+    dj_spacer : optional list
+        Double spacer molecules for S# sites. List cycles through S# sites.
+    site_labels : optional dict
+        Dictionary mapping site types to lists of labels (e.g., {"S1": ["S1", "S1", ...], "A": ["A", "A", ...]})
         
     Returns
     -------
     list[tuple]
-        List of (site_type, ion, position) tuples where ion is str or Atoms object
+        List of (site_type, ion, position, label) tuples where:
+        - site_type is the site type ('A', 'B', 'X', 'Ap', 'S1', etc.)
+        - ion is str or Atoms object
+        - position is numpy array [x, y, z]
+        - label is the site label (e.g., "S1", "S2", "A")
     """
     assignments = []
     
-    # Convert numpy arrays to lists for iteration
-    A_positions = position_template.get('A', np.array([]).reshape(0, 3))
-    Ap_positions = position_template.get('Ap', np.array([]).reshape(0, 3))
-    B_positions = position_template.get('B', np.array([]).reshape(0, 3))
-    X_positions = position_template.get('X', np.array([]).reshape(0, 3))
+    # Collect all positions with their labels and z-coordinates for layer-by-layer processing
+    all_positions_with_labels = []
     
-    # Assign A-site positions
-    if len(A_positions) > 0:
-        if isinstance(A_ions, list):
-            # Pattern mode: cycle through list
-            for i, pos in enumerate(A_positions):
-                ion = A_ions[i % len(A_ions)]
-                # Copy Atoms objects to avoid sharing references
-                if isinstance(ion, Atoms):
-                    ion = ion.copy()
-                assignments.append(('A', ion, pos))
+    # Process all site types including S# sites
+    for site_type, positions in position_template.items():
+        if len(positions) == 0:
+            continue
+        
+        # Get labels for this site type
+        labels = site_labels.get(site_type, [site_type] * len(positions)) if site_labels else [site_type] * len(positions)
+        
+        for i, pos in enumerate(positions):
+            label = labels[i] if i < len(labels) else site_type
+            all_positions_with_labels.append((site_type, pos, label))
+    
+    # Group S# sites by label first (S1 in M1 and S1 in M2 share same molecule)
+    s_site_groups = {}  # {label: [(site_type, pos, label), ...]}
+    other_positions = []
+    
+    for site_type, pos, label in all_positions_with_labels:
+        if site_type.startswith('S') and len(site_type) > 1 and site_type[1:].isdigit():
+            # Group S# sites by label
+            if label not in s_site_groups:
+                s_site_groups[label] = []
+            s_site_groups[label].append((site_type, pos, label))
         else:
-            # Single ion: use for all positions
-            for pos in A_positions:
+            other_positions.append((site_type, pos, label))
+    
+    # Sort other positions by z-coordinate for layer-by-layer processing
+    other_positions.sort(key=lambda x: x[1][2])
+    
+    # Track counters for each site type for cycling through lists
+    site_counters = {}
+    s_site_counter = 0  # Counter for assigning molecules to S# label groups
+    
+    # First, assign molecules to S# site groups
+    # Each label group (S1, S2, etc.) gets one molecule that will be shared
+    if dj_spacer is not None and len(dj_spacer) > 0:
+        for label, group_positions in sorted(s_site_groups.items()):
+            # All positions in this group share the same molecule
+            ion = dj_spacer[s_site_counter % len(dj_spacer)]
+            s_site_counter += 1
+            
+            # Ensure ion is an Atoms object (should already be normalized, but check)
+            if not isinstance(ion, Atoms):
+                # Try to normalize if it's a string
+                if isinstance(ion, str):
+                    try:
+                        from q2D_Materials.pipeline.common import normalize_spacer
+                        ion = normalize_spacer(ion)
+                    except:
+                        # If normalization fails, skip this group
+                        continue
+                else:
+                    # Not an Atoms object and not a string, skip
+                    continue
+            
+            # Copy the molecule for each position
+            ion = ion.copy()
+            # Assign this molecule to all positions in the group
+            for site_type, pos, _ in group_positions:
+                assignments.append((site_type, ion, pos, label))
+    
+    # Process other positions in layer order
+    for site_type, pos, label in other_positions:
+        # Skip Ap positions - they will be handled separately after A positions
+        if site_type == 'Ap':
+            continue
+        
+        # Handle A sites (but Ap will override later)
+        if site_type == 'A':
+            if isinstance(A_ions, list):
+                if 'A' not in site_counters:
+                    site_counters['A'] = 0
+                ion = A_ions[site_counters['A'] % len(A_ions)]
+                site_counters['A'] += 1
+            else:
                 ion = A_ions
-                if isinstance(ion, Atoms):
-                    ion = ion.copy()
-                assignments.append(('A', ion, pos))
-
-    # Assign Ap-site positions (optional spacers)
-    # "HOLE" string in Ap_ions list or as single value creates holes (skip assignment for that position)
+            if isinstance(ion, Atoms):
+                ion = ion.copy()
+            assignments.append((site_type, ion, pos, label))
+            continue
+        
+        # Handle B sites
+        if site_type == 'B':
+            if isinstance(B_ions, list):
+                if 'B' not in site_counters:
+                    site_counters['B'] = 0
+                ion = B_ions[site_counters['B'] % len(B_ions)]
+                site_counters['B'] += 1
+            else:
+                ion = B_ions
+            if isinstance(ion, Atoms):
+                ion = ion.copy()
+            assignments.append((site_type, ion, pos, label))
+            continue
+        
+        # Handle X sites
+        if site_type == 'X':
+            if isinstance(X_ions, list):
+                if 'X' not in site_counters:
+                    site_counters['X'] = 0
+                ion = X_ions[site_counters['X'] % len(X_ions)]
+                site_counters['X'] += 1
+            else:
+                ion = X_ions
+            if isinstance(ion, Atoms):
+                ion = ion.copy()
+            assignments.append((site_type, ion, pos, label))
+            continue
+    
+    # Now handle Ap sites (they override A sites)
+    Ap_positions = position_template.get('Ap', np.array([]).reshape(0, 3))
     if Ap_ions is not None and len(Ap_positions) > 0:
+        Ap_labels = site_labels.get('Ap', ['Ap'] * len(Ap_positions)) if site_labels else ['Ap'] * len(Ap_positions)
+        Ap_positions_with_labels = list(zip(Ap_positions, Ap_labels))
+        Ap_positions_with_labels.sort(key=lambda x: x[0][2])  # Sort by z
+        
         if isinstance(Ap_ions, list):
-            for i, pos in enumerate(Ap_positions):
-                ion = Ap_ions[i % len(Ap_ions)]
+            if 'Ap' not in site_counters:
+                site_counters['Ap'] = 0
+            for pos, label in Ap_positions_with_labels:
+                ion = Ap_ions[site_counters['Ap'] % len(Ap_ions)]
+                site_counters['Ap'] += 1
                 if isinstance(ion, str) and ion.upper() == "HOLE":
                     continue  # Skip this position - creates a hole
                 if isinstance(ion, Atoms):
                     ion = ion.copy()
-                assignments.append(('Ap', ion, pos))
+                assignments.append(('Ap', ion, pos, label))
         else:
             # Single spacer value - check if it's "HOLE"
             if isinstance(Ap_ions, str) and Ap_ions.upper() == "HOLE":
                 # Skip all positions - creates holes everywhere
                 pass
             else:
-                for pos in Ap_positions:
+                for pos, label in Ap_positions_with_labels:
                     ion = Ap_ions
                     if isinstance(ion, Atoms):
                         ion = ion.copy()
-                    assignments.append(('Ap', ion, pos))
-    
-    # Assign B-site positions
-    if len(B_positions) > 0:
-        if isinstance(B_ions, list):
-            for i, pos in enumerate(B_positions):
-                ion = B_ions[i % len(B_ions)]
-                if isinstance(ion, Atoms):
-                    ion = ion.copy()
-                assignments.append(('B', ion, pos))
-        else:
-            for pos in B_positions:
-                ion = B_ions
-                if isinstance(ion, Atoms):
-                    ion = ion.copy()
-                assignments.append(('B', ion, pos))
-    
-    # Assign X-site positions
-    if len(X_positions) > 0:
-        if isinstance(X_ions, list):
-            for i, pos in enumerate(X_positions):
-                ion = X_ions[i % len(X_ions)]
-                if isinstance(ion, Atoms):
-                    ion = ion.copy()
-                assignments.append(('X', ion, pos))
-        else:
-            for pos in X_positions:
-                ion = X_ions
-                if isinstance(ion, Atoms):
-                    ion = ion.copy()
-                assignments.append(('X', ion, pos))
+                    assignments.append(('Ap', ion, pos, label))
     
     return assignments
 
@@ -226,9 +392,14 @@ def populate_structure(
     B_ions: Union[str, List],
     X_ions: Union[str, List],
     Ap_ions: Optional[Union[str, Atoms, List]] = None,
+    dj_spacer: Optional[List[Union[str, Atoms]]] = None,
+    site_labels: Optional[Dict[str, List[str]]] = None,
 ) -> Atoms:
     """
-    Populate structure matrix with atoms based purely on site labels (A, B, X, Ap).
+    Populate structure matrix with atoms based on site labels (A, B, X, Ap, S#).
+    
+    Processes positions in layer-by-layer order (stacking floors). Handles double
+    spacers (dj_spacer) for S# sites that connect adjacent layers.
     """
     # Normalize A-site ions (convert molecular strings to Atoms objects)
     if isinstance(A_ions, list):
@@ -264,44 +435,62 @@ def populate_structure(
                 Ap_ions = normalize_a_site(Ap_ions)
             # else: already Atoms object
     
-    # Assign ions to positions using patterns
+    # Normalize dj_spacer if provided
+    dj_spacer_normalized = None
+    if dj_spacer is not None:
+        dj_spacer_normalized = []
+        for ds in dj_spacer:
+            if isinstance(ds, Atoms):
+                dj_spacer_normalized.append(ds.copy())
+            elif isinstance(ds, str):
+                # Try to normalize as spacer
+                try:
+                    from q2D_Materials.pipeline.common import normalize_spacer
+                    dj_spacer_normalized.append(normalize_spacer(ds))
+                except:
+                    # Fallback to A-site normalization
+                    dj_spacer_normalized.append(normalize_a_site(ds))
+            else:
+                dj_spacer_normalized.append(ds)
+    
+    # Assign ions to positions using patterns with site labels
     assignments = assign_ions_to_sites(
         matrix.positions,
-        A_ions, B_ions, X_ions, Ap_ions
+        A_ions, B_ions, X_ions, Ap_ions,
+        dj_spacer=dj_spacer_normalized,
+        site_labels=site_labels,
     )
     
     # Separate atomic and molecular ions
-    # IMPORTANT: For A-sites, we need to handle atomic and molecular separately
-    # to avoid duplication. Only atomic A-sites go in the main structure,
-    # molecular A-sites are added separately with special positioning.
+    # Process in layer order (already sorted by z in assign_ions_to_sites)
     atomic_symbols = []
     atomic_positions = []
-    molecular_atoms = []  # List of (Atoms, position) tuples
+    molecular_atoms = []  # List of (Atoms, position, site_type, label) tuples
+    s_site_assignments = []  # List of (site_type, ion, pos, label) for S# sites
     
     lattice_vectors = matrix.lattice_vector_sizes
     
-    for site_type, ion, pos in assignments:
+    for site_type, ion, pos, label in assignments:
+        # S# sites need special handling for double spacer placement
+        if site_type.startswith('S') and len(site_type) > 1 and site_type[1:].isdigit():
+            s_site_assignments.append((site_type, ion, pos, label))
+            continue
+        
         if isinstance(ion, Atoms):
-            # Molecular ion (A-site only) - handle separately
-            # Note: ion is already a copy from assign_ions_to_sites, but we copy again
-            # when aligning to be extra safe
-            # IMPORTANT: Also copy the position array to avoid reference issues
+            # Molecular ion - handle separately
             pos_copy = np.array([pos[0], pos[1], pos[2]])
-            molecular_atoms.append((ion, pos_copy, site_type))
+            molecular_atoms.append((ion, pos_copy, site_type, label))
         elif site_type in ['A', 'Ap']:
-            # A/Ap site: check if it's a molecular cation that failed to convert
-            # If it's a string that should be molecular, try to convert again
+            # A/Ap site: check if it's a molecular cation
             if isinstance(ion, str):
                 try:
                     if is_molecular_a_cation(ion):
-                        # It's a molecular cation - convert it
                         mol_ion = get_a_site_object(ion)
-                        molecular_atoms.append((mol_ion, pos, site_type))
+                        molecular_atoms.append((mol_ion, pos, site_type, label))
                         continue
                 except (ImportError, ValueError):
-                    # If conversion fails, treat as atomic
                     pass
-            # Atomic A/Ap-site (or failed molecular conversion)
+            # Atomic A/Ap-site
             atomic_symbols.append(ion)
             atomic_positions.append(pos)
         else:
@@ -313,7 +502,6 @@ def populate_structure(
     if atomic_symbols:
         structure = Atoms(atomic_symbols, positions=atomic_positions)
     else:
-        # No atomic ions (shouldn't happen, but handle gracefully)
         structure = Atoms()
     
     # Set cell dimensions from matrix
@@ -321,26 +509,106 @@ def populate_structure(
     structure.pbc = [1, 1, 1]
     
     # Add molecular A/Ap-sites (if any)
-    for i, (mol, pos, site_type) in enumerate(molecular_atoms):
+    for mol, pos, site_type, label in molecular_atoms:
         if site_type in ['A', 'Ap']:
-            # Determine attachment orientation and placement for spacers (Ap sites)
             if site_type == 'Ap':
                 # For monolayer spacers, determine if position is in bottom or top half
-                z_center = (structure.cell[2][2]) / 2.0  # Cell height / 2
+                z_center = (structure.cell[2][2]) / 2.0
                 if pos[2] < z_center:
-                    # Bottom surface - NH3+ should point upward toward layer above
-                    attachment_end = 'top'  # NH3+ at top of molecule
+                    attachment_end = 'top'
                 else:
-                    # Top surface - NH3+ should point downward toward layer below
-                    attachment_end = 'bottom'  # NH3+ at bottom of molecule
+                    attachment_end = 'bottom'
                 mol_aligned = align_ase_molecule_for_perovskite(mol.copy(), attachment_end=attachment_end)
-                # Place NH3+ end at the attachment position
                 mol_placed = place_spacer_at_location(mol_aligned, pos, attachment_end)
             else:
                 # Regular A-sites use COM placement
                 mol_aligned = align_ase_molecule_for_perovskite(mol.copy())
                 mol_placed = place_atoms_at_location(mol_aligned, pos)
             structure = add_atoms(structure, mol_placed)
+    
+    # Handle S# sites with double spacers (connect adjacent layers)
+    # Group S# sites by label, then find M1 and M2 positions for each label
+    if s_site_assignments:
+        from q2D_Materials.builders.spacer import place_double_spacer_between_positions
+        
+        # Group by label (S1, S2, etc.)
+        s_site_by_label = {}
+        for site_type, ion, pos, label in s_site_assignments:
+            if label not in s_site_by_label:
+                s_site_by_label[label] = []
+            s_site_by_label[label].append((site_type, ion, pos, label))
+        
+        # For each label, find M1 and M2 positions and place molecule
+        for label, assignments in s_site_by_label.items():
+            if len(assignments) < 2:
+                # Need at least 2 positions (M1 and M2) for double spacer
+                continue
+            
+            # Sort by z to identify M1 (lower z) and M2 (higher z)
+            assignments_sorted = sorted(assignments, key=lambda x: x[2][2])
+            
+            # Get the molecule (should be same for all assignments in group)
+            molecule = assignments_sorted[0][1]
+            
+            # Ensure molecule is an Atoms object
+            if not isinstance(molecule, Atoms):
+                # Try to normalize if it's a string (shouldn't happen if normalization worked)
+                if isinstance(molecule, str):
+                    try:
+                        from q2D_Materials.pipeline.common import normalize_spacer
+                        molecule = normalize_spacer(molecule)
+                    except Exception as e:
+                        # If normalization fails, skip this group
+                        print(f"Warning: Failed to normalize dj_spacer for label {label}: {e}")
+                        continue
+                else:
+                    # Not an Atoms object and not a string, skip
+                    print(f"Warning: dj_spacer for label {label} is not an Atoms object: {type(molecule)}")
+                    continue
+            
+            # Verify molecule has atoms
+            if len(molecule) == 0:
+                print(f"Warning: dj_spacer molecule for label {label} has no atoms")
+                continue
+            
+            # Find M1 and M2 positions
+            # M1 should be the lower z position(s), M2 the higher z position(s)
+            # For now, use first (lowest z) and last (highest z) positions
+            p1_pos = assignments_sorted[0][2]  # M1 position (lower z)
+            p2_pos = assignments_sorted[-1][2]  # M2 position (higher z)
+            
+            # Ensure positions are numpy arrays
+            p1_pos = np.array(p1_pos) if not isinstance(p1_pos, np.ndarray) else p1_pos
+            p2_pos = np.array(p2_pos) if not isinstance(p2_pos, np.ndarray) else p2_pos
+            
+            # Verify positions are valid
+            if np.any(np.isnan(p1_pos)) or np.any(np.isnan(p2_pos)):
+                print(f"Warning: Invalid positions for label {label} (NaN detected)")
+                continue
+            
+            distance = np.linalg.norm(p2_pos - p1_pos)
+            if distance < 1e-6:
+                print(f"Warning: Positions for label {label} are too close (distance: {distance:.6f} Å)")
+                continue
+            
+            # Place molecule so NH3+ groups align with P1 and P2
+            try:
+                mol_placed = place_double_spacer_between_positions(
+                    molecule.copy(),
+                    p1_pos,
+                    p2_pos,
+                )
+                
+                # Verify the placed molecule is valid
+                if mol_placed is not None and len(mol_placed) > 0:
+                    structure = add_atoms(structure, mol_placed)
+                else:
+                    print(f"Warning: place_double_spacer_between_positions returned invalid molecule for label {label}")
+            except Exception as e:
+                print(f"Warning: Failed to place double spacer for label {label}: {e}")
+                import traceback
+                traceback.print_exc()
+                continue
     
     return structure
 

@@ -136,13 +136,13 @@ def main():
 
     # 11-15: Glazer tilts (reduced)
     glazer_cases_reduced = [
-        ("monolayer_reduced_glazer_a0a0c+", [0, 0, 2], ["0", "0", "+"], (1, 1, 1)),
-        ("monolayer_reduced_glazer_a0b+b+", [0, 1.5, 1.5], ["0", "+", "+"], (1, 1, 2)),
-        ("monolayer_reduced_glazer_a-a-a-", [1.5, 1.5, 1.5], ["-", "-", "-"], (2, 2, 2)),
-        ("monolayer_reduced_glazer_a0b-c-", [0, 2.5, 2.5], ["0", "-", "-"], (1, 1, 5)),
-        ("monolayer_reduced_glazer_a+b-c-", [3, 2, 2], ["+", "-", "-"], (1, 1, 3)),
+        ("monolayer_reduced_glazer_a0a0c+", [0, 0, 2], ["0", "0", "+"], (1, 1, 1), "CCCC[NH3+]", "bottom", 0.5),
+        ("monolayer_reduced_glazer_a0b+b+", [0, 1.5, 1.5], ["0", "+", "+"], (1, 1, 2), "CCCC[NH3+]", "top", [-0.4, 0.4]),
+        ("monolayer_reduced_glazer_a-a-a-", [1.5, 1.5, 1.5], ["-", "-", "-"], (2, 2, 2), "CCCC[NH3+]", "bottom", 0.3),
+        ("monolayer_reduced_glazer_a0b-c-", [0, 2.5, 2.5], ["0", "-", "-"], (1, 1, 5), ["CCCC[NH3+]", "CN1C=NC2=C1C(=O)N(C(=O)N2C)CC[NH3+]"], "both", 0.7),
+        ("monolayer_reduced_glazer_a+b-c-", [3, 2, 2], ["+", "-", "-"], (1, 1, 3), "CCCC[NH3+]", "top", 0.9),
     ]
-    for name, angles, pattern, sc in glazer_cases_reduced:
+    for name, angles, pattern, sc, spacer, attachment_end, penetration in glazer_cases_reduced:
         print(f"\nGlazer reduced monolayer: {name} angles={angles} pattern={pattern} sc={sc}")
         struct = q2d.create_perovskite(
             A_ions="MA",
@@ -153,6 +153,9 @@ def main():
             glazer_angles=angles,
             glazer_pattern=pattern,
             structure_type="monolayer",
+            spacer=spacer,
+            attachment_end=attachment_end,
+            penetration=penetration,
             vacuum=vacuum,
             thickness=sc[2],
         )

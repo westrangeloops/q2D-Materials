@@ -13,7 +13,9 @@ from typing import Optional, Tuple, List
 import numpy as np
 from ase import Atoms
 
-from .template import SITE_ROLE_KEY, SITE_SPACER
+# Constants for site role tracking
+SITE_ROLE_KEY = "site_role"
+SITE_SPACER = "spacer"
 
 
 def prepare_spacer(
@@ -408,3 +410,260 @@ def get_spacer_extent(structure: Atoms) -> Tuple[float, float]:
     
     spacer_z = positions[spacer_mask, 2]
     return (spacer_z.min(), spacer_z.max())
+
+
+def place_double_spacer_between_positions(
+    molecule: Atoms,
+    p1: np.ndarray,
+    p2: np.ndarray,
+) -> Atoms:
+    """
+    Place a double spacer molecule so its two NH3+ groups align with positions P1 and P2.
+    
+    The molecule is aligned so that:
+    - One NH3+ group is at position P1
+    - The other NH3+ group is at position P2
+    - The molecule is oriented along the P1-P2 vector
+    
+    Parameters
+    ----------
+    molecule : Atoms
+        Double spacer molecule with two NH3+ groups
+    p1 : np.ndarray
+        First attachment position [x, y, z] (e.g., S1 in M1 layer)
+    p2 : np.ndarray
+        Second attachment position [x, y, z] (e.g., S1 in M2 layer)
+        
+    Returns
+    -------
+    Atoms
+        Positioned molecule with NH3+ groups at P1 and P2
+    """
+    mol_copy = molecule.copy()
+    symbols = mol_copy.get_chemical_symbols()
+    positions = mol_copy.get_positions()
+    
+    # Find all nitrogen atoms
+    n_indices = [i for i, s in enumerate(symbols) if s == 'N']
+    
+    if len(n_indices) < 2:
+        # Not a double spacer - place at center between P1 and P2
+        center = (np.array(p1) + np.array(p2)) / 2.0
+        com = mol_copy.get_center_of_mass()
+        shift = center - com
+        mol_copy.positions += shift
+        return mol_copy
+    
+    # Find hydrogen atoms
+    h_indices = [i for i, s in enumerate(symbols) if s == 'H']
+    h_positions = positions[h_indices] if len(h_indices) > 0 else np.array([]).reshape(0, 3)
+    
+    # Identify NH3+ groups: N atoms with 3 nearby H atoms
+    nh_bond_cutoff = 1.2
+    nh3_n_indices = []
+    
+    for n_idx in n_indices:
+        n_pos = positions[n_idx]
+        if len(h_positions) > 0:
+            distances = np.linalg.norm(h_positions - n_pos, axis=1)
+            nearby_h_count = np.sum(distances < nh_bond_cutoff)
+            if nearby_h_count == 3:
+                nh3_n_indices.append(n_idx)
+        else:
+            # No H atoms - assume all N are NH3+ (fallback)
+            nh3_n_indices.append(n_idx)
+    
+    if len(nh3_n_indices) < 2:
+        # Fewer than 2 NH3 groups - place at center
+        center = (np.array(p1) + np.array(p2)) / 2.0
+        com = mol_copy.get_center_of_mass()
+        shift = center - com
+        mol_copy.positions += shift
+        return mol_copy
+    
+    # Get the two NH3+ nitrogen positions
+    nh3_positions = positions[nh3_n_indices]
+    
+    # If more than 2 NH3 groups, use the two that are furthest apart
+    if len(nh3_n_indices) > 2:
+        max_dist = 0.0
+        best_pair = (0, 1)
+        for i in range(len(nh3_n_indices)):
+            for j in range(i + 1, len(nh3_n_indices)):
+                dist = np.linalg.norm(nh3_positions[j] - nh3_positions[i])
+                if dist > max_dist:
+                    max_dist = dist
+                    best_pair = (i, j)
+        nh3_1_idx = nh3_n_indices[best_pair[0]]
+        nh3_2_idx = nh3_n_indices[best_pair[1]]
+    else:
+        nh3_1_idx = nh3_n_indices[0]
+        nh3_2_idx = nh3_n_indices[1]
+    
+    # Get current NH3+ positions
+    nh3_1_pos = positions[nh3_1_idx]
+    nh3_2_pos = positions[nh3_2_idx]
+    
+    # Calculate vectors
+    current_nh3_vector = nh3_2_pos - nh3_1_pos
+    target_vector = np.array(p2) - np.array(p1)
+    
+    # Normalize vectors
+    current_norm = np.linalg.norm(current_nh3_vector)
+    target_norm = np.linalg.norm(target_vector)
+    
+    if current_norm < 1e-6 or target_norm < 1e-6:
+        # Degenerate case - place at center
+        center = (np.array(p1) + np.array(p2)) / 2.0
+        com = mol_copy.get_center_of_mass()
+        shift = center - com
+        mol_copy.positions += shift
+        return mol_copy
+    
+    current_unit = current_nh3_vector / current_norm
+    target_unit = target_vector / target_norm
+    
+    # Calculate rotation to align current_nh3_vector with target_vector
+    # Use Rodrigues' rotation formula
+    v = np.cross(current_unit, target_unit)
+    s = np.linalg.norm(v)  # sin(angle)
+    c = np.dot(current_unit, target_unit)  # cos(angle)
+    
+    if s < 1e-6:
+        # Vectors are already aligned (or anti-aligned)
+        if c < 0:
+            # Anti-aligned - rotate 180 degrees around perpendicular axis
+            perp = np.array([1.0, 0.0, 0.0]) if abs(current_unit[0]) < 0.9 else np.array([0.0, 1.0, 0.0])
+            axis = np.cross(current_unit, perp)
+            axis = axis / np.linalg.norm(axis)
+            # Rotate 180 degrees around nh3_1 position
+            mol_copy.rotate(180.0, axis, center=nh3_1_pos)
+    else:
+        # Calculate rotation axis and angle
+        axis = v / s
+        angle_rad = np.arccos(np.clip(c, -1.0, 1.0))
+        angle_deg = np.degrees(angle_rad)
+        
+        # Rotate molecule around nh3_1 position
+        mol_copy.rotate(angle_deg, axis, center=nh3_1_pos)
+    
+    # Scale molecule if needed (stretch/compress to match target distance)
+    # Get updated NH3 positions after rotation
+    updated_positions = mol_copy.get_positions()
+    nh3_1_pos_updated = updated_positions[nh3_1_idx]
+    nh3_2_pos_updated = updated_positions[nh3_2_idx]
+    current_vector_updated = nh3_2_pos_updated - nh3_1_pos_updated
+    current_dist = np.linalg.norm(current_vector_updated)
+    
+    if current_dist > 1e-6:
+        # Scale molecule along the NH3-NH3 axis to match target distance
+        # This ensures the molecule spans exactly between P1 and P2
+        scale_factor = target_norm / current_dist
+        # Scale relative to nh3_1 position
+        mol_copy.positions = nh3_1_pos_updated + (mol_copy.positions - nh3_1_pos_updated) * scale_factor
+    
+    # Translate so first NH3+ is at P1
+    final_positions = mol_copy.get_positions()
+    nh3_1_final = final_positions[nh3_1_idx]
+    translation = np.array(p1) - nh3_1_final
+    mol_copy.positions += translation
+    
+    # Verify second NH3+ is at P2 (or very close)
+    final_positions_after = mol_copy.get_positions()
+    nh3_2_final = final_positions_after[nh3_2_idx]
+    p2_actual = np.array(p2)
+    distance_error = np.linalg.norm(nh3_2_final - p2_actual)
+    
+    # If there's a significant error, adjust the second NH3+ position
+    # This can happen due to rounding or if scaling wasn't perfect
+    if distance_error > 0.01:  # 0.01 Å tolerance
+        # Adjust by translating the molecule slightly
+        correction = p2_actual - nh3_2_final
+        mol_copy.positions += correction
+    
+    return mol_copy
+
+
+def calculate_double_spacer_nh3_distance(molecule: Atoms) -> float:
+    """
+    Calculate the distance between two NH3+ groups in a double spacer molecule.
+    
+    For molecules with two NH3 groups (like DJ spacers), this calculates the
+    distance between the two NH3+ nitrogen atoms. This distance is used to
+    determine how the molecule spans between adjacent layers.
+    
+    Parameters
+    ----------
+    molecule : Atoms
+        ASE Atoms object of the double spacer molecule (should have 2 NH3+ groups)
+        
+    Returns
+    -------
+    float
+        Distance in Angstroms between the two NH3+ nitrogen atoms.
+        Returns 0.0 if fewer than 2 NH3 groups are found.
+        
+    Raises
+    ------
+    ValueError
+        If molecule has no atoms or is invalid
+    """
+    if len(molecule) == 0:
+        raise ValueError("Molecule must have at least one atom")
+    
+    symbols = molecule.get_chemical_symbols()
+    positions = molecule.get_positions()
+    
+    # Find all nitrogen atoms
+    n_indices = [i for i, s in enumerate(symbols) if s == 'N']
+    
+    if len(n_indices) < 2:
+        # Not a double spacer - return 0.0
+        return 0.0
+    
+    # Find hydrogen atoms
+    h_indices = [i for i, s in enumerate(symbols) if s == 'H']
+    
+    if len(h_indices) == 0:
+        # No H atoms - can't identify NH3 groups
+        return 0.0
+    
+    h_positions = positions[h_indices]
+    
+    # Identify NH3+ groups: N atoms with 3 nearby H atoms
+    # Typical N-H bond distance is around 1.0-1.1 Å
+    nh_bond_cutoff = 1.2
+    
+    nh3_n_indices = []
+    for n_idx in n_indices:
+        n_pos = positions[n_idx]
+        # Calculate distances from this N to all H atoms
+        distances = np.linalg.norm(h_positions - n_pos, axis=1)
+        nearby_h_count = np.sum(distances < nh_bond_cutoff)
+        
+        # NH3+ groups have 3 H atoms nearby
+        if nearby_h_count == 3:
+            nh3_n_indices.append(n_idx)
+    
+    if len(nh3_n_indices) < 2:
+        # Fewer than 2 NH3 groups found
+        return 0.0
+    
+    # Calculate distance between the two NH3+ nitrogen atoms
+    # For molecules with >2 NH3 groups, use the two that are furthest apart
+    if len(nh3_n_indices) == 2:
+        n1_pos = positions[nh3_n_indices[0]]
+        n2_pos = positions[nh3_n_indices[1]]
+        distance = np.linalg.norm(n2_pos - n1_pos)
+    else:
+        # More than 2 NH3 groups - find the two that are furthest apart
+        nh3_positions = positions[nh3_n_indices]
+        max_distance = 0.0
+        for i in range(len(nh3_n_indices)):
+            for j in range(i + 1, len(nh3_n_indices)):
+                dist = np.linalg.norm(nh3_positions[j] - nh3_positions[i])
+                if dist > max_distance:
+                    max_distance = dist
+        distance = max_distance
+    
+    return float(distance)
