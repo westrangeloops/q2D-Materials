@@ -24,6 +24,18 @@ csbr = q2d.create_perovskite(template="cubic", A_ions="Cs", B_ions="Sn", X_ions=
 # Same chemistry, different geometry
 cubic_geom   = q2d.create_perovskite(template="cubic", **base)
 reduced_geom = q2d.create_perovskite(template="reduced", **base)
+
+# DJ spacer example (two spacer layers with S#)
+dj = q2d.create_perovskite(
+    template="cubic",
+    structure_type="bulk",
+    layer_sequence="DJ",
+    thickness=2,
+    A_ions="MA", B_ions="Pb", X_ions="I",
+    dj_spacer="[NH3+]CCCC[NH3+]",
+    glazer_angles=[0, 0, 3],
+    glazer_pattern=["0", "0", "+"],
+)
 ```
 
 ### Visual cue (cubic storyboard)

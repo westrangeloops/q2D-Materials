@@ -70,23 +70,13 @@ def normalize_spacer(spacer):
         ASE Atoms object of the spacer molecule or atom
     """
     if isinstance(spacer, Atoms):
-        try:
-            from q2D_Materials.utils.molecule_builder import com_to_origin
-
-            return com_to_origin(spacer)
-        except Exception:
-            return spacer.copy()
+        return spacer.copy()
 
     if isinstance(spacer, str):
         try:
             normalized = get_a_site_object(spacer)
             if isinstance(normalized, Atoms):
-                try:
-                    from q2D_Materials.utils.molecule_builder import com_to_origin
-
-                    return com_to_origin(normalized)
-                except Exception:
-                    return normalized.copy()
+                return normalized
             if isinstance(normalized, str):
                 try:
                     from pymatgen.core.periodic_table import Element
@@ -107,14 +97,7 @@ def normalize_spacer(spacer):
 
         try:
             if smiles_to_ase_atoms is not None:
-                atoms = smiles_to_ase_atoms(spacer)
-                try:
-                    from q2D_Materials.utils.molecule_builder import com_to_origin
-
-                    atoms = com_to_origin(atoms)
-                except Exception:
-                    atoms = atoms.copy()
-                return atoms
+                return smiles_to_ase_atoms(spacer)
             else:
                 raise ValueError("RDKit not available for SMILES processing")
         except Exception as e:

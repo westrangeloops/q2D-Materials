@@ -8,6 +8,7 @@ You only need two patterns to master templates: a cubic stack (clear layers, eas
 - Templates say **where** atoms go; your inputs say **what** goes there.
 - Layers stack along **c**; you pick the order via `layer_sequence` (list or string, e.g., `L1-L2-L3-L1`).
 - One template can host many sequences—great for exploring faults or thickness without new files.
+- Spacer layers use `S#`; consecutive layers with `S#` form a DJ gap. XY expansion relabels `S#` per image (S1→S3…) so pairings stay unique.
 
 ## Tiny anatomy (used in both examples)
 ```json
@@ -115,3 +116,8 @@ print(len(test))  # sanity check: expected site count
 ```
 
 Next: keep templates short, tell the stacking story with 2–3 frames, and vary only `layer_sequence` (strings like `L1L2L3L1`) to explore new geometries without rewriting JSON.
+
+## Spacer-aware notes
+- Add `S#` entries on two consecutive layers to host DJ spacers.
+- XY expansion auto-renames `S#` so each copy is unique; pairing is by label, not name.
+- Gaps between spacer layers use the spacer N–N distance (fallback `2*BX_dist`).

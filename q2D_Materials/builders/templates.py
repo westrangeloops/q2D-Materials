@@ -8,6 +8,7 @@ cartesian coordinates and the layer name is preserved separately.
 
 import json
 import os
+import re
 from collections import OrderedDict
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
@@ -250,6 +251,30 @@ def _compute_layer_heights(
     return z_positions, total_height
 
 
+def _is_s_label(site: str) -> bool:
+    return isinstance(site, str) and re.fullmatch(r"S\d+", site) is not None
+
+
+def _parse_s_index(site: str) -> Optional[int]:
+    if not _is_s_label(site):
+        return None
+    try:
+        return int(site[1:])
+    except ValueError:
+        return None
+
+
+def _max_s_index(floors: "OrderedDict[str, List[List[float]]]"):
+    max_idx = 0
+    for entries in floors.values():
+        for site, *_ in entries:
+            if _is_s_label(site):
+                idx = _parse_s_index(site)
+                if idx is not None:
+                    max_idx = max(max_idx, idx)
+    return max_idx
+
+
 def _calculate_lattice_lengths(
     data: Dict,
     BX_dist: float,
@@ -275,16 +300,26 @@ def _apply_xy_expansion(
     expanded: "OrderedDict[str, List[List[float]]]" = OrderedDict()
     a_vec = cell_matrix[0]
     b_vec = cell_matrix[1]
+    next_s_idx = _max_s_index(floors) + 1
+    s_label_map: Dict[Tuple[int, int, int], str] = {}
 
     for key, entries in floors.items():
         expanded_entries: List[List[float]] = []
         for site, x, y, z in entries:
             base_vec = np.array([x, y, z], dtype=float)
+            base_s_idx = _parse_s_index(site) if _is_s_label(site) else None
             for ix in range(nx):
                 for iy in range(ny):
                     shift = a_vec * ix + b_vec * iy
                     vec = base_vec + shift
-                    expanded_entries.append([site, float(vec[0]), float(vec[1]), float(vec[2])])
+                    new_site = site
+                    if base_s_idx is not None:
+                        key_map = (base_s_idx, ix, iy)
+                        if key_map not in s_label_map:
+                            s_label_map[key_map] = f"S{next_s_idx}"
+                            next_s_idx += 1
+                        new_site = s_label_map[key_map]
+                    expanded_entries.append([new_site, float(vec[0]), float(vec[1]), float(vec[2])])
         expanded[key] = expanded_entries
 
     expanded_cell = cell_matrix.copy()
@@ -307,6 +342,7 @@ def _apply_glazer_to_floors(
     for entries in floors.values():
         for site, x, y, z in entries:
             position_matrix.setdefault(site, []).append([x, y, z])
+    original_positions = {k: [list(p) for p in v] for k, v in position_matrix.items()}
 
     # Tilt only if we have X sites
     if "X" not in position_matrix or len(position_matrix["X"]) == 0:
@@ -321,6 +357,10 @@ def _apply_glazer_to_floors(
         tilt_pattern=glazer_pattern,
         adjust_cell=True,
     )
+    # Preserve any site types not touched by tilting (e.g., S#)
+    for site, coords in original_positions.items():
+        if site not in tilted_positions:
+            tilted_positions[site] = coords
 
     # Rebuild floors using tilted positions in original order
     updated_floors: "OrderedDict[str, List[List[float]]]" = OrderedDict()
@@ -333,7 +373,10 @@ def _apply_glazer_to_floors(
                 pos = site_iterators[site].pop(0)
                 new_entries.append([site, pos[0], pos[1], pos[2]])
             else:
-                new_entries.append([site, 0.0, 0.0, 0.0])  # fallback should not happen
+                # Fallback to original coordinates for this floor/site if available
+                orig = original_positions.get(site, [[0.0, 0.0, 0.0]])
+                pos = orig[0]
+                new_entries.append([site, pos[0], pos[1], pos[2]])
         updated_floors[floor_key] = new_entries
 
     # Build orthogonal cell from updated lengths
