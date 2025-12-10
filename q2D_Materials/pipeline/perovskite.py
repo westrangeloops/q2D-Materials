@@ -7,6 +7,7 @@ ASE Atoms objects. Currently only bulk is implemented here.
 
 from typing import List, Tuple, Optional
 
+import numpy as np
 from ase import Atoms
 from ase.build import add_vacuum
 
