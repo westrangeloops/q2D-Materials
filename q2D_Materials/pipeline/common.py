@@ -16,7 +16,6 @@ from q2D_Materials.builders.templates import (
     build_structure_matrix,
     flatten_floor_schema,
 )
-from q2D_Materials.builders.glazer_tilting import apply_glazer_tilt
 from q2D_Materials.builders.populate import populate_structure
 from q2D_Materials.utils.A_sites import (
     calculate_BX_distance,
@@ -167,6 +166,8 @@ def build_cell_positions(
     spacer_provided: bool = False,
     attachment_end: Optional[str] = None,
     dj_spacer_nn_distance: Optional[float] = None,
+    glazer_angles: Optional[List[float]] = None,
+    glazer_pattern: Optional[List[str]] = None,
 ) -> Dict[str, object]:
     """
     Build floor schema then flatten to site-indexed positions.
@@ -181,6 +182,8 @@ def build_cell_positions(
         layer_sequence=layer_sequence,
         xy_expansion=xy_expansion,
         dj_spacer_nn_distance=dj_spacer_nn_distance,
+        glazer_angles=glazer_angles,
+        glazer_pattern=glazer_pattern,
     )
 
     if spacer_provided and attachment_end:
@@ -231,42 +234,6 @@ def _apply_attachment_end_ap(schema, attachment_end: str) -> None:
         for entry in entries:
             if entry and entry[0] == "A":
                 entry[0] = "Ap"
-
-
-def apply_glazer_tilting(
-    positions: Dict[str, List[List[float]]],
-    cell_matrix: np.ndarray,
-    glazer_angles: Optional[List[float]],
-    glazer_pattern: Optional[List[str]],
-) -> Tuple[Dict[str, List[List[float]]], np.ndarray, np.ndarray]:
-    """
-    Apply Glazer tilt if requested, otherwise return inputs unchanged.
-
-    Glazer tilting applies octahedral rotations to X-sites about their nearest B-site centers,
-    following the specified angle and pattern parameters.
-    """
-    lattice_vec_sizes = np.linalg.norm(cell_matrix, axis=1)
-    original_positions = positions
-
-    if glazer_angles is not None and glazer_pattern is not None:
-        if len(glazer_angles) == 3 and len(glazer_pattern) == 3:
-            supercell_size = (1, 1, 1)
-
-            tilted_positions, _, _ = apply_glazer_tilt(
-                position_matrix=positions,
-                lattice_vectors=tuple(lattice_vec_sizes),
-                supercell=supercell_size,
-                angles=glazer_angles,
-                tilt_pattern=glazer_pattern,
-                adjust_cell=True
-            )
-            # Preserve site types not modified by the tilting routine (e.g., A/Ap/S#)
-            for site, coords in original_positions.items():
-                if site not in tilted_positions:
-                    tilted_positions[site] = coords
-            return tilted_positions, lattice_vec_sizes, cell_matrix
-
-    return original_positions, lattice_vec_sizes, cell_matrix
 
 
 def populate_positions(

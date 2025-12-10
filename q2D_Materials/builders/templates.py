@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
+from q2D_Materials.builders.glazer_tilting import apply_glazer_tilt
 
 
 # -----------------------------------------------------------------------------
@@ -51,6 +52,8 @@ def build_floor_schema(
     layer_sequence: Optional[List[str] | str] = None,
     xy_expansion: Tuple[int, int] = (1, 1),
     dj_spacer_nn_distance: Optional[float] = None,
+    glazer_angles: Optional[List[float]] = None,
+    glazer_pattern: Optional[List[str]] = None,
 ) -> FloorSchema:
     """
     Build a numbered-floor schema with cartesian coordinates.
@@ -84,6 +87,11 @@ def build_floor_schema(
             cart = frac @ cell_matrix
             entries.append([site, float(cart[0]), float(cart[1]), float(cart[2])])
         floors[floor_key] = entries
+
+    if glazer_angles is not None and glazer_pattern is not None:
+        floors, cell_matrix, lattice_lengths = _apply_glazer_to_floors(
+            floors, lattice_lengths, glazer_angles, glazer_pattern
+        )
 
     if xy_expansion != (1, 1):
         floors, cell_matrix = _apply_xy_expansion(floors, cell_matrix, xy_expansion)
@@ -283,6 +291,54 @@ def _apply_xy_expansion(
     expanded_cell[0] *= nx
     expanded_cell[1] *= ny
     return expanded, expanded_cell
+
+
+def _apply_glazer_to_floors(
+    floors: "OrderedDict[str, List[List[float]]]",
+    lattice_lengths: Tuple[float, float, float],
+    glazer_angles: List[float],
+    glazer_pattern: List[str],
+) -> Tuple["OrderedDict[str, List[List[float]]]", np.ndarray, Tuple[float, float, float]]:
+    """
+    Apply Glazer tilting to X-sites and return updated floors and cell.
+    """
+    # Build position matrix grouped by site
+    position_matrix: Dict[str, List[List[float]]] = {}
+    for entries in floors.values():
+        for site, x, y, z in entries:
+            position_matrix.setdefault(site, []).append([x, y, z])
+
+    # Tilt only if we have X sites
+    if "X" not in position_matrix or len(position_matrix["X"]) == 0:
+        cell_matrix = cell_matrix_from_parameters(*lattice_lengths, 90.0, 90.0, 90.0)
+        return floors, cell_matrix, lattice_lengths
+
+    tilted_positions, lv_unit, cell_lengths = apply_glazer_tilt(
+        position_matrix,
+        lattice_vectors=lattice_lengths,
+        supercell=(1, 1, 1),
+        angles=glazer_angles,
+        tilt_pattern=glazer_pattern,
+        adjust_cell=True,
+    )
+
+    # Rebuild floors using tilted positions in original order
+    updated_floors: "OrderedDict[str, List[List[float]]]" = OrderedDict()
+    # Prepare iterators per site to consume positions in insertion order
+    site_iterators: Dict[str, List[List[float]]] = {k: list(v) for k, v in tilted_positions.items()}
+    for floor_key, entries in floors.items():
+        new_entries: List[List[float]] = []
+        for site, _, _, _ in entries:
+            if site in site_iterators and site_iterators[site]:
+                pos = site_iterators[site].pop(0)
+                new_entries.append([site, pos[0], pos[1], pos[2]])
+            else:
+                new_entries.append([site, 0.0, 0.0, 0.0])  # fallback should not happen
+        updated_floors[floor_key] = new_entries
+
+    # Build orthogonal cell from updated lengths
+    cell_matrix = np.diag(cell_lengths)
+    return updated_floors, cell_matrix, tuple(cell_lengths)
 
 
 # -----------------------------------------------------------------------------

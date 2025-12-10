@@ -11,7 +11,6 @@ from ase import Atoms
 from ase.build import add_vacuum
 
 from q2D_Materials.pipeline.common import (
-    apply_glazer_tilting,
     build_cell_positions,
     default_layer_sequence,
     get_template,
@@ -64,19 +63,13 @@ def create_bulk_perovskite(
         jahn_teller_dist=jahn_teller_dist,
         layer_sequence=layer_sequence,
         xy_expansion=xy_expansion,
+        glazer_angles=glazer_angles,
+        glazer_pattern=glazer_pattern,
         dj_spacer_nn_distance=dj_spacer_nn_distance,
     )
     positions = cell_data["positions"]
     unit_cell_matrix = cell_data["unit_cell_matrix"]
-
-    positions, lattice_vec_sizes, cell_matrix = apply_glazer_tilting(
-        positions,
-        unit_cell_matrix,
-        glazer_angles,
-        glazer_pattern,
-    )
-
-    # Get site_labels if available
+    lattice_vec_sizes = np.linalg.norm(unit_cell_matrix, axis=1)
     site_labels = cell_data.get("site_labels", {})
     
     # Normalize dj_spacer for population
@@ -84,7 +77,7 @@ def create_bulk_perovskite(
     if dj_spacer_normalized is not None:
         dj_spacer_for_populate = dj_spacer_normalized
     
-    atoms = populate_positions(positions, lattice_vec_sizes, cell_matrix, A, B, X, dj_spacer=dj_spacer_for_populate, site_labels=site_labels)
+    atoms = populate_positions(positions, lattice_vec_sizes, unit_cell_matrix, A, B, X, dj_spacer=dj_spacer_for_populate, site_labels=site_labels)
     
     return atoms
 
@@ -139,18 +132,14 @@ def create_monolayer_perovskite(
         penetration=penetration,
         spacer_provided=spacer is not None,
         attachment_end=attachment_end,
+        glazer_angles=glazer_angles,
+        glazer_pattern=glazer_pattern,
         dj_spacer_nn_distance=dj_spacer_nn_distance,
     )
     positions = cell_data["positions"]
     site_labels = cell_data.get("site_labels", {})
     unit_cell_matrix = cell_data["unit_cell_matrix"]
-
-    positions, lattice_vec_sizes, cell_matrix = apply_glazer_tilting(
-        positions,
-        unit_cell_matrix,
-        glazer_angles,
-        glazer_pattern,
-    )
+    lattice_vec_sizes = np.linalg.norm(unit_cell_matrix, axis=1)
 
     # Normalize spacer (Ap_ions) - spacers can be SMILES strings or abbreviations
     # "HOLE" string in lists or as single value creates holes (unpopulated Ap positions)
@@ -172,7 +161,7 @@ def create_monolayer_perovskite(
 
     # dj_spacer_normalized already calculated above
 
-    atoms = populate_positions(positions, lattice_vec_sizes, cell_matrix, A, B, X, Ap_ions, dj_spacer=dj_spacer_normalized, site_labels=site_labels)
+    atoms = populate_positions(positions, lattice_vec_sizes, unit_cell_matrix, A, B, X, Ap_ions, dj_spacer=dj_spacer_normalized, site_labels=site_labels)
 
     # Add vacuum then center the slab symmetrically around mid-cell in Z
     add_vacuum(atoms, vacuum=vacuum)
