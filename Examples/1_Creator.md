@@ -32,7 +32,7 @@ dj = q2d.create_perovskite(
     layer_sequence="DJ",
     thickness=2,
     A_ions="MA", B_ions="Pb", X_ions="I",
-    dj_spacer="[NH3+]CCCC[NH3+]",
+    sharp_spacer="[NH3+]CCCC[NH3+]",
     glazer_angles=[0, 0, 3],
     glazer_pattern=["0", "0", "+"],
 )

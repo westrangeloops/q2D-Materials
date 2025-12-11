@@ -141,16 +141,14 @@ nix develop -c python3 Examples/plot.py
 - `Examples/6_Twist.md`: Gives a minimal twist workflow, notes how `(m, n)` sets the commensurate angle, and offers practical ranges.
 - `Examples/Twist.MD`: Longer twist reference with angle table, spacer examples, and parameter notes.
 
-### Example gallery (from `Examples/plot.py`)
-
-**Creator / Templates**  
-![creator L1](Examples/images/creator-L1.png) ![creator L1-L2](Examples/images/creator-L1-L2.png) ![creator L1-L2-L1](Examples/images/creator-L1-L2-L1.png)
+### Example gallery:
+There is some examples of what its possible to do with q2D-Materials.
 
 **Glazer tilt (top-down)**  
 ![glazer untilted](Examples/images/glazer-untitled-top.png) ![glazer tilted](Examples/images/glazer-tilted-top.png)
 
 **Monolayers**  
-![mono 1 layer](Examples/images/mono-1layer.png) ![mono 2 layer](Examples/images/mono-2layer.png)
+![mono 2 layer](Examples/images/mono-2layer.png)
 
 **Dion–Jacobson spacer**  
 ![dj bulk](Examples/images/dj_bulk.png)

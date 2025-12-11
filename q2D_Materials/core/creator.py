@@ -32,20 +32,20 @@ class q2D_creator:
         layer_sequence=None,
         spacer=None,
         penetration: float = 0.0,
-        dj_spacer=None,
+        sharp_spacer=None,
         attachment_end: str | None = None,
     ):
-        # Normalize dj_spacer: convert single value to list
-        if dj_spacer is not None and not isinstance(dj_spacer, list):
-            dj_spacer = [dj_spacer]
+        # Normalize sharp_spacer: convert single value to list
+        if sharp_spacer is not None and not isinstance(sharp_spacer, list):
+            sharp_spacer = [sharp_spacer]
         if BX_dist is None:
             B_first = B_ions[0] if isinstance(B_ions, list) else B_ions
             X_first = X_ions[0] if isinstance(X_ions, list) else X_ions
             BX_dist = auto_calculate_BX_distance(B_first, X_first)
 
-        # Normalize dj_spacer: convert single value to list
-        if dj_spacer is not None and not isinstance(dj_spacer, list):
-            dj_spacer = [dj_spacer]
+        # Normalize sharp_spacer: convert single value to list
+        if sharp_spacer is not None and not isinstance(sharp_spacer, list):
+            sharp_spacer = [sharp_spacer]
 
         if structure_type.lower() == "bulk":
             atoms = create_bulk_perovskite(
@@ -60,7 +60,7 @@ class q2D_creator:
                 jahn_teller_dist=jahn_teller_dist,
                 thickness=thickness,
                 layer_sequence=layer_sequence,
-                dj_spacer=dj_spacer,
+                sharp_spacer=sharp_spacer,
             )
         elif structure_type.lower() == "monolayer":
             atoms = create_monolayer_perovskite(
@@ -78,7 +78,7 @@ class q2D_creator:
                 layer_sequence=layer_sequence,
                 spacer=spacer,
                 penetration=penetration,
-                dj_spacer=dj_spacer,
+                sharp_spacer=sharp_spacer,
                 attachment_end=attachment_end,
             )
         else:
@@ -92,7 +92,7 @@ class q2D_creator:
             B_ions=B_ions,
             X_ions=X_ions,
             xy_expansion=xy_expansion,
-            dj_spacer=dj_spacer,
+            sharp_spacer=sharp_spacer,
         )
 
     def twist(

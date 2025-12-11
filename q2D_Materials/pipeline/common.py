@@ -106,54 +106,71 @@ def normalize_spacer(spacer):
     raise ValueError(f"Spacer must be a string (SMILES or abbreviation) or Atoms object, got {type(spacer)}")
 
 
-def calculate_max_dj_spacer_nn_distance(dj_spacer: Optional[List]) -> Optional[float]:
+def _count_nh3_groups(spacer_atoms: Atoms) -> int:
+    """Return the number of NH3-like nitrogens (N with 3 nearby H)."""
+    symbols = spacer_atoms.get_chemical_symbols()
+    positions = spacer_atoms.get_positions()
+
+    n_indices = [i for i, s in enumerate(symbols) if s == "N"]
+    h_indices = [i for i, s in enumerate(symbols) if s == "H"]
+    if not n_indices or not h_indices:
+        return 0
+
+    h_positions = positions[h_indices]
+    nh3_count = 0
+    nh_bond_cutoff = 1.2
+
+    for n_idx in n_indices:
+        n_pos = positions[n_idx]
+        distances = np.linalg.norm(h_positions - n_pos, axis=1)
+        nearby_h = np.sum(distances < nh_bond_cutoff)
+        if nearby_h == 3:
+            nh3_count += 1
+
+    return nh3_count
+
+
+def calculate_max_sharp_spacer_span(sharp_spacer: Optional[List]) -> Optional[float]:
     """
-    Calculate the maximum N-N distance from dj_spacer molecules.
-    
-    Parameters
-    ----------
-    dj_spacer : Optional[List]
-        List of double spacer molecules (Atoms objects or strings)
-        
-    Returns
-    -------
-    Optional[float]
-        Maximum N-N distance in Angstroms, or None if no valid molecules found.
-        Returns None if dj_spacer is None or empty, or if all are atomic spacers.
+    Return the maximum span required by sharp_spacer molecules.
+
+    For double-NH3 spacers, uses the N–N distance. For mono-NH3 or atomic
+    spacers, uses the single-molecule length along its main axis.
     """
-    if dj_spacer is None or len(dj_spacer) == 0:
+    if sharp_spacer is None or len(sharp_spacer) == 0:
         return None
-    
+
     from q2D_Materials.builders.spacer import calculate_double_spacer_nh3_distance
     from q2D_Materials.pipeline.common import normalize_spacer
-    
-    max_nn_distance = 0.0
-    has_molecular_spacer = False
-    
-    for ds in dj_spacer:
-        if isinstance(ds, str):
-            # Normalize string to Atoms
+    from q2D_Materials.utils.molecule_builder import get_molecule_length, align_ase_molecule_for_perovskite
+
+    max_span = 0.0
+
+    for spacer in sharp_spacer:
+        if isinstance(spacer, str):
             try:
-                ds_atoms = normalize_spacer(ds)
-            except:
+                spacer_atoms = normalize_spacer(spacer)
+            except Exception:
                 continue
-        elif isinstance(ds, Atoms):
-            ds_atoms = ds
+        elif isinstance(spacer, Atoms):
+            spacer_atoms = spacer
         else:
             continue
-        
-        # Check if atomic (single atom)
-        if len(ds_atoms) == 1:
-            continue  # Skip atomic spacers for N-N distance calculation
-        
-        has_molecular_spacer = True
-        nn_dist = calculate_double_spacer_nh3_distance(ds_atoms)
-        if nn_dist > max_nn_distance:
-            max_nn_distance = nn_dist
-    
-    if has_molecular_spacer and max_nn_distance > 0:
-        return max_nn_distance
-    return None
+
+        if len(spacer_atoms) == 0:
+            continue
+
+        nh3_count = _count_nh3_groups(spacer_atoms)
+        if nh3_count >= 2:
+            span = calculate_double_spacer_nh3_distance(spacer_atoms)
+        else:
+            aligned = align_ase_molecule_for_perovskite(spacer_atoms.copy())
+            span = get_molecule_length(aligned)
+
+        if span > max_span:
+            max_span = span
+
+    return max_span if max_span > 0 else None
 
 
 def build_cell_positions(
@@ -165,7 +182,7 @@ def build_cell_positions(
     penetration: float = 0.0,
     spacer_provided: bool = False,
     attachment_end: Optional[str] = None,
-    dj_spacer_nn_distance: Optional[float] = None,
+    sharp_spacer_span: Optional[float] = None,
     glazer_angles: Optional[List[float]] = None,
     glazer_pattern: Optional[List[str]] = None,
 ) -> Dict[str, object]:
@@ -181,7 +198,7 @@ def build_cell_positions(
         jahn_teller_dist=jahn_teller_dist,
         layer_sequence=layer_sequence,
         xy_expansion=xy_expansion,
-        dj_spacer_nn_distance=dj_spacer_nn_distance,
+        sharp_spacer_nn_distance=sharp_spacer_span,
         glazer_angles=glazer_angles,
         glazer_pattern=glazer_pattern,
     )
@@ -204,6 +221,7 @@ def build_cell_positions(
         "site_labels": site_labels,
         "unit_cell_matrix": cell_matrix,
         "lattice_vec_sizes": lattice_vec_sizes,
+        "floors_cart": list(schema.floors.values()),
     }
 
 
@@ -240,11 +258,12 @@ def populate_positions(
     positions: Dict[str, List[List[float]]],
     lattice_vec_sizes: np.ndarray,
     cell_matrix: np.ndarray,
+    floors_cart: List[List[List[float]]],
     A,
     B,
     X,
     Ap_ions=None,
-    dj_spacer=None,
+    sharp_spacer=None,
     site_labels=None,
 ) -> Atoms:
     """Populate ions using the population toolchain."""
@@ -252,11 +271,12 @@ def populate_positions(
     matrix = build_structure_matrix(positions_np, lattice_vec_sizes, cell_vectors=cell_matrix)
     return populate_structure(
         matrix=matrix,
+        floors_cart=floors_cart,
         A_ions=A,
         B_ions=B,
         X_ions=X,
         Ap_ions=Ap_ions,
-        dj_spacer=dj_spacer,
+        sharp_spacer=sharp_spacer,
         site_labels=site_labels,
     )
 
@@ -265,9 +285,9 @@ def default_layer_sequence(layer_sequence: Optional[str | List[str]], thickness:
     """Return the default layer sequence for a given thickness if not provided."""
     if layer_sequence is None:
         if structure_type.lower() == "bulk":
-            return "-".join(["L1-L2"] * thickness) + "-L1"
+            return "-".join(["L1-L2"] * thickness)
         else:
-            return "-".join(["L1-L2"] * thickness) + "-L1"
+            return "-".join(["L1-L2"] * thickness)
     elif isinstance(layer_sequence, str) and layer_sequence.upper() == "DJ":
         # DJ keyword: (L1-L2) * thickness + "-M1-M2" for bulk
         if structure_type.lower() == "bulk" and thickness > 1:
@@ -277,5 +297,8 @@ def default_layer_sequence(layer_sequence: Optional[str | List[str]], thickness:
             return f"{base_sequence}-M1-M1"
         elif structure_type.lower() == "bulk" and thickness == 1:
             return "L2-M1-M1"
+    elif isinstance(layer_sequence, str) and layer_sequence.upper() == "RP":
+        # RP keyword: fixed sequence using RP layers
+        return "L2-M1-RP1-RP2-RP1-M1"
     else:
         return layer_sequence

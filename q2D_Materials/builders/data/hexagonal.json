@@ -11,7 +11,6 @@
       ["X", 1.0, 0.0]
     ]
   },
-  "layer_sequence": ["L1", "L2"],
   "lattice_multipliers": [1.5, 1.0],
   "angles": [90.0, 90.0, 120.0]
 }

@@ -52,7 +52,7 @@ def build_floor_schema(
     jahn_teller_dist: float = 1.0,
     layer_sequence: Optional[List[str] | str] = None,
     xy_expansion: Tuple[int, int] = (1, 1),
-    dj_spacer_nn_distance: Optional[float] = None,
+    sharp_spacer_nn_distance: Optional[float] = None,
     glazer_angles: Optional[List[float]] = None,
     glazer_pattern: Optional[List[str]] = None,
 ) -> FloorSchema:
@@ -68,7 +68,7 @@ def build_floor_schema(
 
     layers, layer_names = _resolve_layers(data, layer_sequence)
     z_positions, total_height = _compute_layer_heights(
-        layers, layer_names, BX_dist=BX_dist, dj_spacer_nn_distance=dj_spacer_nn_distance
+        layers, layer_names, BX_dist=BX_dist, sharp_spacer_nn_distance=sharp_spacer_nn_distance
     )
 
     lattice_lengths = _calculate_lattice_lengths(
@@ -223,13 +223,13 @@ def _compute_layer_heights(
     layers: List[List[List[float]]],
     layer_names: List[str],
     BX_dist: float,
-    dj_spacer_nn_distance: Optional[float],
+    sharp_spacer_nn_distance: Optional[float],
 ) -> Tuple[List[float], float]:
     """
     Return absolute z for each layer start and total c-length.
 
     Any consecutive layers that both contain spacer sites (S#) use the
-    N–N gap (dj_spacer_nn_distance or 2*BX_dist). All other gaps use BX_dist.
+    spacer span (sharp_spacer_nn_distance or 2*BX_dist). All other gaps use BX_dist.
     """
     if not layer_names:
         return [], 0.0
@@ -242,7 +242,7 @@ def _compute_layer_heights(
         curr_layer = layers[idx]
         gap = BX_dist
         if _layer_has_spacer_sites(prev_layer) and _layer_has_spacer_sites(curr_layer):
-            gap = dj_spacer_nn_distance if dj_spacer_nn_distance is not None else 2.0 * BX_dist
+            gap = sharp_spacer_nn_distance if sharp_spacer_nn_distance is not None else 2.0 * BX_dist
         cumulative += gap
         z_positions.append(cumulative)
 

@@ -9,7 +9,8 @@ def main():
         ("dj_glazer_a0b+b+", [0, 1.5, 10], ["0", "+", "+"], 2, (1, 1, 2), "[NH3+]CCCCCCC[NH3+]", [-0.4, 0.4]),
         ("dj_glazer_a-a-a-", [1.5, 1.5, 15], ["-", "-", "-"], 3, (2, 2, 2), "[NH3+]CCCCCCCCC[NH3+]", 0.3),
         ("dj_glazer_a0b-c-", [0, 2.5, 5], ["0", "-", "-"], 4, (1, 1, 5), ["[NH3+]CCCCCCC[NH3+]", "CN1C=NC2=C1C(=O)N(C(=O)N2C)CC[NH3+]"], 0.7),
-        ("dj_glazer_a+b-c-", [3, 2, 6], ["+", "-", "-"], 5, (1, 1, 3), "[NH3+]CCC=CCC[NH3+]", 0.9),
+        ("dj_glazer_a+b-c-", [3, 2, 6], ["+", "-", "-"], 5, (1, 1, 3), "[NH3+]CCC=CCC[NH3+]", 0.0),
+        ("dj_glazer_atomic", [3, 2, 6], ["+", "-", "-"], 5, (1, 1, 3), "Cs", 0.0),
     ]
     for name, angles, pattern, thickness, sc, spacer, penetration in glazer_cases_dj:
         print(f"\nGlazer DJ: {name} angles={angles} pattern={pattern} sc={sc}")
@@ -20,7 +21,7 @@ def main():
             structure_type="bulk",
             xy_expansion=(sc[0], sc[1]),
             thickness=thickness,
-            dj_spacer=spacer,
+            sharp_spacer=spacer,
             penetration=penetration,
             glazer_angles=angles,
             glazer_pattern=pattern,

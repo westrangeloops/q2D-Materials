@@ -61,11 +61,22 @@ dj = q2d.create_perovskite(
     **dj_base,
     layer_sequence="DJ",
     thickness=2,
-    dj_spacer="[NH3+]CCCC[NH3+]",
+    sharp_spacer="[NH3+]CCCC[NH3+]",
     glazer_angles=[0, 0, 3],
     glazer_pattern=["0", "0", "+"],
 )
 write(IMAGES / "dj_bulk.png", dj, rotation=rotation_iso, show_unit_cell=2)
+
+# DJ atomic spacer example (Cs)
+dj_atomic = q2d.create_perovskite(
+    **(dj_base | {"xy_expansion": (2, 2)}),
+    layer_sequence="DJ",
+    thickness=3,
+    sharp_spacer="Cs",
+    glazer_angles=[3, 2, 6],
+    glazer_pattern=["+", "-", "-"],
+)
+write(IMAGES / "dj_atomic.png", dj_atomic, rotation=rotation_iso, show_unit_cell=2)
 
 # Twist storyboard: build two monolayers and twist them
 twist_mono1 = q2d.create_perovskite(structure_type="monolayer", A_ions="MA", B_ions="Pb", X_ions="I", xy_expansion=(1, 1), template="cubic", vacuum=12.0)
