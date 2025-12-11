@@ -27,6 +27,10 @@ dj = q2d.create_perovskite(
 )
 ```
 
+Render (from `Examples/plot.py`):
+
+- Bulk DJ with spacer (isometric): `Examples/images/dj_bulk.png`
+
 ## Tips
 - Provide `dj_spacer` as SMILES or pre‑built ASE `Atoms`; lists cycle across S# labels.
 - `penetration` shifts Ap/S# along ±c by `BX_dist * penetration` (per Ap site, uniform for S#).

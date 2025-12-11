@@ -20,6 +20,7 @@ rotation_top = "0x,0y,0z"
 # Bases
 cubic_base = dict(structure_type="bulk", A_ions="MA", B_ions="Pb", X_ions="I", xy_expansion=(1, 1), template="cubic")
 jago_base = dict(structure_type="bulk", A_ions="MA", B_ions="Pb", X_ions="I", xy_expansion=(1, 1), template="jagodinxky")
+dj_base = dict(structure_type="bulk", A_ions="MA", B_ions="Pb", X_ions="I", xy_expansion=(1, 1), template="cubic")
 
 # Creator / Templates (cubic)
 creator_L1 = q2d.create_perovskite(**cubic_base, layer_sequence=["L1"])
@@ -54,6 +55,17 @@ write(IMAGES / "mono-1layer.png", mono1, rotation=rotation_iso, show_unit_cell=2
 
 mono2 = q2d.create_perovskite(structure_type="monolayer", A_ions="MA", B_ions="Pb", X_ions="I", xy_expansion=(1, 1), template="cubic", vacuum=15.0, thickness=2, layer_sequence=["L1", "L2", "L1"])
 write(IMAGES / "mono-2layer.png", mono2, rotation=rotation_iso, show_unit_cell=2)
+
+# DJ (Dion–Jacobson) spacer example (bulk, spacer between S# layers)
+dj = q2d.create_perovskite(
+    **dj_base,
+    layer_sequence="DJ",
+    thickness=2,
+    dj_spacer="[NH3+]CCCC[NH3+]",
+    glazer_angles=[0, 0, 3],
+    glazer_pattern=["0", "0", "+"],
+)
+write(IMAGES / "dj_bulk.png", dj, rotation=rotation_iso, show_unit_cell=2)
 
 # Twist storyboard: build two monolayers and twist them
 twist_mono1 = q2d.create_perovskite(structure_type="monolayer", A_ions="MA", B_ions="Pb", X_ions="I", xy_expansion=(1, 1), template="cubic", vacuum=12.0)

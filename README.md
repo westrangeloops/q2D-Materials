@@ -2,7 +2,7 @@
 
 # q2D-Materials: Quasi-2D Perovskite Structure Generation
 
-Another Python package for creating bulk and quasi-2D perovskite structures with support for mixed compositions and molecular spacers.
+q2D-Materials is a Python package designed to generate bulk and quasi-2D perovskite structures with support for mixed compositions and molecular alignment. Our vision is to give you complete structural liberty: rather than locking you into hardcoded geometries, we employ a flexible template system based on layer stacking. While we include pre-defined templates for standard phases like Dion-Jacobson or Ruddlesden-Popper, we designed this framework to be hacked. We encourage you to define your own custom templates (see Examples/2_Templates.md) to build exactly the architecture your research demands.
 
 ## Quick Start
 
@@ -18,7 +18,7 @@ pip install ase numpy rdkit
 
 ![Nix Logo](https://nixos.org/_astro/nixos-logo-default-gradient-black-regular-horizontal-none.BPpok6mb_JppMK.svg)
 
-**Why Nix?** For computational chemistry and materials science, reproducibility is critical—your results should be independent of your system's Python version or library installations. Nix ensures that everyone working with q2D-Materials uses identical environments with the exact same versions of ASE, RDKit, NumPy, and all dependencies, eliminating the classic "works on my machine" problem. This is especially valuable when sharing structures with collaborators or reproducing published results, as molecular structure generation is sensitive to numerical precision and library versions.
+**Why Nix?** We favor reproducibility: one command, same deps for everyone.
 
 ### Basic Usage
 
@@ -40,9 +40,7 @@ write("MAPbI3.vasp", bulk, sort=True)
 
 ## Examples
 
-### Bulk Perovskite with All Parameters (current API)
-
-![Bulk Perovskite Structure](Logos/BULK.png)
+### Bulk Perovskite with All Parameters
 
 ```python
 from q2D_Materials.core.creator import q2D_creator
@@ -64,7 +62,7 @@ bulk = q2d.create_perovskite(
 write('MAPbI3_bulk_complete.vasp', bulk, sort=True)
 ```
 
-### Monolayer (key differences)
+### Monolayer
 
 ```python
 from q2D_Materials.core.creator import q2D_creator
@@ -129,7 +127,53 @@ print(recommendations['spacer'])  # Top 5 spacers
 
 ## Documentation
 
-For tutorials and examples, see the `Examples/` folder (Creator, Templates, Glazer, Jagodzinski, Monolayer, Twist).
+The `Examples/` folder holds short, focused guides. Regenerate the visuals anytime with:
+
+```bash
+nix develop -c python3 Examples/plot.py
+```
+
+- `Examples/1_Creator.md`: Separates template geometry from chemistry inputs; shows pattern cycling and how `layer_sequence` reuses one template.
+- `Examples/2_Templates.md`: Builds simple cubic and Jagodzinski templates, keeping layer swaps and stack strings front and center.
+- `Examples/3_Glazer.md`: Explains tilts with angle/pattern pairs and shows a top-down comparison of untilted vs rotated octahedra.
+- `Examples/4_Jagodzinski.md`: Walks through Jagodzinski stacking strings, the helper that expands `c/h` codes, and how it maps to `layer_sequence`.
+- `Examples/5_Monolayer.md`: Highlights what changes in 2D (`structure_type="monolayer"`), vacuum padding, thickness repeats, spacers, and penetration.
+- `Examples/6_Twist.md`: Gives a minimal twist workflow, notes how `(m, n)` sets the commensurate angle, and offers practical ranges.
+- `Examples/Twist.MD`: Longer twist reference with angle table, spacer examples, and parameter notes.
+
+### Example gallery (from `Examples/plot.py`)
+
+**Creator / Templates**  
+![creator L1](Examples/images/creator-L1.png) ![creator L1-L2](Examples/images/creator-L1-L2.png) ![creator L1-L2-L1](Examples/images/creator-L1-L2-L1.png)
+
+**Glazer tilt (top-down)**  
+![glazer untilted](Examples/images/glazer-untitled-top.png) ![glazer tilted](Examples/images/glazer-tilted-top.png)
+
+**Monolayers**  
+![mono 1 layer](Examples/images/mono-1layer.png) ![mono 2 layer](Examples/images/mono-2layer.png)
+
+**Dion–Jacobson spacer**  
+![dj bulk](Examples/images/dj_bulk.png)
+
+**Twisted bilayer**  
+![twist layer 1](Examples/images/twist-mono1.png) ![twist layer 2](Examples/images/twist-mono2.png) ![twist bilayer](Examples/images/twist-bilayer.png)
+
+### Quick start (recap)
+
+```bash
+# enter the reproducible env
+nix develop
+
+# make a simple cubic bulk and save it
+python3 - <<'PY'
+from q2D_Materials.core.creator import q2D_creator
+from ase.io import write
+
+q2d = q2D_creator()
+bulk = q2d.create_perovskite(structure_type="bulk", A_ions="MA", B_ions="Pb", X_ions="I", xy_expansion=(1, 1), template="cubic")
+write("MAPbI3.vasp", bulk, sort=True)
+PY
+```
 
 ## License
 

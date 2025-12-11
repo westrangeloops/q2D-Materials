@@ -271,13 +271,11 @@ def default_layer_sequence(layer_sequence: Optional[str | List[str]], thickness:
     elif isinstance(layer_sequence, str) and layer_sequence.upper() == "DJ":
         # DJ keyword: (L1-L2) * thickness + "-M1-M2" for bulk
         if structure_type.lower() == "bulk" and thickness > 1:
-            base_sequence = "-".join(["L1-L2"] * thickness)
+            parts = ["L2", "L1"] * thickness
+            parts.pop()
+            base_sequence = "-".join(parts)
             return f"{base_sequence}-M1-M1"
         elif structure_type.lower() == "bulk" and thickness == 1:
             return "L2-M1-M1"
-        else:
-            # For monolayer, just use the base sequence
-            return "-".join(["L1-L2"] * thickness) + "-L1"
     else:
         return layer_sequence
-
