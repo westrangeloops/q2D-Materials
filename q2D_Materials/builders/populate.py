@@ -422,8 +422,8 @@ def _place_s_pair(
 ) -> Tuple[Atoms, set]:
     """Place sharp spacers for a pair of adjacent floors (floor and ceiling).
     
-    Processes S# sites on-the-fly with no global state. Each S# position is populated
-    only once - once as floor (with 'bottom' attachment) and once as ceiling (with 'top' attachment).
+    Processes S# sites on-the-fly with no global state. Each S# position can be populated
+    once as floor (with 'bottom' attachment) and once as ceiling (with 'top' attachment).
     A layer can be both floor and ceiling for different pairs, and molecules will have
     different attachment ends accordingly.
     
@@ -443,7 +443,7 @@ def _place_s_pair(
     structure : Atoms
         Structure with molecules added
     placed_positions : set
-        Set of position keys (x, y, z rounded) that were placed in this call
+        Set of (position_key, role) tuples where role is 'floor' or 'ceiling'
     """
     from q2D_Materials.builders.spacer import place_double_spacer_between_positions
 
@@ -459,7 +459,8 @@ def _place_s_pair(
         """Create a position key for deduplication (x, y, z rounded to 3 decimals)."""
         return (round(float(pos[0]), 3), round(float(pos[1]), 3), round(float(pos[2]), 3))
 
-    # Track positions placed in THIS function call
+    # Track (position, role) pairs placed in THIS function call
+    # This allows same position to be placed as both floor and ceiling with different orientations
     placed_in_this_call = set()
     
     floor_s = _collect_s(floor_entries)
@@ -511,9 +512,9 @@ def _place_s_pair(
                 placed = place_double_spacer_between_positions(mol_template.copy(), p_floor, p_ceiling)
                 if placed is not None and len(placed) > 0:
                     structure = add_atoms(structure, placed)
-                    # Track both positions for double spacer
-                    placed_in_this_call.add(_pos_key(p_floor))
-                    placed_in_this_call.add(_pos_key(p_ceiling))
+                    # Track both positions with their roles for double spacer
+                    placed_in_this_call.add((_pos_key(p_floor), 'floor'))
+                    placed_in_this_call.add((_pos_key(p_ceiling), 'ceiling'))
                 else:
                     print(f"Warning: place_double_spacer_between_positions returned invalid molecule for label {label}")
             except Exception as e:
@@ -523,12 +524,13 @@ def _place_s_pair(
                 continue
         else:
             # Mono spacer: place on floor with 'bottom' attachment
-            # Each position is populated only once as floor
+            # Track by (position, role) to allow same position as floor and ceiling
             for _, pos in floor_list:
                 pos_key = _pos_key(pos)
-                if pos_key in placed_in_this_call:
-                    continue  # Skip if already placed in this call
-                placed_in_this_call.add(pos_key)
+                role_key = (pos_key, 'floor')
+                if role_key in placed_in_this_call:
+                    continue  # Skip if already placed as floor in this call
+                placed_in_this_call.add(role_key)
                 placed = _place_mono_sharp_spacer(mol_template, pos, 'bottom')
                 if placed is None or len(placed) == 0:
                     print(f"Warning: Failed to place mono sharp_spacer for label {label} at floor")
@@ -550,12 +552,13 @@ def _place_s_pair(
             continue
         
         # Mono spacer: place on ceiling with 'top' attachment
-        # Each position is populated only once as ceiling
+        # Track by (position, role) to allow same position as floor and ceiling
         for _, pos in ceiling_list:
             pos_key = _pos_key(pos)
-            if pos_key in placed_in_this_call:
-                continue  # Skip if already placed in this call
-            placed_in_this_call.add(pos_key)
+            role_key = (pos_key, 'ceiling')
+            if role_key in placed_in_this_call:
+                continue  # Skip if already placed as ceiling in this call
+            placed_in_this_call.add(role_key)
             placed = _place_mono_sharp_spacer(mol_template, pos, 'top')
             if placed is None or len(placed) == 0:
                 print(f"Warning: Failed to place mono sharp_spacer for label {label} at ceiling")
@@ -713,28 +716,30 @@ def populate_structure(
     
     # Handle S# per adjacent floor pairs - each pair is processed independently
     # Each pair consists of floor (lower) and ceiling (upper)
-    # Track all placed positions across pairs to ensure each S# position is populated only once
-    all_placed_positions = set()
+    # Track all placed (position, role) pairs across pairs
+    # Same position can be placed as both floor and ceiling with different orientations
+    all_placed_roles = set()  # Set of (position_key, role) tuples
     for i in range(len(floors) - 1):
         _, floor_entries = floors[i]
         _, ceiling_entries = floors[i + 1]
         
-        # Filter entries to exclude positions already placed
-        # A position can be both floor and ceiling in different pairs, but should only be placed once
-        def _filter_placed(entries, placed_set):
-            """Filter out entries whose positions have already been placed."""
+        # Filter entries to exclude positions already placed in the same role
+        # A position can be placed as both floor and ceiling in different pairs
+        def _filter_placed_by_role(entries, placed_set, role):
+            """Filter out entries whose positions have already been placed in this role."""
             filtered = []
             for site_type, ion, pos, label in entries:
                 if site_type.startswith('S') and len(site_type) > 1 and site_type[1:].isdigit():
                     pos_key = (round(float(pos[0]), 3), round(float(pos[1]), 3), round(float(pos[2]), 3))
-                    if pos_key in placed_set:
-                        continue  # Skip already placed positions
+                    role_key = (pos_key, role)
+                    if role_key in placed_set:
+                        continue  # Skip if already placed in this role
                 filtered.append((site_type, ion, pos, label))
             return filtered
         
-        # Filter floor and ceiling entries to exclude already-placed positions
-        floor_filtered = _filter_placed(floor_entries, all_placed_positions)
-        ceiling_filtered = _filter_placed(ceiling_entries, all_placed_positions)
+        # Filter floor and ceiling entries to exclude already-placed positions in same role
+        floor_filtered = _filter_placed_by_role(floor_entries, all_placed_roles, 'floor')
+        ceiling_filtered = _filter_placed_by_role(ceiling_entries, all_placed_roles, 'ceiling')
         
         # Place molecules for this pair
         structure, placed_in_call = _place_s_pair(
@@ -744,8 +749,8 @@ def populate_structure(
             structure
         )
         
-        # Update global tracking of placed positions
-        all_placed_positions.update(placed_in_call)
+        # Update global tracking of placed (position, role) pairs
+        all_placed_roles.update(placed_in_call)
     
     return structure
 
