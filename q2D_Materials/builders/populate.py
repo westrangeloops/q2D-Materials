@@ -552,6 +552,34 @@ def _sort_spacer_entries(entries: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     )
 
 
+def _adjust_positions_for_double_spacer(
+    ground_pos: np.ndarray,
+    sky_pos: np.ndarray,
+    spacer_template: Atoms,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Project ground/sky anchors onto the molecule's intrinsic N-N span."""
+    from q2D_Materials.builders.spacer import calculate_double_spacer_nh3_distance
+
+    try:
+        mol_length = float(calculate_double_spacer_nh3_distance(spacer_template))
+    except Exception:
+        mol_length = 0.0
+
+    vec = sky_pos - ground_pos
+    dist = np.linalg.norm(vec)
+
+    if mol_length <= 0.0 or dist <= 1e-6:
+        return ground_pos, sky_pos
+
+    unit = vec / dist
+    midpoint = (ground_pos + sky_pos) * 0.5
+    half_len = 0.5 * mol_length
+
+    ground_new = midpoint - unit * half_len
+    sky_new = midpoint + unit * half_len
+    return ground_new, sky_new
+
+
 class _SharpSpacerSequence:
     """Simple cursor that cycles through user-provided sharp spacers across floor pairs."""
 
@@ -616,6 +644,12 @@ def populate_sharp(
                     unit = direction / dist
                     ground_pos = ground_pos - unit
                     sky_pos = sky_pos + unit
+
+                ground_pos, sky_pos = _adjust_positions_for_double_spacer(
+                    ground_pos,
+                    sky_pos,
+                    spacer_template,
+                )
 
                 placed = place_double_spacer_between_positions(
                     spacer_template.copy(),
