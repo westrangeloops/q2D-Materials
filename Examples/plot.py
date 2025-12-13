@@ -78,6 +78,54 @@ dj_atomic = q2d.create_perovskite(
 )
 write(IMAGES / "dj_atomic.png", dj_atomic, rotation=rotation_iso, show_unit_cell=2)
 
+# Ruddlesden–Popper storyboard (three representative shots)
+rp_base = q2d.create_perovskite(
+    structure_type="bulk",
+    template="cubic",
+    layer_sequence="RP",
+    thickness=2,
+    xy_expansion=(1, 1),
+    A_ions="MA",
+    B_ions="Pb",
+    X_ions="I",
+    sharp_spacer="[NH3+]CCCC[NH3+]",
+    glazer_angles=[0, 0, 5],
+    glazer_pattern=["0", "0", "+"],
+)
+write(IMAGES / "rp_base_side.png", rp_base, rotation=rotation_iso, show_unit_cell=2)
+
+rp_glazer = q2d.create_perovskite(
+    structure_type="bulk",
+    template="cubic",
+    layer_sequence="RP",
+    thickness=3,
+    xy_expansion=(2, 2),
+    A_ions="MA",
+    B_ions="Pb",
+    X_ions="I",
+    sharp_spacer=["[NH3+]CCCCCCC", "[NH3+]CCCC[NH3+]"],
+    glazer_angles=[0, 2, 12],
+    glazer_pattern=["0", "+", "+"],
+    penetration=[-0.3, 0.3],
+)
+write(IMAGES / "rp_glazer_top.png", rp_glazer, rotation=rotation_top, show_unit_cell=2)
+
+rp_atomic = q2d.create_perovskite(
+    structure_type="bulk",
+    template="cubic",
+    layer_sequence="RP",
+    thickness=4,
+    xy_expansion=(1, 1),
+    A_ions="MA",
+    B_ions="Pb",
+    X_ions="I",
+    sharp_spacer="Cs",
+    glazer_angles=[3, 2, 6],
+    glazer_pattern=["+", "-", "-"],
+    penetration=0.2,
+)
+write(IMAGES / "rp_atomic_side.png", rp_atomic, rotation=rotation_iso, show_unit_cell=2)
+
 # Twist storyboard: build two monolayers and twist them
 twist_mono1 = q2d.create_perovskite(structure_type="monolayer", A_ions="MA", B_ions="Pb", X_ions="I", xy_expansion=(1, 1), template="cubic", vacuum=12.0)
 twist_mono2 = q2d.create_perovskite(structure_type="monolayer", A_ions="FA", B_ions="Sn", X_ions="Br", xy_expansion=(1, 1), template="cubic", vacuum=12.0)

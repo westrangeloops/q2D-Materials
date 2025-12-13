@@ -121,3 +121,23 @@ Next: keep templates short, tell the stacking story with 2–3 frames, and vary 
 - Add `S#` entries on two consecutive layers to host DJ spacers.
 - XY expansion auto-renames `S#` so each copy is unique; pairing is by label, not name.
 - Gaps between spacer layers use the spacer N–N distance (fallback `2*BX_dist`).
+
+### How the cubic template encodes S#
+The same `cubic.json` that drives the simple L1/L2 stacks also carries two extra layers—`M1` and `RP1`—each containing `S1` sites:
+
+```json
+"M1": [
+  ["S1", 0.0, 0.0],
+  ["X", 0.5, 0.5]
+],
+"RP1": [
+  ["X", 0.0, 0.0],
+  ["S1", 0.5, 0.5]
+]
+```
+
+- When your `layer_sequence` inserts **two consecutive layers that both include `S#` (M1→RP1, RP1→M1, etc.)** the population step treats the first as the **ground** and the next as the **sky**. Because both layers reuse the same label (`S1`) the code can align the same anchor pair no matter how many times the sequence repeats.
+- `RP1` sits between perovskite slabs (`RP2` is the spacer-only bridge), so `layer_sequence="RP"` expands to `L2-M1-RP1-RP2-RP1-M1`. That means every RP block automatically creates two S# pairs (M1↔RP1) for the organic/atomic spacer to occupy.
+- XY expansion duplicates each `S1` into `S2`, `S3`, … so every image cell has a unique label. The populate logic then cycles through the `sharp_spacer` list (or reuses the single entry) while preserving which ground/sky positions belong together.
+
+Net effect: you never hard-code spacer coordinates in Python. Defining `S#` rows inside `cubic.json` is enough for Ruddlesden–Popper and Dion–Jacobson flows to know where to anchor spacers, how to orient double NH₃ molecules, and how to offset mono spacers on each side of the slab.

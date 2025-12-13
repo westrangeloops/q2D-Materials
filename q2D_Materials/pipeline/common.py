@@ -130,7 +130,10 @@ def _count_nh3_groups(spacer_atoms: Atoms) -> int:
     return nh3_count
 
 
-def calculate_max_sharp_spacer_span(sharp_spacer: Optional[List]) -> Optional[float]:
+def calculate_max_sharp_spacer_span(
+    sharp_spacer: Optional[List],
+    atomic_span: Optional[float] = None,
+) -> Optional[float]:
     """
     Return the maximum span required by sharp_spacer molecules.
 
@@ -145,6 +148,8 @@ def calculate_max_sharp_spacer_span(sharp_spacer: Optional[List]) -> Optional[fl
     from q2D_Materials.utils.molecule_builder import get_molecule_length, align_ase_molecule_for_perovskite
 
     max_span = 0.0
+    saw_valid = False
+    atomic_only = True
 
     for spacer in sharp_spacer:
         if isinstance(spacer, str):
@@ -160,6 +165,10 @@ def calculate_max_sharp_spacer_span(sharp_spacer: Optional[List]) -> Optional[fl
         if len(spacer_atoms) == 0:
             continue
 
+        saw_valid = True
+        if len(spacer_atoms) > 1:
+            atomic_only = False
+
         nh3_count = _count_nh3_groups(spacer_atoms)
         if nh3_count >= 2:
             span = calculate_double_spacer_nh3_distance(spacer_atoms)
@@ -170,7 +179,13 @@ def calculate_max_sharp_spacer_span(sharp_spacer: Optional[List]) -> Optional[fl
         if span > max_span:
             max_span = span
 
-    return max_span if max_span > 0 else None
+    if max_span > 0:
+        return max_span
+
+    if saw_valid and atomic_only and atomic_span is not None:
+        return float(atomic_span)
+
+    return None
 
 
 def build_cell_positions(

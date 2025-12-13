@@ -55,7 +55,10 @@ def create_bulk_perovskite(
 
         from q2D_Materials.pipeline.common import calculate_max_sharp_spacer_span
 
-        sharp_spacer_span = calculate_max_sharp_spacer_span(sharp_spacer_normalized)
+        sharp_spacer_span = calculate_max_sharp_spacer_span(
+            sharp_spacer_normalized,
+            atomic_span=BX_dist,
+        )
     
     tpl = get_template(template)
     cell_data = build_cell_positions(
@@ -132,7 +135,10 @@ def create_monolayer_perovskite(
 
         from q2D_Materials.pipeline.common import calculate_max_sharp_spacer_span
 
-        sharp_spacer_span = calculate_max_sharp_spacer_span(sharp_spacer_normalized)
+        sharp_spacer_span = calculate_max_sharp_spacer_span(
+            sharp_spacer_normalized,
+            atomic_span=BX_dist,
+        )
 
     tpl = get_template(template)
     cell_data = build_cell_positions(

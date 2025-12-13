@@ -7,7 +7,7 @@ to convert abstract position matrices into complete ASE Atoms objects.
 
 import numpy as np
 from ase import Atoms
-from typing import Union, List, Tuple, Dict, Optional
+from typing import Union, List, Tuple, Dict, Optional, Any
 
 from .q_builder import QBuilderOutput
 from .templates import FloorSchema, flatten_floor_schema
@@ -386,186 +386,269 @@ def _place_mono_sharp_spacer(molecule: Atoms, position: np.ndarray, attachment_e
     return place_spacer_at_location(aligned, position, attachment_end)
 
 
-def _process_floor_non_s(
-    floor_entries: List[Tuple[str, Union[str, Atoms], np.ndarray, str]],
-    atomic_symbols: List,
-    atomic_positions: List,
-    molecular_atoms: List,
-):
-    """Process a single floor's non-S sites (A/B/X/Ap), appending to collectors."""
-    for site_type, ion, pos, label in floor_entries:
-        if site_type.startswith('S') and len(site_type) > 1 and site_type[1:].isdigit():
-            continue  # skip S#, handled separately
-
-        if isinstance(ion, Atoms):
-            molecular_atoms.append((ion, np.array([pos[0], pos[1], pos[2]]), site_type, label))
+def _build_floor_slabs(
+    resolved_floors: List[List[Tuple[str, Union[str, Atoms], np.ndarray, str]]]
+) -> List[Dict[str, Any]]:
+    """Create JSON-style slabs per floor containing structured metadata."""
+    slabs: List[Dict[str, Any]] = []
+    for entries in resolved_floors:
+        if not entries:
             continue
+        slab: Dict[str, Any] = {
+            "z": float(entries[0][2][2]),
+            "entries": [],
+            "sites": {},
+            "s_labels": {},
+        }
+        for site_type, ion, pos, label in entries:
+            record = {
+                "site_type": site_type,
+                "ion": ion,
+                "position": np.array(pos, dtype=float),
+                "label": label,
+            }
+            slab["entries"].append(record)
+            slab.setdefault("sites", {}).setdefault(site_type, []).append(record)
+            if site_type.startswith('S') and len(site_type) > 1 and site_type[1:].isdigit():
+                slab.setdefault("s_labels", {}).setdefault(label, []).append(record)
+        slabs.append(slab)
+    return slabs
 
-        if site_type in ['A', 'Ap']:
-            if isinstance(ion, str):
+
+def _add_atomic_site(structure: Atoms, symbol: str, position: np.ndarray) -> Atoms:
+    """Add a single atomic ion to the structure."""
+    if symbol is None:
+        return structure
+    atom = Atoms(symbol, positions=[np.array(position, dtype=float)])
+    return add_atoms(structure, atom)
+
+
+def _place_a_molecule(structure: Atoms, molecule: Atoms, position: np.ndarray) -> Atoms:
+    """Align and place a molecular A-site at the requested coordinates."""
+    mol_aligned = align_ase_molecule_for_perovskite(molecule.copy())
+    mol_placed = place_atoms_at_location(mol_aligned, position)
+    return add_atoms(structure, mol_placed)
+
+
+def _place_ap_molecule(structure: Atoms, molecule: Atoms, position: np.ndarray) -> Atoms:
+    """Place an Ap spacer respecting whether it sits on ground or sky."""
+    cell = structure.cell if structure.cell is not None else np.eye(3)
+    try:
+        z_extent = float(cell[2][2])
+    except Exception:
+        z_extent = float(np.linalg.norm(cell[2]))
+    z_center = z_extent / 2.0 if z_extent else 0.0
+    attachment_end = 'top' if float(position[2]) < z_center else 'bottom'
+    mol_aligned = align_ase_molecule_for_perovskite(molecule.copy(), attachment_end=attachment_end)
+    mol_placed = place_spacer_at_location(mol_aligned, position, attachment_end)
+    return add_atoms(structure, mol_placed)
+
+
+def populate_a_sites(structure: Atoms, slab: Dict[str, Any]) -> Atoms:
+    """Populate A and Ap sites for a ground slab."""
+    for entry in slab.get("sites", {}).get('A', []):
+        ion = entry["ion"]
+        position = entry["position"]
+        if ion is None:
+            continue
+        if isinstance(ion, Atoms):
+            structure = _place_a_molecule(structure, ion, position)
+            continue
+        if isinstance(ion, str):
+            try:
+                if is_molecular_a_cation(ion):
+                    mol = get_a_site_object(ion)
+                    structure = _place_a_molecule(structure, mol, position)
+                    continue
+            except (ImportError, ValueError):
+                pass
+        structure = _add_atomic_site(structure, ion, position)
+
+    for entry in slab.get("sites", {}).get('Ap', []):
+        ion = entry["ion"]
+        position = entry["position"]
+        if ion is None:
+            continue
+        if isinstance(ion, Atoms):
+            structure = _place_ap_molecule(structure, ion, position)
+            continue
+        if isinstance(ion, str):
+            try:
+                if is_molecular_a_cation(ion):
+                    mol = get_a_site_object(ion)
+                    structure = _place_ap_molecule(structure, mol, position)
+                    continue
+            except (ImportError, ValueError):
+                pass
+        structure = _add_atomic_site(structure, ion, position)
+
+    return structure
+
+
+def populate_b_sites(structure: Atoms, slab: Dict[str, Any]) -> Atoms:
+    """Populate B sites for a ground slab."""
+    for entry in slab.get("sites", {}).get('B', []):
+        ion = entry["ion"]
+        position = entry["position"]
+        if ion is None:
+            continue
+        if isinstance(ion, Atoms):
+            structure = add_atoms(structure, place_atoms_at_location(ion.copy(), position))
+        else:
+            structure = _add_atomic_site(structure, ion, position)
+    return structure
+
+
+def populate_x_sites(structure: Atoms, slab: Dict[str, Any]) -> Atoms:
+    """Populate X sites for a ground slab."""
+    for entry in slab.get("sites", {}).get('X', []):
+        ion = entry["ion"]
+        position = entry["position"]
+        if ion is None:
+            continue
+        if isinstance(ion, Atoms):
+            structure = add_atoms(structure, place_atoms_at_location(ion.copy(), position))
+        else:
+            structure = _add_atomic_site(structure, ion, position)
+    return structure
+
+
+def _slab_has_spacer_sites(slab: Dict[str, Any]) -> bool:
+    """Return True if the slab contains any S# entries."""
+    return bool(slab.get("s_labels"))
+
+
+def _prepare_sharp_template(template: Union[str, Atoms]) -> Optional[Atoms]:
+    """Normalize sharp spacer template to an Atoms object if possible."""
+    if isinstance(template, Atoms):
+        return template.copy()
+    if isinstance(template, str):
+        try:
+            from q2D_Materials.pipeline.common import normalize_spacer
+            normalized = normalize_spacer(template)
+            if isinstance(normalized, Atoms):
+                return normalized
+        except Exception:
+            normalized = normalize_a_site(template)
+            if isinstance(normalized, Atoms):
+                return normalized
+            if isinstance(normalized, str):
                 try:
-                    if is_molecular_a_cation(ion):
-                        mol_ion = get_a_site_object(ion)
-                        molecular_atoms.append((mol_ion, pos, site_type, label))
-                        continue
-                except (ImportError, ValueError):
-                    pass
-        atomic_symbols.append(ion)
-        atomic_positions.append(pos)
+                    return Atoms(normalized, positions=[[0.0, 0.0, 0.0]])
+                except Exception:
+                    return None
+    return None
 
 
-def _place_s_pair(
-    floor_entries: List[Tuple[str, Union[str, Atoms], np.ndarray, str]],
-    ceiling_entries: List[Tuple[str, Union[str, Atoms], np.ndarray, str]],
-    sharp_spacer_normalized: Optional[List[Union[str, Atoms]]],
+def _sort_spacer_entries(entries: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Sort S-site entries deterministically for pairing ground and sky."""
+    return sorted(
+        entries,
+        key=lambda e: (
+            round(float(e["position"][0]), 4),
+            round(float(e["position"][1]), 4),
+            round(float(e["position"][2]), 4),
+        ),
+    )
+
+
+class _SharpSpacerSequence:
+    """Simple cursor that cycles through user-provided sharp spacers across floor pairs."""
+
+    def __init__(self, templates: Optional[List[Union[str, Atoms]]]):
+        self.templates = templates or []
+        self.index = 0
+
+    def has_templates(self) -> bool:
+        return len(self.templates) > 0
+
+    def next_template(self) -> Optional[Union[str, Atoms]]:
+        if not self.templates:
+            return None
+        template = self.templates[self.index % len(self.templates)]
+        self.index += 1
+        return template
+
+
+def populate_sharp(
     structure: Atoms,
-) -> Tuple[Atoms, set]:
-    """Place sharp spacers for a pair of adjacent floors (floor and ceiling).
-    
-    Processes S# sites on-the-fly with no global state. Each S# position can be populated
-    once as floor (with 'bottom' attachment) and once as ceiling (with 'top' attachment).
-    A layer can be both floor and ceiling for different pairs, and molecules will have
-    different attachment ends accordingly.
-    
-    Parameters
-    ----------
-    floor_entries : list
-        Entries from the floor (lower layer) of this pair
-    ceiling_entries : list
-        Entries from the ceiling (upper layer) of this pair
-    sharp_spacer_normalized : list or None
-        Normalized spacer molecules to assign to S# labels
-    structure : Atoms
-        Current structure to add molecules to
-        
-    Returns
-    -------
-    structure : Atoms
-        Structure with molecules added
-    placed_positions : set
-        Set of (position_key, role) tuples where role is 'floor' or 'ceiling'
-    """
+    ground_slab: Dict[str, Any],
+    sky_slab: Optional[Dict[str, Any]],
+    sharp_sequence: Optional[_SharpSpacerSequence],
+) -> Atoms:
+    """Populate sharp (S#) sites between a ground slab and an optional sky slab."""
+    if sharp_sequence is None or not sharp_sequence.has_templates():
+        return structure
+    if sky_slab is None:
+        return structure
+    if not _slab_has_spacer_sites(ground_slab) or not _slab_has_spacer_sites(sky_slab):
+        return structure
+
+    ground_labels = ground_slab.get("s_labels", {})
+    sky_labels = sky_slab.get("s_labels", {})
+    shared_labels = sorted(set(ground_labels.keys()) & set(sky_labels.keys()))
+    if not shared_labels:
+        return structure
+
     from q2D_Materials.builders.spacer import place_double_spacer_between_positions
 
-    def _collect_s(entries):
-        """Collect S# sites from floor/ceiling entries, grouped by label."""
-        out = {}
-        for site_type, ion, pos, label in entries:
-            if site_type.startswith('S') and len(site_type) > 1 and site_type[1:].isdigit():
-                out.setdefault(label, []).append((ion, pos))
-        return out
-
-    def _pos_key(pos):
-        """Create a position key for deduplication (x, y, z rounded to 3 decimals)."""
-        return (round(float(pos[0]), 3), round(float(pos[1]), 3), round(float(pos[2]), 3))
-
-    # Track (position, role) pairs placed in THIS function call
-    # This allows same position to be placed as both floor and ceiling with different orientations
-    placed_in_this_call = set()
-    
-    floor_s = _collect_s(floor_entries)
-    ceiling_s = _collect_s(ceiling_entries)
-
-    # Process each label found in this floor pair only
-    # Get unique labels from both floor and ceiling, sorted for consistent ordering
-    all_labels = sorted(set(list(floor_s.keys()) + list(ceiling_s.keys())))
-    
-    # Assign molecules to labels for THIS floor pair only (no global state)
-    label_to_mol_local: Dict[str, Atoms] = {}
-    if sharp_spacer_normalized is not None and len(sharp_spacer_normalized) > 0:
-        for idx, label in enumerate(all_labels):
-            ion = sharp_spacer_normalized[idx % len(sharp_spacer_normalized)]
-            if isinstance(ion, Atoms):
-                label_to_mol_local[label] = ion.copy()
-            elif isinstance(ion, str):
-                try:
-                    from q2D_Materials.pipeline.common import normalize_spacer
-                    label_to_mol_local[label] = normalize_spacer(ion)
-                except Exception as e:
-                    print(f"Warning: Failed to normalize sharp_spacer for label {label} in floor pair: {e}")
-                    continue
-            else:
-                label_to_mol_local[label] = ion
-
-    # Process labels found in floor first
-    for label, floor_list in floor_s.items():
-        if label not in label_to_mol_local:
+    for label in shared_labels:
+        template = sharp_sequence.next_template()
+        spacer_template = _prepare_sharp_template(template)
+        if spacer_template is None:
             continue
-        mol_template = label_to_mol_local[label]
-        ceiling_list = ceiling_s.get(label, [])
 
-        nh3_groups = _count_nh3_groups(mol_template)
+        ground_entries = _sort_spacer_entries(ground_labels.get(label, []))
+        sky_entries = _sort_spacer_entries(sky_labels.get(label, []))
+        if not ground_entries or not sky_entries:
+            continue
 
-        if nh3_groups >= 2 and floor_list and ceiling_list:
-            # Double spacer: connect floor and ceiling positions
-            p_floor = np.array(floor_list[0][1])
-            p_ceiling = np.array(ceiling_list[0][1])
+        nh3_groups = _count_nh3_groups(spacer_template)
 
-            if np.any(np.isnan(p_floor)) or np.any(np.isnan(p_ceiling)):
-                print(f"Warning: Invalid positions for S-label {label} (NaN detected)")
-                continue
-            if np.linalg.norm(p_ceiling - p_floor) < 1e-6:
-                print(f"Warning: Positions for S-label {label} are too close")
-                continue
+        if nh3_groups >= 2:
+            pair_count = min(len(ground_entries), len(sky_entries))
+            for pair_idx in range(pair_count):
+                ground_pos = np.array(ground_entries[pair_idx]["position"], dtype=float)
+                sky_pos = np.array(sky_entries[pair_idx]["position"], dtype=float)
+                direction = sky_pos - ground_pos
+                dist = np.linalg.norm(direction)
+                if dist > 1e-6:
+                    unit = direction / dist
+                    ground_pos = ground_pos - unit
+                    sky_pos = sky_pos + unit
 
-            try:
-                placed = place_double_spacer_between_positions(mol_template.copy(), p_floor, p_ceiling)
+                placed = place_double_spacer_between_positions(
+                    spacer_template.copy(),
+                    ground_pos,
+                    sky_pos,
+                )
                 if placed is not None and len(placed) > 0:
                     structure = add_atoms(structure, placed)
-                    # Track both positions with their roles for double spacer
-                    placed_in_this_call.add((_pos_key(p_floor), 'floor'))
-                    placed_in_this_call.add((_pos_key(p_ceiling), 'ceiling'))
-                else:
-                    print(f"Warning: place_double_spacer_between_positions returned invalid molecule for label {label}")
-            except Exception as e:
-                print(f"Warning: Failed to place double spacer for label {label}: {e}")
-                import traceback
-                traceback.print_exc()
-                continue
         else:
-            # Mono spacer: place on floor with 'bottom' attachment
-            # Track by (position, role) to allow same position as floor and ceiling
-            for _, pos in floor_list:
-                pos_key = _pos_key(pos)
-                role_key = (pos_key, 'floor')
-                if role_key in placed_in_this_call:
-                    continue  # Skip if already placed as floor in this call
-                placed_in_this_call.add(role_key)
-                placed = _place_mono_sharp_spacer(mol_template, pos, 'bottom')
-                if placed is None or len(placed) == 0:
-                    print(f"Warning: Failed to place mono sharp_spacer for label {label} at floor")
-                    continue
-                structure = add_atoms(structure, placed)
-    
-    # Process labels found in ceiling
-    for label, ceiling_list in ceiling_s.items():
-        if label not in label_to_mol_local:
-            continue
-        mol_template = label_to_mol_local[label]
-        
-        # Check if this label was processed as double spacer above
-        floor_list = floor_s.get(label, [])
-        nh3_groups = _count_nh3_groups(mol_template)
-        
-        if nh3_groups >= 2 and floor_list and ceiling_list:
-            # Already processed as double spacer above, skip
-            continue
-        
-        # Mono spacer: place on ceiling with 'top' attachment
-        # Track by (position, role) to allow same position as floor and ceiling
-        for _, pos in ceiling_list:
-            pos_key = _pos_key(pos)
-            role_key = (pos_key, 'ceiling')
-            if role_key in placed_in_this_call:
-                continue  # Skip if already placed as ceiling in this call
-            placed_in_this_call.add(role_key)
-            placed = _place_mono_sharp_spacer(mol_template, pos, 'top')
-            if placed is None or len(placed) == 0:
-                print(f"Warning: Failed to place mono sharp_spacer for label {label} at ceiling")
-                continue
-            structure = add_atoms(structure, placed)
+            for entry in ground_entries:
+                placed = _place_mono_sharp_spacer(spacer_template.copy(), entry["position"], 'bottom')
+                if placed is not None and len(placed) > 0:
+                    structure = add_atoms(structure, placed)
+            for entry in sky_entries:
+                placed = _place_mono_sharp_spacer(spacer_template.copy(), entry["position"], 'top')
+                if placed is not None and len(placed) > 0:
+                    structure = add_atoms(structure, placed)
 
-    return structure, placed_in_this_call
+    return structure
+
+
+def _process_floor_slab(
+    structure: Atoms,
+    ground_slab: Dict[str, Any],
+    sky_slab: Optional[Dict[str, Any]],
+    sharp_sequence: Optional[_SharpSpacerSequence],
+) -> Atoms:
+    """Process a single ground slab and optionally populate sharp spacers to the sky."""
+    structure = populate_a_sites(structure, ground_slab)
+    structure = populate_b_sites(structure, ground_slab)
+    structure = populate_x_sites(structure, ground_slab)
+    structure = populate_sharp(structure, ground_slab, sky_slab, sharp_sequence)
+    return structure
 
 
 def populate_structure(
@@ -644,10 +727,6 @@ def populate_structure(
         site_labels=site_labels,
     )
     
-    lattice_vectors = matrix.lattice_vector_sizes
-    
-    # S# sites will be processed on-the-fly per floor pair - no global mapping
-    
     # Build floors strictly from provided floors_cart (ordered)
     if floors_cart is None:
         raise ValueError("floors_cart is required for populate_structure")
@@ -681,77 +760,28 @@ def populate_structure(
         if resolved:
             floors.append((resolved[0][2][2], resolved))
     
-    # Collect atomic and molecular (non-S) from floors
-    atomic_symbols: List = []
-    atomic_positions: List = []
-    molecular_atoms: List = []  # (Atoms, pos, site_type, label)
-    
-    for _, entries in floors:
-        _process_floor_non_s(entries, atomic_symbols, atomic_positions, molecular_atoms)
-    
-    # Create structure with atomic ions first
-    if atomic_symbols:
-        structure = Atoms(atomic_symbols, positions=atomic_positions)
-    else:
-        structure = Atoms()
-    
-    # Set cell dimensions from matrix
+    # Prepare ordered slabs (ground/sky metadata)
+    floors.sort(key=lambda x: x[0])
+    resolved_floors = [entries for _, entries in floors]
+    slabs = _build_floor_slabs(resolved_floors)
+
+    # Initialize structure and cell
+    structure = Atoms()
     structure.set_cell(matrix.cell_vectors)
     structure.pbc = [1, 1, 1]
-    
-    # Add molecular A/Ap-sites (if any)
-    for mol, pos, site_type, label in molecular_atoms:
-        if site_type in ['A', 'Ap']:
-            if site_type == 'Ap':
-                # For monolayer spacers, determine if position is in bottom or top half
-                z_center = (structure.cell[2][2]) / 2.0
-                attachment_end = 'top' if pos[2] < z_center else 'bottom'
-                mol_aligned = align_ase_molecule_for_perovskite(mol.copy(), attachment_end=attachment_end)
-                mol_placed = place_spacer_at_location(mol_aligned, pos, attachment_end)
-            else:
-                # Regular A-sites use COM placement
-                mol_aligned = align_ase_molecule_for_perovskite(mol.copy())
-                mol_placed = place_atoms_at_location(mol_aligned, pos)
-            structure = add_atoms(structure, mol_placed)
-    
-    # Handle S# per adjacent floor pairs - each pair is processed independently
-    # Each pair consists of floor (lower) and ceiling (upper)
-    # Track all placed (position, role) pairs across pairs
-    # Same position can be placed as both floor and ceiling with different orientations
-    all_placed_roles = set()  # Set of (position_key, role) tuples
-    for i in range(len(floors) - 1):
-        _, floor_entries = floors[i]
-        _, ceiling_entries = floors[i + 1]
-        
-        # Filter entries to exclude positions already placed in the same role
-        # A position can be placed as both floor and ceiling in different pairs
-        def _filter_placed_by_role(entries, placed_set, role):
-            """Filter out entries whose positions have already been placed in this role."""
-            filtered = []
-            for site_type, ion, pos, label in entries:
-                if site_type.startswith('S') and len(site_type) > 1 and site_type[1:].isdigit():
-                    pos_key = (round(float(pos[0]), 3), round(float(pos[1]), 3), round(float(pos[2]), 3))
-                    role_key = (pos_key, role)
-                    if role_key in placed_set:
-                        continue  # Skip if already placed in this role
-                filtered.append((site_type, ion, pos, label))
-            return filtered
-        
-        # Filter floor and ceiling entries to exclude already-placed positions in same role
-        floor_filtered = _filter_placed_by_role(floor_entries, all_placed_roles, 'floor')
-        ceiling_filtered = _filter_placed_by_role(ceiling_entries, all_placed_roles, 'ceiling')
-        
-        # Place molecules for this pair
-        structure, placed_in_call = _place_s_pair(
-            floor_filtered, 
-            ceiling_filtered, 
-            sharp_spacer_normalized, 
-            structure
+
+    sharp_sequence = _SharpSpacerSequence(sharp_spacer_normalized) if sharp_spacer_normalized else None
+
+    # Process slabs ground-by-ground
+    for idx, ground_slab in enumerate(slabs):
+        sky_slab = slabs[idx + 1] if idx + 1 < len(slabs) else None
+        structure = _process_floor_slab(
+            structure,
+            ground_slab,
+            sky_slab,
+            sharp_sequence,
         )
-        
-        # Update global tracking of placed (position, role) pairs
-        all_placed_roles.update(placed_in_call)
-    
+
     return structure
 
 
@@ -947,4 +977,3 @@ def attach_spacers(spacer: Union[Atoms, List[Atoms]], layer: Atoms, n: int,
         structure = add_atoms(structure, positioned_spacer)
     
     return structure
-
