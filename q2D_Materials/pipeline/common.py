@@ -296,7 +296,16 @@ def populate_positions(
     )
 
 
-def default_layer_sequence(layer_sequence: Optional[str | List[str]], thickness: int, structure_type: str = "monolayer") -> str:
+def _split_layer_sequence_string(seq: str) -> List[str]:
+    """Split a hyphen/space-separated layer string into explicit names."""
+    raw = seq
+    for sep in ("-", ","):
+        raw = raw.replace(sep, " ")
+    parts = [p for p in raw.split() if p]
+    return parts if parts else [seq]
+
+
+def default_layer_sequence(layer_sequence: Optional[str | List[str]], thickness: int, structure_type: str = "monolayer") -> str | List[str]:
     """Return the default layer sequence for a given thickness if not provided."""
     if layer_sequence is None:
         if structure_type.lower() == "bulk":
@@ -316,4 +325,8 @@ def default_layer_sequence(layer_sequence: Optional[str | List[str]], thickness:
         # RP keyword: fixed sequence using RP layers
         return "L2-M1-RP1-RP2-RP1-M1"
     else:
+        if isinstance(layer_sequence, str):
+            if any(sep in layer_sequence for sep in ("-", ",", " ")):
+                return _split_layer_sequence_string(layer_sequence)
+            return layer_sequence
         return layer_sequence

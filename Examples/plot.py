@@ -1,6 +1,19 @@
 from pathlib import Path
 import sys
 
+try:
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from ase.visualize.plot import plot_atoms
+
+    MATPLOTLIB_AVAILABLE = True
+except Exception:
+    MATPLOTLIB_AVAILABLE = False
+    plt = None
+    plot_atoms = None
+
 from ase.io import write
 from q2D_Materials.core.creator import q2D_creator
 
@@ -125,6 +138,72 @@ rp_atomic = q2d.create_perovskite(
     penetration=0.2,
 )
 write(IMAGES / "rp_atomic_side.png", rp_atomic, rotation=rotation_iso, show_unit_cell=2)
+
+
+def save_multiview(atoms, filename, rotations, titles=None, radii=0.25):
+    if not MATPLOTLIB_AVAILABLE:
+        print(f"Matplotlib not available; skipping {filename}")
+        return
+    fig, axarr = plt.subplots(1, len(rotations), figsize=(4 * len(rotations), 4))
+    if len(rotations) == 1:
+        axarr = [axarr]
+    for i, (ax, rot) in enumerate(zip(axarr, rotations)):
+        plot_atoms(atoms, ax, radii=radii, rotation=rot)
+        ax.set_axis_off()
+        if titles and i < len(titles):
+            ax.set_title(titles[i])
+    fig.tight_layout()
+    fig.savefig(filename, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+
+
+if MATPLOTLIB_AVAILABLE:
+    # DJ (reduced template) Matplotlib views
+    dj_reduced = q2d.create_perovskite(
+        structure_type="bulk",
+        template="reduced",
+        layer_sequence="L2-M1-RP1-RP2-RP1-M1",
+        thickness=2,
+        A_ions="MA",
+        B_ions="Pb",
+        X_ions="I",
+        sharp_spacer="[NH3+]CCCC[NH3+]",
+        glazer_angles=[0, 0, 3],
+        glazer_pattern=["0", "0", "+"],
+    )
+    save_multiview(
+        dj_reduced,
+        IMAGES / "dj_reduced_single.png",
+        rotations=["90x,45y,0z"],
+    )
+
+    # RP (reduced template) Matplotlib storyboard
+    rp_reduced = q2d.create_perovskite(
+        structure_type="bulk",
+        template="reduced",
+        layer_sequence="L2-M1-RP1-RP2-RP1-M1",
+        thickness=3,
+        A_ions="MA",
+        B_ions="Pb",
+        X_ions="I",
+        sharp_spacer=["C=CCC=CCC[NH3+]", "[NH3+]CCCC[NH3+]"],
+        glazer_angles=[2, 4, 8],
+        glazer_pattern=["0", "+", "+"],
+        penetration=0.2,
+    )
+    save_multiview(
+        rp_reduced,
+        IMAGES / "rp_reduced_views.png",
+        rotations=[
+            "0x,0y,0z",
+            "45x,0y,0z",
+            "0x,0y,45z",
+            "90x,45y,0z",
+        ],
+        titles=["Front", "Tilt", "Plan", "Iso"],
+    )
+else:
+    print("Matplotlib not installed; skip DJ/RP multiview renders.")
 
 # Twist storyboard: build two monolayers and twist them
 twist_mono1 = q2d.create_perovskite(structure_type="monolayer", A_ions="MA", B_ions="Pb", X_ions="I", xy_expansion=(1, 1), template="cubic", vacuum=12.0)
