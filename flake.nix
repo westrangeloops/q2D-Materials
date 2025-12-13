@@ -1,5 +1,5 @@
 {
-  description = "SVC-Materials Python development environment";
+  description = "q2D-Materials: Template-driven quasi-2D perovskite structure generator";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.05";
@@ -15,51 +15,58 @@
       in {
         devShells.default = pkgs.mkShell {
           buildInputs = [
+            # Core q2D-Materials dependencies
             python
+            pythonPackages.numpy      # Numerical computing
+            pythonPackages.pandas     # Data manipulation
+            pythonPackages.scipy      # Scientific computing
+            pythonPackages.ase        # Atomic Simulation Environment
+            pythonPackages.pymatgen   # Materials analysis
+            pythonPackages.rdkit      # Molecular chemistry
+            pythonPackages.matplotlib # Plotting and visualization
+
+            # Development tools
+            pythonPackages.pytest     # Testing framework
+            pythonPackages.jupyter    # Interactive development
+            pythonPackages.ipython    # Enhanced Python shell
+
+            # Build tools
             pythonPackages.pip
             pythonPackages.setuptools
             pythonPackages.wheel
-            pythonPackages.numpy
-            pythonPackages.pandas
-            pythonPackages.ase
-            pythonPackages.matplotlib
-            pythonPackages.rdkit
-            pythonPackages.ipython
-            pythonPackages.jupyter
-            pythonPackages.scipy
-            pythonPackages.requests
-            pythonPackages.pytest
-            pythonPackages.pytest-cov
-            pythonPackages.pytest-xdist
-            pythonPackages.scikit-learn
-            pythonPackages.networkx
-            pythonPackages.rdkit
-            pythonPackages.seaborn
-            pythonPackages.pymatgen
-            pythonPackages.rmsd
-            pythonPackages.pyvis
-            # Note: pyprocar not available in nixpkgs, install via pip
-            # Add more packages as needed
           ];
-          # For ase-gui visualization
-          nativeBuildInputs = [ pkgs.xorg.libX11 pkgs.xorg.libXext pkgs.xorg.libSM pkgs.xorg.libICE ];
+
+          # For ase-gui visualization and matplotlib backends
+          nativeBuildInputs = [
+            pkgs.xorg.libX11
+            pkgs.xorg.libXext
+            pkgs.xorg.libSM
+            pkgs.xorg.libICE
+          ];
+
           shellHook = ''
             export PYTHONPATH=$PWD:$PYTHONPATH
-            
-            # Check if requirements are installed, if not install them
+
+            # Install additional packages from requirements.txt if needed
             if [ ! -f .venv_installed ]; then
-              echo "Installing Python packages from requirements.txt..."
-              pip install -r requirements.txt
+              echo "Installing additional Python packages from requirements.txt..."
+              pip install --break-system-packages -r requirements.txt
               touch .venv_installed
-              echo "✓ Python packages installed successfully!"
             fi
-            
-            echo "SVC-Materials dev environment ready!"
-            echo "Available tools:"
-            echo "  - q2D Materials analysis"
-            echo "  - DOS analysis with pyprocar"
-            echo "  - Batch analysis scripts"
-            echo "  - Correlation analysis"
+
+            echo "q2D-Materials development environment ready!"
+            echo ""
+            echo "Core capabilities:"
+            echo "  🧱 Layer stacking - Build complex structures from JSON templates"
+            echo "  🔄 Ion assignment - Automated population with mixed compositions"
+            echo "  🧬 Molecular spacers - RDKit-powered organic linker attachment"
+            echo "  📐 Glazer tilting - Systematic octahedral distortion patterns"
+            echo "  🔍 Multi-view visualization - ASE-powered structure analysis"
+            echo "  🌀 Twisted interfaces - Moiré pattern generation"
+            echo ""
+            echo "Quick start:"
+            echo "  python3 -c \"from q2D_Materials.core.creator import q2D_creator; print('Ready!')\""
+            echo "  nix develop -c python3 Examples/plot.py  # Regenerate documentation images"
           '';
         };
       });

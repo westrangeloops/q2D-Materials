@@ -2,7 +2,7 @@
 
 # q2D-Materials: Stacking-first perovskite architecture
 
-q2D-Materials is a template-driven library for stacking quasi-2D and bulk perovskites. Instead of shipping a single geometry, we provide a set of hackable layer types (`L1`, `RP1`, `M1`, …) that you can arrange however you want—much like an architecture studio that swaps floor plates. Our tooling then handles ion assignment, molecular alignment, Glazer tilts, spacer orientation, and export. Because everything is encoded as JSON templates you can version-control, you are free to invent new stack types without editing the core library.
+q2D-Materials is a template-driven library for stacking quasi-2D and bulk perovskites. Instead of shipping a single geometry, we provide a set of hackable layer types (`L1`, `RP1`, `M1`, …) that you can arrange however you want—much like an architecture studio that swaps floor plates. Our tooling then handles ion assignment, molecular alignment, Glazer tilts, spacer orientation, and export. Because everything is encoded as JSON templates you can version-control, you are free to invent new stack types without editing the core library. Our framework providing a fully hackable, layer-sequence-driven approach that decouples geometry from composition.
 
 ## Reproducible hacking (Nix encouraged)
 
@@ -106,15 +106,21 @@ Regenerate every figure with `nix develop -c python3 Examples/plot.py` and brows
 - `Examples/7_DionJacobson.md`
 - `Examples/8_Ruddlessden_Popper.md`
 
-## Gallery — stacking capabilities
+## Gallery — program capabilities
 
-| Image | What it shows |
+| Image | What it demonstrates |
 | --- | --- |
-| ![Creator storyboard](Examples/images/creator-L1-L2-L1.png) | **Template storyboard** – swap `layer_sequence` (`L1`, `L1-L2`, …) to grow a structure without touching Cartesian data. |
-| ![Glazer top view](Examples/images/glazer-tilted-top.png) | **Glazer tilts** – same template, different angle/pattern pairs, perfect for top-down comparisons. |
-| ![DJ slab](Examples/images/dj_bulk.png) | **Dion–Jacobson stacks** – double spacers bridging mirrored S# sites in the reduced template. |
-| ![RP plan](Examples/images/rp_glazer_top.png) ![RP side](Examples/images/rp_base_side.png) ![RP iso](Examples/images/rp_atomic_side.png) | **Ruddlesden–Popper slabs** – plan, elevation, and isometric glimpses of stepped RP architectures. |
-| ![Twist workflow](Examples/images/twist-bilayer.png) | **Twisted bilayer** – two monolayers, independent chemistries, twisted and stacked with set gaps. |
+| ![Creator storyboard](Examples/images/creator-L1-L2-L1.png) | **Layer stacking flexibility** – Shows how changing just the `layer_sequence` parameter builds increasingly complex structures from the same template, demonstrating automated layer assembly and ion population. |
+| ![Glazer top view](Examples/images/glazer-tilted-top.png) | **Automated octahedral tilting** – Illustrates how the framework automatically applies Glazer tilt patterns to break cubic symmetry, enabling systematic exploration of perovskite distortions. |
+| ![DJ slab](Examples/images/dj_bulk.png) | **Hybrid organic-inorganic assembly** – Demonstrates automated molecular spacer attachment between perovskite layers, with precise control over spacer orientation and penetration depth. |
+| ![RP plan](Examples/images/rp_glazer_top.png) ![RP side](Examples/images/rp_base_side.png) ![RP iso](Examples/images/rp_atomic_side.png) | **Multi-view structural analysis** – Shows the same Ruddlesden-Popper structure from plan, elevation, and isometric perspectives, highlighting stepped layer architectures and surface termination. |
+| ![Twist workflow](Examples/images/twist-bilayer.png) | **Twisted interface engineering** – Demonstrates the creation of twisted bilayer perovskites with controlled interlayer distances and arbitrary twist angles, enabling moiré pattern studies. |
+
+## References
+
+[1] Kunz, S. L., Haefner, M., & Clemens, O. "``hexagonal'' perovskites: From stacking sequence to space group symmetry and new opportunities." *Chem. Mater.* 36, 23 (2024).
+
+[2] Stanton, R., & Trivedi, D. J. "Pyrovskite: A software package for the high-throughput construction, analysis, and featurization of two- and three-dimensional perovskite systems." *J. Chem. Phys.* 159, 6 (2023).
 
 ## License
 
