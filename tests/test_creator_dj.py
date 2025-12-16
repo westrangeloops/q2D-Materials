@@ -12,23 +12,31 @@ def main():
         ("dj_glazer_a+b-c-", [3, 2, 6], ["+", "-", "-"], 5, (1, 1, 3), "[NH3+]CCC=CCC[NH3+]", 0.0),
         ("dj_glazer_atomic", [3, 2, 6], ["+", "-", "-"], 5, (1, 1, 3), "Cs", 0.0),
     ]
-    for name, angles, pattern, thickness, sc, spacer, penetration in glazer_cases_dj:
-        print(f"\nGlazer DJ: {name} angles={angles} pattern={pattern} sc={sc}")
-        atoms = q2d.create_perovskite(
-            A_ions="MA",
-            B_ions="Pb",
-            X_ions="I",
-            structure_type="bulk",
-            xy_expansion=(sc[0], sc[1]),
-            thickness=thickness,
-            sharp_spacer=spacer,
-            penetration=penetration,
-            glazer_angles=angles,
-            glazer_pattern=pattern,
-            layer_sequence="DJ",
-        )
-        write(f"{name}.vasp", atoms, format="vasp", sort=True)
-        print(f"✓ Wrote {name}.vasp")
+    
+    optimizers = ["Off", "KS", "UFF"]
+    
+    for optimizer in optimizers:
+        print(f"\n--- Testing optimizer: {optimizer} ---")
+            
+        for name, angles, pattern, thickness, sc, spacer, penetration in glazer_cases_dj:
+            output_name = f"{name}_opt{optimizer}"
+            print(f"\nGlazer DJ: {name} angles={angles} pattern={pattern} optimizer={optimizer}")
+            atoms = q2d.create_structure(
+                        A_ions="MA",
+                        B_ions="Pb",
+                        X_ions="I",
+                        structure_type="bulk",
+                        xy_expansion=(sc[0], sc[1]),
+                        thickness=thickness,
+                        sharp_spacer=spacer,
+                        penetration=penetration,
+                        glazer_angles=angles,
+                        glazer_pattern=pattern,
+                        layer_sequence="DJ",
+                        optimizer=optimizer,
+                    )
+            write(f"{output_name}.vasp", atoms, format="vasp", sort=True)
+            print(f"✓ Wrote {output_name}.vasp ({len(atoms)} atoms)")
 
 if __name__ == "__main__":
     main()

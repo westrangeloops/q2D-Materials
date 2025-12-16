@@ -18,7 +18,7 @@ def main():
 
     # 0. Wrapper check (cubic)
     print("\n0. Verifying q2DStructure wrapper (cubic)...")
-    test_structure = q2d.create_perovskite(
+    test_structure = q2d.create_structure(
         A_ions="MA", B_ions="Pb", X_ions="I", xy_expansion=(1, 1), template="cubic"
     )
     assert isinstance(test_structure, q2DStructure)
@@ -29,7 +29,7 @@ def main():
 
     # 1. Simple bulk cubic
     print("\n1. Simple bulk perovskite (cubic)...")
-    bulk_cubic = q2d.create_perovskite(
+    bulk_cubic = q2d.create_structure(
         A_ions="MA", B_ions="Pb", X_ions="I", xy_expansion=(1, 1), template="cubic"
     )
     write("MAPbI3_bulk_simple_cubic.vasp", bulk_cubic, format="vasp", sort=True)
@@ -37,7 +37,7 @@ def main():
 
     # 2. Simple bulk reduced
     print("\n2. Simple bulk perovskite (reduced)...")
-    bulk_reduced = q2d.create_perovskite(
+    bulk_reduced = q2d.create_structure(
         A_ions="MA", B_ions="Pb", X_ions="I", xy_expansion=(1, 1), template="reduced"
     )
     write("MAPbI3_bulk_simple_reduced.vasp", bulk_reduced, format="vasp", sort=True)
@@ -45,7 +45,7 @@ def main():
 
     # 2b. Simple bulk hexagonal
     print("\n2b. Simple bulk perovskite (hexagonal)...")
-    bulk_hex = q2d.create_perovskite(
+    bulk_hex = q2d.create_structure(
         A_ions="MA", B_ions="Pb", X_ions="I", xy_expansion=(1, 1), template="hexagonal"
     )
     write("MAPbI3_bulk_simple_hexagonal.vasp", bulk_hex, format="vasp", sort=True)
@@ -53,7 +53,7 @@ def main():
 
     # 3. Mixed A-site pattern (cubic)
     print("\n3. Mixed A-site perovskite (pattern, cubic)...")
-    mixed_a_cubic = q2d.create_perovskite(
+    mixed_a_cubic = q2d.create_structure(
         A_ions=["Cs", "MA", "FA", "Cs", "MA", "FA", "Cs", "MA"],
         B_ions="Pb",
         X_ions="I",
@@ -65,7 +65,7 @@ def main():
 
     # 4. Mixed X-site pattern (reduced)
     print("\n4. Mixed X-site perovskite (pattern, reduced)...")
-    mixed_x_reduced = q2d.create_perovskite(
+    mixed_x_reduced = q2d.create_structure(
         A_ions="MA",
         B_ions="Pb",
         X_ions=["Br", "I", "I", "Br", "I", "I"],
@@ -77,7 +77,7 @@ def main():
 
     # 4b. Mixed X-site pattern (hexagonal)
     print("\n4b. Mixed X-site perovskite (pattern, hexagonal)...")
-    mixed_x_hex = q2d.create_perovskite(
+    mixed_x_hex = q2d.create_structure(
         A_ions="MA",
         B_ions="Pb",
         X_ions=["Br", "I", "I", "Br", "I", "I", "Br", "I"],
@@ -89,7 +89,7 @@ def main():
 
     # 5. Fully mixed composition (reduced)
     print("\n5. Super-mixed perovskite (A/B/X patterns, reduced)...")
-    super_mix_reduced = q2d.create_perovskite(
+    super_mix_reduced = q2d.create_structure(
         A_ions=["Cs", "MA", "FA", "MA", "MA", "FA", "Cs", "MA"],
         B_ions=["Pb", "Sn", "Pb", "Pb", "Sn", "Pb", "Pb", "Sn"],
         X_ions=["Br"] * 12 + ["I"] * 12,
@@ -101,7 +101,7 @@ def main():
 
     # 5b. Super-mixed composition (hexagonal)
     print("\n5b. Super-mixed perovskite (A/B/X patterns, hexagonal)...")
-    super_mix_hexagonal = q2d.create_perovskite(
+    super_mix_hexagonal = q2d.create_structure(
         A_ions=["Cs", "MA", "FA", "MA", "MA", "FA", "Cs", "MA"],
         B_ions=["Pb", "Sn", "Pb", "Pb", "Sn", "Pb", "Pb", "Sn"],
         X_ions=["Br"] * 12 + ["I"] * 12,
@@ -121,7 +121,7 @@ def main():
     ]
     for name, angles, pattern, sc in glazer_cases_cubic:
         print(f"\nGlazer cubic: {name} angles={angles} pattern={pattern} sc={sc}")
-        struct = q2d.create_perovskite(
+        struct = q2d.create_structure(
             A_ions="MA",
             B_ions="Pb",
             X_ions="I",
@@ -143,7 +143,7 @@ def main():
     ]
     for name, angles, pattern, sc in glazer_cases_reduced:
         print(f"\nGlazer reduced: {name} angles={angles} pattern={pattern} sc={sc}")
-        struct = q2d.create_perovskite(
+        struct = q2d.create_structure(
             A_ions="MA",
             B_ions="Pb",
             X_ions="I",
@@ -159,11 +159,55 @@ def main():
     # Run the jagodinxky custom sequence example so the VASP file is emitted
     test_jagodinxky_custom_sequence()
 
+    # Test interlayer distance control
+    print("\nTesting interlayer distance control...")
+    test_interlayer = q2d.create_structure(
+        A_ions="MA", B_ions="Pb", X_ions="I",
+        xy_expansion=(1, 1), template="cubic",
+        layer_sequence="L1-(1.5)-L2-(2.0)-L1"
+    )
+    assert isinstance(test_interlayer, q2DStructure)
+    assert test_interlayer.structure_type == "bulk"
+
+    # Get z positions of floors to verify distances
+    positions = test_interlayer.get_positions()
+    z_coords = positions[:, 2]
+    min_z = z_coords.min()
+    max_z = z_coords.max()
+
+    # For a 3-layer structure with explicit gaps, the total height should reflect the custom distances
+    # The layers should be at approximately 0, 1.5, 3.5, 5.5 (with some tolerance for layer thickness)
+    expected_z_ranges = [
+        (0.0, 1.0),    # First layer around 0
+        (1.0, 2.5),    # Second layer around 1.5
+        (3.0, 4.5),    # Third layer around 3.5
+        (5.0, 6.5)     # Terminal layer around 5.5
+    ]
+
+    # Check that atoms exist in expected z ranges
+    for i, (z_min, z_max) in enumerate(expected_z_ranges):
+        atoms_in_range = ((z_coords >= z_min) & (z_coords <= z_max)).sum()
+        assert atoms_in_range > 0, f"No atoms found in expected z-range {z_min}-{z_max} for layer {i+1}"
+
+    write("MAPbI3_bulk_custom_distances.vasp", test_interlayer, format="vasp", sort=True)
+    print("✓ Wrote MAPbI3_bulk_custom_distances.vasp with interlayer distances L1-(1.5)-L2-(2.0)-L1")
+
+    # Test mixed explicit and default distances
+    print("\nTesting mixed explicit/default interlayer distances...")
+    test_mixed = q2d.create_structure(
+        A_ions="MA", B_ions="Pb", X_ions="I",
+        xy_expansion=(1, 1), template="cubic",
+        layer_sequence="L1-(2.5)-L2-L1-(1.8)-L2"  # First gap explicit, second gap default BX, third gap explicit
+    )
+    assert isinstance(test_mixed, q2DStructure)
+    write("MAPbI3_bulk_mixed_distances.vasp", test_mixed, format="vasp", sort=True)
+    print("✓ Wrote MAPbI3_bulk_mixed_distances.vasp with mixed distances L1-(2.5)-L2-L1-(1.8)-L2")
+
 
 def test_jagodinxky_custom_sequence():
     q2d = q2D_creator()
     seq = "AcBcAcBaCbAbCbAcBaCaBaCb"
-    struct = q2d.create_perovskite(
+    struct = q2d.create_structure(
         A_ions="Ca",
         B_ions="Ti",
         X_ions="O",

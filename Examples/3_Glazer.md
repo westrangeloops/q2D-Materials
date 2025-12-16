@@ -9,13 +9,13 @@ Glazer tilting is just rotating the X-site anions around each B-site center. You
 from q2D_Materials.core.creator import q2D_creator
 q2d = q2D_creator()
 
-untilted = q2d.create_perovskite(
+untilted = q2d.create_structure(
     structure_type="bulk",
     A_ions="MA", B_ions="Pb", X_ions="I",
     xy_expansion=(1, 1), template="cubic",
 )
 
-tilting = q2d.create_perovskite(
+tilting = q2d.create_structure(
     structure_type="bulk",
     A_ions="MA", B_ions="Pb", X_ions="I",
     xy_expansion=(1, 1), template="cubic",

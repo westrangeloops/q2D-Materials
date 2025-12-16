@@ -16,14 +16,14 @@ A monolayer call is the bulk creator with a few extra switches: `structure_type=
 from q2D_Materials.core.creator import q2D_creator
 q2d = q2D_creator()
 
-mono1 = q2d.create_perovskite(
+mono1 = q2d.create_structure(
     structure_type="monolayer",
     A_ions="MA", B_ions="Pb", X_ions="I",
     xy_expansion=(1, 1), template="cubic",
     vacuum=15.0, thickness=1,
 )
 
-mono2 = q2d.create_perovskite(
+mono2 = q2d.create_structure(
     structure_type="monolayer",
     A_ions="MA", B_ions="Pb", X_ions="I",
     xy_expansion=(1, 1), template="cubic",

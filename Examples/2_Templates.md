@@ -56,9 +56,9 @@ q2d = q2D_creator()
 base = dict(structure_type='bulk', A_ions='MA', B_ions='Pb', X_ions='I',
             xy_expansion=(1, 1), template='cubic')
 
-f1 = q2d.create_perovskite(**base, layer_sequence=["L1"])
-f2 = q2d.create_perovskite(**base, layer_sequence=["L1", "L2"])
-f3 = q2d.create_perovskite(**base, layer_sequence=["L1", "L2", "L1", "L2"])
+f1 = q2d.create_structure(**base, layer_sequence=["L1"])
+f2 = q2d.create_structure(**base, layer_sequence=["L1", "L2"])
+f3 = q2d.create_structure(**base, layer_sequence=["L1", "L2", "L1", "L2"])
 
 write("cubic_f1.vasp", f1)
 write("cubic_f2.vasp", f2)
@@ -91,7 +91,7 @@ Template:
 
 Use compact string sequences:
 ```python
-stack = q2d.create_perovskite(
+stack = q2d.create_structure(
     structure_type='bulk',
     A_ions='MA', B_ions='Pb', X_ions='I',
     xy_expansion=(1, 1),
@@ -105,7 +105,7 @@ write("jago_stack.vasp", stack)
 
 ## Minimal validation loop
 ```python
-test = q2d.create_perovskite(
+test = q2d.create_structure(
     structure_type='bulk',
     A_ions='MA', B_ions='Pb', X_ions='I',
     xy_expansion=(1, 1),

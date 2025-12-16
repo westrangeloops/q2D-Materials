@@ -9,7 +9,7 @@ RP stacks interleave perovskite slabs with `S#` spacer planes. Every time two co
 from q2D_Materials.core.creator import q2D_creator
 
 q2d = q2D_creator()
-rp = q2d.create_perovskite(
+rp = q2d.create_structure(
     structure_type="bulk",
     template="cubic",
     layer_sequence="RP",     # expands to the RP slab ordering

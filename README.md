@@ -60,7 +60,7 @@ from ase.io import write
 
 q2d = q2D_creator()
 
-bulk = q2d.create_perovskite(
+bulk = q2d.create_structure(
     structure_type="bulk",
     A_ions="MA",
     B_ions="Pb",

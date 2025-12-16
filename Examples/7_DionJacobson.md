@@ -15,7 +15,7 @@ Use DJ spacers when you need a molecule bridging two adjacent spacer layers (S# 
 from q2D_Materials.core.creator import q2D_creator
 q2d = q2D_creator()
 
-dj = q2d.create_perovskite(
+dj = q2d.create_structure(
     structure_type="bulk",
     template="cubic",          # or reduced
     layer_sequence="DJ",       # expands to L1-L2-...-M1-M1
@@ -41,7 +41,7 @@ Render (from `Examples/plot.py`):
 from q2D_Materials.core.creator import q2D_creator
 q2d = q2D_creator()
 
-dj_atomic = q2d.create_perovskite(
+dj_atomic = q2d.create_structure(
     structure_type="bulk",
     template="cubic",
     layer_sequence="DJ",

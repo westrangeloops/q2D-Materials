@@ -13,7 +13,7 @@ code = "chc"               # c/h Jagodzinski code
 seq = jag_to_layers(code)  # -> ['A','c','B','a','C','b','A','c']
 
 q2d = q2D_creator()
-bulk = q2d.create_perovskite(
+bulk = q2d.create_structure(
     structure_type='bulk',
     A_ions='MA', B_ions='Pb', X_ions='I',
     xy_expansion=(1, 1),

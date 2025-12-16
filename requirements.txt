@@ -30,3 +30,9 @@ jupyter>=1.0.0
 # Utilities
 requests>=2.25.0
 openpyxl>=3.0.0  # For reading Excel files
+
+# Web framework (for visual_tools)
+fastapi>=0.100.0
+uvicorn>=0.23.0
+pydantic>=2.0.0
+python-multipart>=0.0.6  # Required for FastAPI file uploads

@@ -15,7 +15,7 @@ def main():
     ]
     for name, angles, pattern, thickness, sc, spacer, penetration in glazer_cases_rp:
         print(f"\nGlazer RP: {name} angles={angles} pattern={pattern} sc={sc}")
-        atoms = q2d.create_perovskite(
+        atoms = q2d.create_structure(
             A_ions="MA",
             B_ions="Pb",
             X_ions="I",
@@ -42,7 +42,7 @@ def main():
     ]
     for name, angles, pattern, thickness, sc, spacer, penetration, seq in glazer_cases_rp_reduced:
         print(f"\nGlazer RP: {name} angles={angles} pattern={pattern} sc={sc}")
-        atoms = q2d.create_perovskite(
+        atoms = q2d.create_structure(
             A_ions="MA",
             B_ions="Pb",
             X_ions="I",

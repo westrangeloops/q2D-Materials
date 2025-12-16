@@ -19,7 +19,7 @@ def main():
 
     # 0. Wrapper check (cubic)
     print("\n0. Verifying q2DStructure wrapper (cubic monolayer)...")
-    test_structure = q2d.create_perovskite(
+    test_structure = q2d.create_structure(
         A_ions="MA",
         B_ions="Pb",
         X_ions="I",
@@ -36,7 +36,7 @@ def main():
 
     # 1. Simple monolayer cubic
     print("\n1. Simple monolayer perovskite (cubic)...")
-    mono_cubic = q2d.create_perovskite(
+    mono_cubic = q2d.create_structure(
         A_ions="MA",
         B_ions="Pb",
         X_ions="I",
@@ -50,7 +50,7 @@ def main():
 
     # 2. Simple monolayer reduced
     print("\n2. Simple monolayer perovskite (reduced)...")
-    mono_reduced = q2d.create_perovskite(
+    mono_reduced = q2d.create_structure(
         A_ions="MA",
         B_ions="Pb",
         X_ions="I",
@@ -64,7 +64,7 @@ def main():
 
     # 3. Mixed A-site pattern (cubic)
     print("\n3. Mixed A-site monolayer (pattern, cubic)...")
-    mixed_a_cubic = q2d.create_perovskite(
+    mixed_a_cubic = q2d.create_structure(
         A_ions=["Cs", "MA", "FA", "Cs", "MA", "FA", "Cs", "MA"],
         B_ions="Pb",
         X_ions="I",
@@ -78,7 +78,7 @@ def main():
 
     # 4. Mixed X-site pattern (reduced)
     print("\n4. Mixed X-site monolayer (pattern, reduced)...")
-    mixed_x_reduced = q2d.create_perovskite(
+    mixed_x_reduced = q2d.create_structure(
         A_ions="MA",
         B_ions="Pb",
         X_ions=["Br", "I", "I", "Br", "I", "I"],
@@ -92,7 +92,7 @@ def main():
 
     # 5. Fully mixed composition (reduced)
     print("\n5. Super-mixed monolayer (A/B/X patterns, reduced)...")
-    super_mix_reduced = q2d.create_perovskite(
+    super_mix_reduced = q2d.create_structure(
         A_ions=["Cs", "MA", "FA", "MA", "MA", "FA", "Cs", "MA"],
         B_ions=["Pb", "Sn", "Pb", "Pb", "Sn", "Pb", "Pb", "Sn"],
         spacer=["CN1C=NC2=C1C(=O)N(C(=O)N2C)CC[NH3+]", "CCCC[NH3+]"],
@@ -119,7 +119,7 @@ def main():
     ]
     for name, angles, pattern, sc in glazer_cases_cubic:
         print(f"\nGlazer cubic monolayer: {name} angles={angles} pattern={pattern} sc={sc}")
-        struct = q2d.create_perovskite(
+        struct = q2d.create_structure(
             A_ions="MA",
             B_ions="Pb",
             X_ions="I",
@@ -144,7 +144,7 @@ def main():
     ]
     for name, angles, pattern, sc, spacer, attachment_end, penetration in glazer_cases_reduced:
         print(f"\nGlazer reduced monolayer: {name} angles={angles} pattern={pattern} sc={sc}")
-        struct = q2d.create_perovskite(
+        struct = q2d.create_structure(
             A_ions="MA",
             B_ions="Pb",
             X_ions="I",
@@ -161,6 +161,20 @@ def main():
         )
         write(f"{name}.vasp", struct, format="vasp", sort=True)
         print(f"✓ Wrote {name}.vasp")
+
+    # Test monolayer interlayer distance control
+    print("\nTesting monolayer interlayer distance control...")
+    test_mono_interlayer = q2d.create_structure(
+        A_ions="MA", B_ions="Pb", X_ions="I",
+        xy_expansion=(1, 1), template="cubic",
+        structure_type="monolayer",
+        layer_sequence="L1-(2.0)-L2-(1.5)-L1",
+        vacuum=vacuum,
+    )
+    assert isinstance(test_mono_interlayer, q2DStructure)
+    assert test_mono_interlayer.structure_type == "monolayer"
+    write("MAPbI3_monolayer_custom_distances.vasp", test_mono_interlayer, format="vasp", sort=True)
+    print("✓ Wrote MAPbI3_monolayer_custom_distances.vasp with interlayer distances L1-(2.0)-L2-(1.5)-L1")
 
     print("\nAll monolayer tests completed.")
 

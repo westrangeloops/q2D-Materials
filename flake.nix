@@ -25,6 +25,12 @@
             pythonPackages.rdkit      # Molecular chemistry
             pythonPackages.matplotlib # Plotting and visualization
 
+            # Web framework
+            pythonPackages.fastapi    # FastAPI web framework
+            pythonPackages.uvicorn    # ASGI server for FastAPI
+            pythonPackages.pydantic   # Data validation using Python type annotations
+            pythonPackages.python-multipart  # Required for FastAPI file uploads (form data)
+
             # Development tools
             pythonPackages.pytest     # Testing framework
             pythonPackages.jupyter    # Interactive development
@@ -34,6 +40,7 @@
             pythonPackages.pip
             pythonPackages.setuptools
             pythonPackages.wheel
+            pythonPackages.streamlit
           ];
 
           # For ase-gui visualization and matplotlib backends
