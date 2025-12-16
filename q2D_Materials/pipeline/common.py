@@ -143,7 +143,7 @@ def calculate_max_sharp_spacer_span(
     if sharp_spacer is None or len(sharp_spacer) == 0:
         return None
 
-    from q2D_Materials.builders.spacer import calculate_double_spacer_nh3_distance
+    from q2D_Materials.builders.spacer import calculate_double_spacer_nh3_distances
     from q2D_Materials.pipeline.common import normalize_spacer
     from q2D_Materials.utils.molecule_builder import get_molecule_length, align_ase_molecule_for_perovskite
 
@@ -171,7 +171,7 @@ def calculate_max_sharp_spacer_span(
 
         nh3_count = _count_nh3_groups(spacer_atoms)
         if nh3_count >= 2:
-            span = calculate_double_spacer_nh3_distance(spacer_atoms)
+            span = calculate_double_spacer_nh3_distances(spacer_atoms)
         else:
             aligned = align_ase_molecule_for_perovskite(spacer_atoms.copy())
             span = get_molecule_length(aligned)
@@ -200,6 +200,8 @@ def build_cell_positions(
     sharp_spacer_span: Optional[float] = None,
     glazer_angles: Optional[List[float]] = None,
     glazer_pattern: Optional[List[str]] = None,
+    lattice_multipliers: Optional[List[float]] = None,
+    interlayer_distances: Optional[Dict[int, float]] = None,
 ) -> Dict[str, object]:
     """
     Build floor schema then flatten to site-indexed positions.
@@ -216,6 +218,8 @@ def build_cell_positions(
         sharp_spacer_nn_distance=sharp_spacer_span,
         glazer_angles=glazer_angles,
         glazer_pattern=glazer_pattern,
+        lattice_multipliers=lattice_multipliers,
+        interlayer_distances=interlayer_distances,
     )
 
     if spacer_provided and attachment_end:
@@ -280,6 +284,8 @@ def populate_positions(
     Ap_ions=None,
     sharp_spacer=None,
     site_labels=None,
+    optimizer: str = "KS",
+    BX_dist=None,
 ) -> Atoms:
     """Populate ions using the population toolchain."""
     positions_np = {site: np.asarray(coords, dtype=float) for site, coords in positions.items()}
@@ -293,6 +299,8 @@ def populate_positions(
         Ap_ions=Ap_ions,
         sharp_spacer=sharp_spacer,
         site_labels=site_labels,
+        optimizer=optimizer,
+        BX_dist=BX_dist,
     )
 
 
@@ -305,28 +313,82 @@ def _split_layer_sequence_string(seq: str) -> List[str]:
     return parts if parts else [seq]
 
 
-def default_layer_sequence(layer_sequence: Optional[str | List[str]], thickness: int, structure_type: str = "monolayer") -> str | List[str]:
-    """Return the default layer sequence for a given thickness if not provided."""
+def _parse_layer_sequence_with_distances(seq: str) -> Tuple[List[str], Optional[Dict[int, float]]]:
+    """
+    Parse a layer sequence string with optional inter-floor distances.
+
+    Examples:
+    - "L1-L2-L3" -> (["L1", "L2", "L3"], None)
+    - "L1-(1.5)-L2-(2.0)-L3" -> (["L1", "L2", "L3"], {0: 1.5, 1: 2.0})
+
+    Parameters
+    ----------
+    seq : str
+        Layer sequence string, e.g. "L1-(1.5)-L3-M2-(3.2)-M1"
+
+    Returns
+    -------
+    Tuple[List[str], Optional[Dict[int, float]]]
+        Floor labels and optional interlayer distances keyed by gap index.
+    """
+    import re
+
+    # Pattern to match floor labels and optional distances in parentheses
+    # Matches: LABEL or LABEL-(DISTANCE)
+    pattern = r'([A-Za-z]\w*)\s*(?:-\s*\((\d+(?:\.\d+)?)\))?'
+    matches = re.findall(pattern, seq)
+
+    if not matches:
+        # Fallback to old parsing if regex fails
+        floor_labels = _split_layer_sequence_string(seq)
+        return floor_labels, None
+
+    floor_labels = []
+    distances = {}
+
+    for i, (label, dist_str) in enumerate(matches):
+        floor_labels.append(label)
+        if dist_str:
+            try:
+                distances[i - 1] = float(dist_str)
+            except ValueError:
+                # Skip invalid numeric values
+                continue
+
+    # Only return distances if any were found
+    return floor_labels, distances if distances else None
+
+
+def default_layer_sequence(layer_sequence: Optional[str | List[str]], thickness: int, structure_type: str = "monolayer") -> Tuple[str | List[str], Optional[Dict[int, float]]]:
+    """
+    Return the default layer sequence for a given thickness if not provided.
+
+    Returns both the layer sequence and any interlayer distances specified in the sequence.
+    """
     if layer_sequence is None:
         if structure_type.lower() == "bulk":
-            return "-".join(["L1-L2"] * thickness)
+            return "-".join(["L1-L2"] * thickness), None
         else:
-            return "-".join(["L1-L2"] * thickness)
+            # For monolayers, add L1 at the end
+            base_sequence = "-".join(["L1-L2"] * thickness)
+            return f"{base_sequence}-L1", None
     elif isinstance(layer_sequence, str) and layer_sequence.upper() == "DJ":
         # DJ keyword: (L1-L2) * thickness + "-M1-M2" for bulk
         if structure_type.lower() == "bulk" and thickness > 1:
             parts = ["L2", "L1"] * thickness
             parts.pop()
             base_sequence = "-".join(parts)
-            return f"{base_sequence}-M1-M1"
+            return f"{base_sequence}-M1-M1", None
         elif structure_type.lower() == "bulk" and thickness == 1:
-            return "L2-M1-M1"
+            return "L2-M1-M1", None
     elif isinstance(layer_sequence, str) and layer_sequence.upper() == "RP":
         # RP keyword: fixed sequence using RP layers
-        return "L2-M1-RP1-RP2-RP1-M1"
+        return "L2-M1-RP1-RP2-RP1-M1", None
     else:
         if isinstance(layer_sequence, str):
             if any(sep in layer_sequence for sep in ("-", ",", " ")):
-                return _split_layer_sequence_string(layer_sequence)
-            return layer_sequence
-        return layer_sequence
+                # Try to parse with distances first
+                floor_labels, distances = _parse_layer_sequence_with_distances(layer_sequence)
+                return floor_labels, distances
+            return layer_sequence, None
+        return layer_sequence, None

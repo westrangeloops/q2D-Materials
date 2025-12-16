@@ -23,8 +23,8 @@ from q2D_Materials.pipeline.common import (
 
 def create_bulk_perovskite(
     A: str | List[str] | Atoms,
-    B: str | List[str] | Atoms,
-    X: str | List[str] | Atoms,
+    B: str | List[str] | Atoms | None,
+    X: str | List[str] | Atoms | None,
     xy_expansion: Tuple[int, int] = (1, 1),
     BX_dist: float = None,
     template: str = "cubic",
@@ -34,13 +34,23 @@ def create_bulk_perovskite(
     thickness: int = 1,
     layer_sequence: Optional[List[str] | str] = None,
     sharp_spacer: Optional[List[str | Atoms]] = None,
+    lattice_multipliers: Optional[List[float]] = None,
+    optimizer: str = "KS",
 ) -> Atoms:
     """
-    Build a bulk perovskite using a chosen geometry template and populate it.
+    Build a bulk perovskite (or related) structure using a geometry template.
     Applies XY expansion within the layer plane.
+
+    B and X can be omitted for templates that do not define B-sites (e.g. salts);
+    in that case a small default BX_dist is used and Glazer tilts are effectively
+    disabled by the template logic.
     """
-    BX_dist = resolve_BX_distance(B, X, BX_dist)
-    layer_sequence = default_layer_sequence(layer_sequence, thickness, structure_type="bulk")
+    if B is None or X is None:
+        if BX_dist is None:
+            BX_dist = 3.0
+    else:
+        BX_dist = resolve_BX_distance(B, X, BX_dist)
+    layer_sequence, interlayer_distances = default_layer_sequence(layer_sequence, thickness, structure_type="bulk")
     
     # Normalize sharp_spacer early to calculate required spans
     sharp_spacer_normalized = None
@@ -70,6 +80,8 @@ def create_bulk_perovskite(
         glazer_angles=glazer_angles,
         glazer_pattern=glazer_pattern,
         sharp_spacer_span=sharp_spacer_span,
+        lattice_multipliers=lattice_multipliers,
+        interlayer_distances=interlayer_distances,
     )
     positions = cell_data["positions"]
     unit_cell_matrix = cell_data["unit_cell_matrix"]
@@ -92,14 +104,16 @@ def create_bulk_perovskite(
         X,
         sharp_spacer=sharp_spacer_for_populate,
         site_labels=site_labels,
+        optimizer=optimizer,
+        BX_dist=BX_dist,
     )
     
     return atoms
 
 def create_monolayer_perovskite(
     A: str | List[str] | Atoms,
-    B: str | List[str] | Atoms,
-    X: str | List[str] | Atoms,
+    B: str | List[str] | Atoms | None,
+    X: str | List[str] | Atoms | None,
     xy_expansion: Tuple[int, int] = (1, 1),
     BX_dist: float = None,
     template: str = "cubic",
@@ -113,14 +127,24 @@ def create_monolayer_perovskite(
     penetration: float = 0.0,
     attachment_end: Optional[str] = None,
     sharp_spacer: Optional[List[str | Atoms]] = None,
+    lattice_multipliers: Optional[List[float]] = None,
+    optimizer: str = "KS",
 ) -> Atoms:
     """
-    Build a monolayer perovskite using a chosen geometry template and populate it.
+    Build a monolayer perovskite (or related) structure using a geometry template.
     Replace the X of terminal positions with the X of the spacer.
     Applies XY expansion within the layer plane.
+
+    B and X can be omitted for templates that do not define B-sites (e.g. salts);
+    in that case a small default BX_dist is used and Glazer tilts are effectively
+    disabled by the template logic.
     """
-    BX_dist = resolve_BX_distance(B, X, BX_dist)
-    layer_sequence = default_layer_sequence(layer_sequence, thickness, structure_type="monolayer")
+    if B is None or X is None:
+        if BX_dist is None:
+            BX_dist = 3.0
+    else:
+        BX_dist = resolve_BX_distance(B, X, BX_dist)
+    layer_sequence, interlayer_distances = default_layer_sequence(layer_sequence, thickness, structure_type="monolayer")
 
     # Normalize sharp_spacer early to calculate required spans
     sharp_spacer_normalized = None
@@ -153,6 +177,8 @@ def create_monolayer_perovskite(
         glazer_angles=glazer_angles,
         glazer_pattern=glazer_pattern,
         sharp_spacer_span=sharp_spacer_span,
+        lattice_multipliers=lattice_multipliers,
+        interlayer_distances=interlayer_distances,
     )
     positions = cell_data["positions"]
     site_labels = cell_data.get("site_labels", {})
@@ -189,23 +215,26 @@ def create_monolayer_perovskite(
         Ap_ions,
         sharp_spacer=sharp_spacer_normalized,
         site_labels=site_labels,
+        optimizer=optimizer,
+        BX_dist=BX_dist,
     )
 
-    # Add vacuum then center the slab symmetrically around mid-cell in Z
-    add_vacuum(atoms, vacuum=vacuum)
+    # Always align bottom at Z=0, then add vacuum above if needed
     z_min = atoms.positions[:, 2].min()
-    z_max = atoms.positions[:, 2].max()
-    cell_z = atoms.get_cell().lengths()[2]
-    center = 0.5 * (z_min + z_max)
-    shift = 0.5 * cell_z - center
-    atoms.positions[:, 2] += shift
+    atoms.positions[:, 2] -= z_min  # Shift so bottom is at Z=0
+    
+    if vacuum > 0.0:
+        add_vacuum(atoms, vacuum=vacuum)
+        # After adding vacuum, shift up by half vacuum to center
+        shift = vacuum / 2.0
+        atoms.positions[:, 2] += shift
 
 
     return atoms
 
 
-def create_perovskite(structure_type="bulk", **kwargs):
-    """Dispatch to the appropriate creator based on structure_type."""
+def create_structure(structure_type="bulk", **kwargs):
+    """Dispatch to the appropriate structure creator based on structure_type."""
     stype = structure_type.lower()
     if stype == "bulk":
         return create_bulk_perovskite(**kwargs)
