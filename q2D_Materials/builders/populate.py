@@ -7,6 +7,7 @@ to convert abstract position matrices into complete ASE Atoms objects.
 
 import numpy as np
 from ase import Atoms
+from ase.data import covalent_radii
 from typing import Union, List, Tuple, Dict, Optional, Any
 
 from .q_builder import QBuilderOutput
@@ -22,6 +23,8 @@ from ..utils.molecule_builder import (
     com_to_origin
 )
 from ..utils.A_sites import get_ionic_radius, is_molecular_a_cation, get_a_site_object
+from .optimizers import find_shortest_pbc_vector, find_optimal_spacer_vectors_global
+from .spacer import calculate_molecule_radius
 
 
 def place_spacer_at_location(atoms, r, attachment_end):
@@ -193,6 +196,8 @@ def populate_from_floor_schema(
         Ap_ions=Ap_ions,
         sharp_spacer=sharp_spacer,
         site_labels=site_labels,
+        floors_cart=list(schema.floors.values()),
+        BX_dist=BX_dist,
     )
 
 
@@ -557,27 +562,15 @@ def _adjust_positions_for_double_spacer(
     sky_pos: np.ndarray,
     spacer_template: Atoms,
 ) -> Tuple[np.ndarray, np.ndarray]:
-    """Project ground/sky anchors onto the molecule's intrinsic N-N span."""
-    from q2D_Materials.builders.spacer import calculate_double_spacer_nh3_distance
-
-    try:
-        mol_length = float(calculate_double_spacer_nh3_distance(spacer_template))
-    except Exception:
-        mol_length = 0.0
-
-    vec = sky_pos - ground_pos
-    dist = np.linalg.norm(vec)
-
-    if mol_length <= 0.0 or dist <= 1e-6:
-        return ground_pos, sky_pos
-
-    unit = vec / dist
-    midpoint = (ground_pos + sky_pos) * 0.5
-    half_len = 0.5 * mol_length
-
-    ground_new = midpoint - unit * half_len
-    sky_new = midpoint + unit * half_len
-    return ground_new, sky_new
+    """Project ground/sky anchors onto the molecule's intrinsic N-N span.
+    
+    CRITICAL: Preserves X, Y coordinates of original S# sites exactly.
+    The kinematic solver will handle aligning the molecule between the two points,
+    so we don't need to adjust positions here - just return them as-is.
+    """
+    # Simply return original positions - the kinematic solver will handle
+    # aligning the molecule between P1 and P2 while respecting bond constraints
+    return ground_pos, sky_pos
 
 
 class _SharpSpacerSequence:
@@ -598,11 +591,148 @@ class _SharpSpacerSequence:
         return template
 
 
+def _find_shortest_xy_pbc_vector(p1: np.ndarray, p2: np.ndarray, cell: np.ndarray) -> np.ndarray:
+    """
+    Find the shortest vector from p1 to p2 considering only XY periodic boundary conditions.
+    Z coordinate is kept fixed (no wrapping in Z direction).
+    Checks all 9 XY periodic images (center + 8 neighbors).
+    
+    Parameters
+    ----------
+    p1 : np.ndarray
+        First point [x, y, z]
+    p2 : np.ndarray
+        Second point [x, y, z]
+    cell : np.ndarray
+        Unit cell matrix (3x3)
+        
+    Returns
+    -------
+    np.ndarray
+        Shortest vector from p1 to p2 considering XY PBC only
+    """
+    p1 = np.asarray(p1, dtype=np.float64)
+    p2 = np.asarray(p2, dtype=np.float64)
+    cell = np.asarray(cell, dtype=np.float64)
+    
+    # Calculate base difference
+    diff_base = p2 - p1
+    
+    # Convert to fractional coordinates
+    try:
+        inv_cell = np.linalg.inv(cell)
+    except np.linalg.LinAlgError:
+        return diff_base
+    
+    diff_frac = diff_base @ inv_cell.T  # Shape: (3,)
+    diff_frac_xy = diff_frac[:2]  # XY fractional coords
+    diff_frac_z = diff_frac[2]  # Z fractional coord (keep as-is)
+    
+    # Generate all 9 XY periodic images
+    shifts = np.array([(dx, dy) for dx in [-1, 0, 1] for dy in [-1, 0, 1]], dtype=np.float64)
+    
+    # Find the shortest vector among all 9 XY images
+    best_vector = None
+    best_distance = np.inf
+    
+    for shift in shifts:
+        # Apply shift to fractional XY coordinates only
+        diff_frac_xy_shifted = diff_frac_xy - shift
+        
+        # Create full fractional coords with shifted XY and original Z
+        diff_frac_shifted = np.array([diff_frac_xy_shifted[0], diff_frac_xy_shifted[1], diff_frac_z])
+        
+        # Convert back to Cartesian
+        diff_shifted = diff_frac_shifted @ cell
+        
+        # Calculate distance
+        distance = np.linalg.norm(diff_shifted)
+        
+        if distance < best_distance:
+            best_distance = distance
+            best_vector = diff_shifted
+    
+    return best_vector if best_vector is not None else diff_base
+
+
+def _calculate_xy_pbc_distances(reference_pos: np.ndarray, positions: np.ndarray, cell: np.ndarray) -> np.ndarray:
+    """
+    Calculate PBC-aware distances considering only XY periodic images (9 total: center + 8 neighbors).
+    Z coordinate is kept fixed (no wrapping in Z direction).
+    
+    Parameters
+    ----------
+    reference_pos : np.ndarray
+        Reference position [x, y, z]
+    positions : np.ndarray
+        Array of positions to calculate distances to, shape (n, 3)
+    cell : np.ndarray
+        Unit cell matrix (3x3)
+        
+    Returns
+    -------
+    np.ndarray
+        Array of shortest distances considering XY PBC only, shape (n,)
+    """
+    reference_pos = np.asarray(reference_pos, dtype=np.float64)
+    positions = np.asarray(positions, dtype=np.float64)
+    cell = np.asarray(cell, dtype=np.float64)
+    
+    # Calculate base difference (no periodic shift)
+    diff_base = positions - reference_pos  # Shape: (n, 3)
+    
+    # Get XY components and Z component separately
+    diff_xy_base = diff_base[:, :2]  # Shape: (n, 2)
+    diff_z = diff_base[:, 2]  # Shape: (n,) - keep Z as-is
+    
+    # Convert to fractional coordinates using full cell (but we'll only use XY)
+    try:
+        inv_cell = np.linalg.inv(cell)
+    except np.linalg.LinAlgError:
+        # Fallback to simple distance if cell is singular
+        return np.linalg.norm(diff_base, axis=1)
+    
+    # Convert full difference to fractional
+    diff_frac_full = diff_base @ inv_cell.T  # Shape: (n, 3)
+    diff_frac_xy = diff_frac_full[:, :2]  # Shape: (n, 2) - only XY fractional coords
+    
+    # Generate all 9 XY periodic images: (-1,-1), (-1,0), (-1,1), (0,-1), (0,0), (0,1), (1,-1), (1,0), (1,1)
+    shifts = np.array([(dx, dy) for dx in [-1, 0, 1] for dy in [-1, 0, 1]], dtype=np.float64)  # Shape: (9, 2)
+    
+    # For each position, check all 9 XY images and find the minimum distance
+    n_positions = len(positions)
+    min_distances = np.full(n_positions, np.inf)
+    
+    for shift in shifts:
+        # Apply shift to fractional XY coordinates only
+        diff_frac_xy_shifted = diff_frac_xy - shift  # Shape: (n, 2)
+        
+        # Convert back to Cartesian using full cell
+        # Create full fractional coords with shifted XY and original Z
+        diff_frac_full_shifted = np.column_stack([
+            diff_frac_xy_shifted,
+            diff_frac_full[:, 2]  # Keep Z fractional coordinate unchanged
+        ])  # Shape: (n, 3)
+        
+        # Convert back to Cartesian
+        diff_shifted = diff_frac_full_shifted @ cell  # Shape: (n, 3)
+        
+        # Calculate distances
+        distances = np.linalg.norm(diff_shifted, axis=1)  # Shape: (n,)
+        
+        # Update minimum distances
+        min_distances = np.minimum(min_distances, distances)
+    
+    return min_distances
+
+
 def populate_sharp(
     structure: Atoms,
     ground_slab: Dict[str, Any],
     sky_slab: Optional[Dict[str, Any]],
     sharp_sequence: Optional[_SharpSpacerSequence],
+    optimizer: str = "KS",
+    BX_dist: Optional[float] = None,
 ) -> Atoms:
     """Populate sharp (S#) sites between a ground slab and an optional sky slab."""
     if sharp_sequence is None or not sharp_sequence.has_templates():
@@ -620,6 +750,42 @@ def populate_sharp(
 
     from q2D_Materials.builders.spacer import place_double_spacer_between_positions
 
+    # Get cell for PBC-aware calculations
+    cell = structure.cell if structure.cell is not None else None
+    
+    # Extract obstacles from existing structure atoms (X ions, B ions, etc.)
+    obstacles = []
+    if len(structure) > 0:
+        symbols = structure.get_chemical_symbols()
+        positions = structure.get_positions()
+        numbers = structure.get_atomic_numbers()
+        
+        for i, (symbol, pos, num) in enumerate(zip(symbols, positions, numbers)):
+            # Include X ions (halides like I, Br, Cl) and B ions (metals)
+            # These are the main obstacles for spacer molecules
+            if symbol in ['I', 'Br', 'Cl', 'F']:  # X-site halides
+                try:
+                    radius = covalent_radii[num]
+                    # Add smaller safety margin - just enough to account for van der Waals
+                    if BX_dist is not None:
+                        radius += BX_dist * 0.1  # Reduced to 10% of BX_dist
+                    else:
+                        radius += 0.3  # Reduced safety margin
+                    # Ensure reasonable minimum radius for halides
+                    radius = max(radius, 1.5)  # Reduced minimum
+                    obstacles.append((np.array(pos, dtype=float), float(radius)))
+                except (KeyError, IndexError):
+                    # Fallback radius for halides
+                    obstacles.append((np.array(pos, dtype=float), 2.0))
+            elif symbol not in ['H', 'C', 'N', 'O']:  # Heavy metals (B-site, etc.)
+                try:
+                    radius = covalent_radii[num]
+                    # Add small safety margin for metals
+                    radius += 0.2  # Reduced margin
+                    obstacles.append((np.array(pos, dtype=float), float(radius)))
+                except (KeyError, IndexError):
+                    pass  # Skip if we can't determine radius
+
     for label in shared_labels:
         template = sharp_sequence.next_template()
         spacer_template = _prepare_sharp_template(template)
@@ -634,31 +800,205 @@ def populate_sharp(
         nh3_groups = _count_nh3_groups(spacer_template)
 
         if nh3_groups >= 2:
-            pair_count = min(len(ground_entries), len(sky_entries))
-            for pair_idx in range(pair_count):
-                ground_pos = np.array(ground_entries[pair_idx]["position"], dtype=float)
-                sky_pos = np.array(sky_entries[pair_idx]["position"], dtype=float)
-                direction = sky_pos - ground_pos
+            # Calculate molecule radius for this spacer template
+            try:
+                # Get the geometric radius (perpendicular to N-N axis)
+                geometric_radius = calculate_molecule_radius(spacer_template)
+                
+                # Also calculate maximum distance from center of mass to any atom
+                # This gives us a more conservative estimate
+                positions = spacer_template.get_positions()
+                com = spacer_template.get_center_of_mass()
+                max_dist_from_com = np.max(np.linalg.norm(positions - com, axis=1))
+                
+                # Use the larger of geometric radius or max distance from COM
+                # This accounts for molecules that might not be perfectly cylindrical
+                spacer_radius = max(geometric_radius, max_dist_from_com * 0.6)  # 60% of max dist
+                
+                # Add safety margin: use larger of calculated radius or default
+                spacer_radius = max(spacer_radius, 2.5)  # Increased minimum
+                
+                # Add moderate safety margin based on BX_dist if available
+                if BX_dist is not None:
+                    spacer_radius += BX_dist * 0.15  # Increased to 15% of BX_dist
+                else:
+                    spacer_radius += 0.5  # Increased safety margin
+            except Exception:
+                # Fallback to conservative default radius
+                spacer_radius = 3.0  # Increased default
+                if BX_dist is not None:
+                    spacer_radius += BX_dist * 0.15
+            
+            # Collect all pairs first for global optimization
+            all_starts = []
+            all_targets = []
+            all_pairs_info = []  # Store (ground_entry, sky_entry, ground_pos, sky_pos) for later
+            
+            if cell is None:
+                # Fallback to simple pairing if no cell
+                pair_count = min(len(ground_entries), len(sky_entries))
+                for pair_idx in range(pair_count):
+                    ground_pos = np.array(ground_entries[pair_idx]["position"], dtype=float)
+                    sky_pos = np.array(sky_entries[pair_idx]["position"], dtype=float)
+                    all_starts.append(ground_pos)
+                    all_targets.append(sky_pos)
+                    all_pairs_info.append((ground_entries[pair_idx], sky_entries[pair_idx], ground_pos, sky_pos))
+            else:
+                # PBC-aware pairing: match each ground entry to closest sky entry
+                sky_positions = np.array([entry["position"] for entry in sky_entries], dtype=float)
+                used_sky_indices = set()
+                
+                # Pair each ground entry with its closest available sky entry
+                for ground_entry in ground_entries:
+                    ground_pos = np.array(ground_entry["position"], dtype=float)
+                    
+                    # Calculate PBC-aware distances from this ground position to all sky positions
+                    distances = _calculate_xy_pbc_distances(ground_pos, sky_positions, cell)
+                    
+                    # Find the closest unused sky entry
+                    best_sky_idx = None
+                    best_dist = float('inf')
+                    for sky_idx, dist in enumerate(distances):
+                        if sky_idx not in used_sky_indices and dist < best_dist:
+                            best_dist = dist
+                            best_sky_idx = sky_idx
+                    
+                    if best_sky_idx is None:
+                        continue  # No available sky position to pair with
+                    
+                    # Mark this sky entry as used
+                    used_sky_indices.add(best_sky_idx)
+                    sky_pos = sky_positions[best_sky_idx]
+                    sky_entry = sky_entries[best_sky_idx]
+                    
+                    all_starts.append(ground_pos)
+                    all_targets.append(sky_pos)
+                    all_pairs_info.append((ground_entry, sky_entry, ground_pos, sky_pos))
+            
+            # Collect already-placed spacer positions as additional obstacles
+            # (for checking collisions with previously placed spacers in this structure)
+            placed_spacer_obstacles = []
+            if len(structure) > 0:
+                # Find spacer molecules already in structure (they have site_role="spacer")
+                from .spacer import SITE_ROLE_KEY
+                if SITE_ROLE_KEY in structure.arrays:
+                    spacer_mask = structure.arrays[SITE_ROLE_KEY] == "spacer"
+                    if np.any(spacer_mask):
+                        spacer_positions = structure.get_positions()[spacer_mask]
+                        # Add each spacer atom as an obstacle with small radius
+                        for pos in spacer_positions:
+                            placed_spacer_obstacles.append((np.array(pos, dtype=float), 1.0))
+            
+            # Combine structure obstacles with placed spacer obstacles
+            all_obstacles = obstacles + placed_spacer_obstacles
+            
+            # Global optimization: get all optimal vectors at once
+            if len(all_starts) > 0 and cell is not None:
+                # Use attachment tolerance based on BX_dist or default
+                attachment_tol = 3.0
+                if BX_dist is not None:
+                    attachment_tol = max(3.0, BX_dist * 0.5)  # At least 50% of BX_dist
+                
+                vectors = find_optimal_spacer_vectors_global(
+                    all_starts, 
+                    all_targets, 
+                    cell,
+                    spacer_radius=spacer_radius,
+                    obstacles=all_obstacles,  # Use combined obstacles
+                    attachment_tolerance=attachment_tol
+                )
+            else:
+                # Fallback: calculate vectors individually
+                vectors = []
+                for i in range(len(all_starts)):
+                    if cell is not None:
+                        vec = _find_shortest_xy_pbc_vector(all_starts[i], all_targets[i], cell)
+                    else:
+                        vec = all_targets[i] - all_starts[i]
+                    vectors.append(vec)
+            
+            # Place spacers using the assigned vectors
+            for i, (ground_entry, sky_entry, ground_pos, sky_pos) in enumerate(all_pairs_info):
+                # Debug: Verify Z coordinates are different
+                if len(ground_pos) >= 3 and len(sky_pos) >= 3:
+                    direction = vectors[i] if i < len(vectors) else (sky_pos - ground_pos)
+                    z_diff = abs(direction[2]) if len(direction) >= 3 else abs(ground_pos[2] - sky_pos[2])
+                    if z_diff < 1e-6:
+                        import warnings
+                        warnings.warn(
+                            f"Warning: Ground and sky positions have same Z coordinate! "
+                            f"Ground pos={ground_pos}, Sky pos={sky_pos}, Z diff={z_diff:.6f}. "
+                            f"Ground slab z={ground_slab.get('z', 'unknown')}, Sky slab z={sky_slab.get('z', 'unknown') if sky_slab else 'none'}. "
+                            f"This will cause molecules to be placed in plane."
+                        )
+                
+                # CRITICAL FIX: Only adjust Z, preserve X, Y coordinates
+                # This ensures molecules are placed at correct S# site positions
+                direction = vectors[i] if i < len(vectors) else (sky_pos - ground_pos)
                 dist = np.linalg.norm(direction)
+                
                 if dist > 1e-6:
                     unit = direction / dist
-                    ground_pos = ground_pos - unit
-                    sky_pos = sky_pos + unit
+                    # Only adjust Z component to move positions slightly outward
+                    # Preserve X, Y to keep molecules at correct S# sites
+                    ground_pos_adjusted = ground_pos.copy()
+                    sky_pos_adjusted = sky_pos.copy()
+                    ground_pos_adjusted[2] = ground_pos[2] - unit[2]  # Only adjust Z
+                    sky_pos_adjusted[2] = sky_pos[2] + unit[2]  # Only adjust Z
+                else:
+                    ground_pos_adjusted = ground_pos.copy()
+                    sky_pos_adjusted = sky_pos.copy()
 
-                ground_pos, sky_pos = _adjust_positions_for_double_spacer(
-                    ground_pos,
-                    sky_pos,
+                ground_pos_adjusted, sky_pos_adjusted = _adjust_positions_for_double_spacer(
+                    ground_pos_adjusted,
+                    sky_pos_adjusted,
                     spacer_template,
                 )
 
+                # Place the spacer molecule using the specific vector from global optimization
                 placed = place_double_spacer_between_positions(
                     spacer_template.copy(),
-                    ground_pos,
-                    sky_pos,
+                    ground_pos_adjusted,
+                    sky_pos_adjusted,
+                    optimizer=optimizer,
+                    cell=cell,
+                    target_vector=vectors[i] if i < len(vectors) else None,
                 )
                 if placed is not None and len(placed) > 0:
+                    # Apply torque-based overlap avoidance to prevent molecule overlaps
+                    from .optimizers import apply_torque_overlap_avoidance
+                    from .spacer import _find_terminal_nitrogens
+
+                    # Find NH3+ groups for rotation axis
+                    _, nh3_indices = _find_terminal_nitrogens(placed)
+                    if len(nh3_indices) >= 2 and len(structure) > 0:
+                        # Apply overlap avoidance - check against ALL atoms in structure
+                        # (not just other spacers, but also X, B, A sites, etc.)
+                        placed = apply_torque_overlap_avoidance(
+                            placed,
+                            structure,  # Pass entire structure for comprehensive overlap checking
+                            nh3_indices[0],
+                            nh3_indices[1],
+                            cell=cell,
+                            max_iterations=20,
+                            torque_strength=0.15,  # Increased for more noticeable rotation
+                            min_distance=2.5,
+                            convergence_tol=0.1
+                        )
+
+                    # Add spacer atoms to structure
                     structure = add_atoms(structure, placed)
+
+                    # Update obstacles with newly placed spacer atoms for next iterations
+                    # (This helps prevent overlaps when placing multiple spacers)
+                    placed_positions = placed.get_positions()
+                    placed_symbols = placed.get_chemical_symbols()
+                    for atom_idx, (pos, symbol) in enumerate(zip(placed_positions, placed_symbols)):
+                        # Only add heavy atoms as obstacles (exclude H)
+                        if symbol != 'H':
+                            all_obstacles.append((np.array(pos, dtype=float), 1.5))  # Small radius for spacer atoms
         else:
+            # Mono spacers: no global optimization needed
             for entry in ground_entries:
                 placed = _place_mono_sharp_spacer(spacer_template.copy(), entry["position"], 'bottom')
                 if placed is not None and len(placed) > 0:
@@ -676,12 +1016,14 @@ def _process_floor_slab(
     ground_slab: Dict[str, Any],
     sky_slab: Optional[Dict[str, Any]],
     sharp_sequence: Optional[_SharpSpacerSequence],
+    optimizer: str = "KS",
+    BX_dist: Optional[float] = None,
 ) -> Atoms:
     """Process a single ground slab and optionally populate sharp spacers to the sky."""
     structure = populate_a_sites(structure, ground_slab)
     structure = populate_b_sites(structure, ground_slab)
     structure = populate_x_sites(structure, ground_slab)
-    structure = populate_sharp(structure, ground_slab, sky_slab, sharp_sequence)
+    structure = populate_sharp(structure, ground_slab, sky_slab, sharp_sequence, optimizer=optimizer, BX_dist=BX_dist)
     return structure
 
 
@@ -694,6 +1036,8 @@ def populate_structure(
     Ap_ions: Optional[Union[str, Atoms, List]] = None,
     sharp_spacer: Optional[List[Union[str, Atoms]]] = None,
     site_labels: Optional[Dict[str, List[str]]] = None,
+    optimizer: str = "KS",
+    BX_dist: Optional[float] = None,
 ) -> Atoms:
     """
     Populate structure matrix with atoms based on site labels (A, B, X, Ap, S#).
@@ -814,9 +1158,62 @@ def populate_structure(
             ground_slab,
             sky_slab,
             sharp_sequence,
+            optimizer=optimizer,
+            BX_dist=BX_dist,
         )
 
     return structure
+
+
+def get_existing_spacer_molecules(structure: Atoms) -> List[Atoms]:
+    """
+    Extract individual spacer molecules from structure.
+
+    Groups atoms by connectivity or site_role tag to identify separate molecules.
+
+    Parameters
+    ----------
+    structure : Atoms
+        The full structure containing multiple molecules
+
+    Returns
+    -------
+    List[Atoms]
+        List of individual spacer molecules
+    """
+    from .spacer import SITE_ROLE_KEY
+
+    spacer_molecules = []
+
+    if len(structure) == 0:
+        return spacer_molecules
+
+    # Check if we have site_role information
+    if SITE_ROLE_KEY in structure.arrays:
+        site_roles = structure.arrays[SITE_ROLE_KEY]
+
+        # Find all unique molecule IDs (groups of atoms with same site_role)
+        unique_roles = set()
+        for role in site_roles:
+            if role == "spacer":
+                unique_roles.add(role)
+
+        # For now, treat all spacer atoms as one molecule (simplified approach)
+        # In practice, you'd want to group by connectivity or molecule ID
+        spacer_indices = [i for i, role in enumerate(site_roles) if role == "spacer"]
+
+        if spacer_indices:
+            # Create a molecule from all spacer atoms
+            spacer_atoms = structure[spacer_indices]
+            spacer_molecules.append(spacer_atoms)
+
+    else:
+        # Fallback: no site_role info, try to identify molecules by connectivity
+        # This is a simplified approach - in practice you'd use bond detection
+        # For now, return empty list (no existing spacers to avoid)
+        pass
+
+    return spacer_molecules
 
 
 def get_effective_spacer_size(spacer: Atoms) -> float:

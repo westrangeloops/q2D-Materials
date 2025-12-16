@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Layer Architect - q2D Materials</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    
+    <style>
+        /* --- Dracula Theme & Base Settings --- */
+        :root {
+            --bg: #272935; --fg: #f8f8f2; --comment: #6272a4;
+            --purple: #bd93f9; --green: #50fa7b; --cyan: #8be9fd;
+            --red: #ff5555; --orange: #ffb86c; --selection: #44475a;
+            --button-primary: #8A5CB7; --button-hover: #BA90F5;
+            --panel-bg: #21222c;
+        }
+        * { box-sizing: border-box; }
+        body { 
+            background-color: var(--bg); color: var(--fg); 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+            margin: 0; height: 100vh; display: flex; overflow: hidden;
+        }
+        
+        /* Layout */
+        #app { display: flex; width: 100%; height: 100%; }
+        .sidebar { 
+            width: 340px; background: var(--panel-bg); 
+            border-right: 1px solid var(--comment); 
+            display: flex; flex-direction: column; 
+            overflow-y: auto; padding: 15px; gap: 15px; flex-shrink: 0;
+        }
+        .main { 
+            flex: 1; display: flex; flex-direction: column; 
+            padding: 20px; overflow: hidden; position: relative;
+        }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-shrink: 0; }
+        .workstation { display: flex; gap: 20px; flex: 1; min-height: 0; }
+        .panel { 
+            flex: 1; background: var(--panel-bg); border-radius: 8px; 
+            border: 1px solid var(--comment); display: flex; flex-direction: column; overflow: hidden;
+        }
+        .panel-header {
+            padding: 10px 15px; background: rgba(255,255,255,0.05);
+            border-bottom: 1px solid var(--comment); font-weight: bold; color: var(--purple);
+        }
+        .panel-content {
+            flex: 1; overflow-y: auto; padding: 15px; 
+            display: flex; flex-direction: column; align-items: center;
+        }
+
+        /* Widgets */
+        details { background: rgba(0,0,0,0.2); border-radius: 4px; margin-bottom: 10px; border: 1px solid transparent; }
+        details[open] { border-color: var(--comment); }
+        summary { padding: 10px; cursor: pointer; font-weight: bold; color: var(--cyan); list-style: none; display: flex; justify-content: space-between; }
+        summary::after { content: '+'; font-size: 1.2em; }
+        details[open] summary::after { content: '-'; }
+        
+        .details-content { padding: 10px; border-top: 1px solid var(--comment); }
+        .row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 0.9em; }
+        
+        input[type="number"], input[type="text"], select {
+            background: var(--bg); border: 1px solid var(--comment); color: var(--fg);
+            padding: 4px 8px; border-radius: 4px; width: 70px;
+        }
+        
+        button { background: var(--button-primary); color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: 500; }
+        button:hover { opacity: 0.9; }
+        button.full-width { width: 100%; }
+        
+        .segmented-control { display: flex; background: var(--bg); border-radius: 6px; padding: 3px; gap: 2px; margin-bottom: 10px; }
+        .segment-opt { flex: 1; text-align: center; padding: 6px; cursor: pointer; border-radius: 4px; font-size: 0.85em; color: var(--comment); transition: all 0.2s; }
+        .segment-opt.active { background: var(--selection); color: var(--fg); font-weight: bold; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+
+        canvas { background: #282a36; cursor: crosshair; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+        .atom-list { flex: 1; overflow-y: auto; min-height: 100px; margin-top: 10px; border-top: 1px solid var(--comment); }
+        .atom-row { display: flex; justify-content: space-between; padding: 6px; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 0.85em; font-family: monospace; }
+        
+        input[type="range"] {
+            -webkit-appearance: none;
+            appearance: none;
+            background: var(--bg);
+            height: 6px;
+            border-radius: 3px;
+            outline: none;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            background: var(--button-primary);
+            border-radius: 50%;
+            cursor: pointer;
+        }
+        input[type="range"]::-moz-range-thumb {
+            width: 16px;
+            height: 16px;
+            background: var(--button-primary);
+            border-radius: 50%;
+            cursor: pointer;
+            border: none;
+        }
+    </style>
+</head>
+<body>
+
+<div id="app">
+    <div class="sidebar">
+        <h2 style="margin:0 0 15px 0; color: var(--purple);">⚙️ Config</h2>
+
+        <details open>
+            <summary>🌐 Lattice Parameters</summary>
+            <div class="details-content">
+                <div class="row"><span>a (Scale X)</span><input type="number" v-model.number="lattice.a" step="0.1" @change="syncLattice"></div>
+                <div class="row"><span>b (Scale Y)</span><input type="number" v-model.number="lattice.b" step="0.1" @change="syncLattice"></div>
+                <div class="row"><span>Alpha (α)</span><input type="number" v-model.number="lattice.alpha" @change="syncLattice"></div>
+                <div class="row"><span>Beta (β)</span><input type="number" v-model.number="lattice.beta" @change="syncLattice"></div>
+                <div class="row"><span>Gamma (γ)</span><input type="number" v-model.number="lattice.gamma" @change="syncLattice"></div>
+            </div>
+        </details>
+
+        <details>
+            <summary>📏 Grid & Guides</summary>
+            <div class="details-content">
+                <div class="row" style="margin-bottom: 5px;">
+                    <label style="cursor:pointer; font-weight:bold; color:var(--fg);"><input type="checkbox" v-model="gridOptions.cartesian" @change="syncGrid"> Cartesian Grid</label>
+                </div>
+                <div class="row" style="padding-left:15px;">
+                    <span style="font-size:0.8em; color:var(--comment);">Vertical Step</span>
+                    <input type="number" v-model.number="gridOptions.step_x" step="0.05" min="0.01" @change="syncGrid" style="width:60px;">
+                </div>
+                <div class="row" style="padding-left:15px; margin-bottom:15px;">
+                    <span style="font-size:0.8em; color:var(--comment);">Horiz. Step</span>
+                    <input type="number" v-model.number="gridOptions.step_y" step="0.05" min="0.01" @change="syncGrid" style="width:60px;">
+                </div>
+
+                <div class="row" style="border-top:1px solid var(--comment); padding-top:10px; margin-bottom:5px;">
+                    <label style="cursor:pointer; font-weight:bold; color:var(--fg);"><input type="checkbox" v-model="gridOptions.diagonal" @change="syncGrid"> Diagonals</label>
+                </div>
+                <div class="row" style="padding-left:15px;">
+                    <span style="font-size:0.8em; color:var(--comment);">Diag. Step</span>
+                    <input type="number" v-model.number="gridOptions.step_diag" step="0.05" min="0.01" @change="syncGrid" style="width:60px;">
+                </div>
+            </div>
+        </details>
+
+        <div style="margin-top: 10px;">
+            <div class="row"><h3 style="margin:0; color: var(--green);">📚 Stack</h3></div>
+            <button class="full-width" @click="addToStack">➕ Add Current Layer</button>
+            <div v-if="layerStack.length > 0" style="margin-top:10px; background:rgba(0,0,0,0.2); border-radius:4px; padding:5px;">
+                <div v-for="(layer, idx) in [...layerStack].reverse()" :key="idx" class="atom-row">
+                    <span>{{ layerStack.length - 1 - idx }}: {{ layer }}</span>
+                    <span style="color:var(--red); cursor:pointer;" @click="removeFromStack(layerStack.length - 1 - idx)">✕</span>
+                </div>
+                <button class="danger full-width" style="margin-top:5px; font-size:0.8em;" @click="clearStack">Clear Stack</button>
+            </div>
+            <div v-else style="text-align:center; color: var(--comment); padding:10px; font-size:0.8em;">Stack Empty</div>
+        </div>
+
+        <div style="margin-top: auto; padding-top: 15px; border-top: 1px solid var(--comment);">
+            <h3 style="margin:0 0 10px 0; color: var(--orange);">💾 Data</h3>
+            <div class="row"><input type="file" @change="handleImport" accept=".json" style="width:100%"></div>
+            <button class="full-width" @click="exportProject">⬇️ Download JSON</button>
+        </div>
+    </div>
+
+    <div class="main">
+        <div class="header">
+            <div>
+                <span style="color:var(--comment)">Editing:</span>
+                <select v-model="currentLayer" @change="selectLayer" style="margin-left:10px; font-size:1.1em; width:auto;">
+                    <option v-for="(atoms, name) in layers" :key="name" :value="name">{{ name }}</option>
+                </select>
+                <button @click="showCreateLayer = !showCreateLayer" style="margin-left:5px; padding:2px 8px;">+</button>
+            </div>
+            <div style="display:flex; gap:10px; align-items:center; flex-wrap: wrap;">
+                <div v-if="showCreateLayer" style="display:flex; gap:5px;">
+                    <input v-model="newLayerName" placeholder="Name..." style="width:100px;">
+                    <button @click="createLayer">Create</button>
+                </div>
+                <div style="display:flex; gap:5px; align-items:center;">
+                    <span style="color:var(--comment); font-size:0.9em;">Overlay:</span>
+                    <select v-model="selectedOverlayLayer" @change="onOverlayLayerChange" style="font-size:0.9em; padding:4px; background:var(--bg); border:1px solid var(--comment); color:var(--fg); border-radius:4px; min-width:100px;">
+                        <option value="">None</option>
+                        <option v-for="layerName in Object.keys(layers).filter(l => l !== currentLayer)" :key="layerName" :value="layerName">{{ layerName }}</option>
+                    </select>
+                </div>
+                <div style="display:flex; gap:5px; align-items:center;">
+                    <button @click="showTraceImage = !showTraceImage" :style="{background: showTraceImage ? 'var(--button-primary)' : 'var(--comment)', cursor: traceImage ? 'pointer' : 'not-allowed', opacity: traceImage ? 1 : 0.5}" :disabled="!traceImage" style="font-size:0.9em; padding:4px 8px; border:none; border-radius:4px; color:white;">
+                        {{ showTraceImage ? '🖼️ Hide Trace' : '🖼️ Show Trace' }}
+                    </button>
+                    <input type="file" @change="handleTraceImageUpload" accept="image/*" style="font-size:0.85em; padding:4px; max-width:150px; cursor:pointer;">
+                    <button v-if="traceImage" @click="clearTraceImage" style="font-size:0.85em; background:var(--red); padding:4px 8px; border:none; border-radius:4px; color:white; cursor:pointer;">Clear</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="workstation">
+            <div class="panel">
+                <div class="panel-header">📐 2D Architect</div>
+                <div class="panel-content">
+                    <div style="width:100%; max-width:600px; margin-bottom:10px;">
+                        <div class="segmented-control">
+                            <div class="segment-opt" :class="{active: inputType==='A'}" @click="inputType='A'">A (Green)</div>
+                            <div class="segment-opt" :class="{active: inputType==='B'}" @click="inputType='B'">B (Blue)</div>
+                            <div class="segment-opt" :class="{active: inputType==='X'}" @click="inputType='X'">X (Red)</div>
+                            <div class="segment-opt" :class="{active: inputType==='Spacer'}" @click="inputType='Spacer'">Spacer</div>
+                        </div>
+                        <div style="display:flex; gap:10px; align-items:center; background:rgba(0,0,0,0.2); padding:8px; border-radius:6px;">
+                            <div v-if="inputType === 'Spacer'" style="display:flex; align-items:center; gap:5px;">
+                                <span style="font-size:0.8em; color:var(--orange);">#</span>
+                                <input type="number" v-model.number="spacerIdx" min="1" style="width:50px;">
+                            </div>
+                            <div style="display:flex; gap:5px; align-items:center;">
+                                <span style="font-size:0.8em;">U</span><input type="number" v-model.number="inputU" step="0.125" style="width:70px;">
+                            </div>
+                            <div style="display:flex; gap:5px; align-items:center;">
+                                <span style="font-size:0.8em;">V</span><input type="number" v-model.number="inputV" step="0.125" style="width:70px;">
+                            </div>
+                            <button style="margin-left:auto;" @click="addAtom">
+                                {{ selectedAtomIndex !== null ? 'Update' : 'Add' }}
+                            </button>
+                            <button v-if="selectedAtomIndex !== null" @click="selectedAtomIndex = null" style="margin-left:5px; background:var(--comment);">
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                    <canvas ref="gridCanvas" width="600" height="600" @mousemove="handleMouseMove" @click="handleClick"></canvas>
+                    <div class="atom-list" style="width:100%; max-width:600px;">
+                        <div v-for="(atom, idx) in currentAtoms" 
+                             :key="`atom-${idx}-${atom[0]}-${atom[1]}-${atom[2]}`" 
+                             class="atom-row"
+                             :style="{background: selectedAtomIndex === idx ? 'rgba(189, 147, 249, 0.2)' : 'transparent', cursor: 'pointer', borderRadius: '4px'}"
+                             @click="selectAtom(idx)">
+                            <span :style="{color: getColor(atom[0])}"><b>{{ atom[0] }}</b></span>
+                            <span>{{ atom[1].toFixed(3) }}, {{ atom[2].toFixed(3) }}</span>
+                            <button style="color:var(--red); cursor:pointer; background:transparent; border:none; padding:2px 6px; font-size:0.85em;" @click.stop.prevent="deleteAtom(idx)">del</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-header">🧊 3D Flipbook</div>
+                <div class="panel-content" style="padding: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #21222c;">
+                    <div style="flex: 1; display: flex; align-items: center; justify-content: center; width: 100%; overflow: hidden;">
+                        <img :src="snapshotUrl" 
+                             style="max-width: 100%; max-height: 100%; object-fit: contain; transition: transform 0.1s;"
+                             alt="3D Preview">
+                    </div>
+                    <div style="width: 100%; padding: 15px; background: rgba(0,0,0,0.2); border-top: 1px solid var(--comment);">
+                        <div class="row">
+                            <span style="font-size: 0.9em; color: var(--cyan);">Rotation (X): {{ rotation }}°</span>
+                        </div>
+                        <input type="range" v-model.number="rotation" min="0" max="360" step="10" style="width: 100%; cursor: pointer; margin-bottom: 10px;">
+                        <div class="row">
+                            <span style="font-size: 0.9em; color: var(--cyan);">Elevation (Y): {{ elevation }}°</span>
+                        </div>
+                        <input type="range" v-model.number="elevation" min="0" max="180" step="10" style="width: 100%; cursor: pointer;">
+                        <div style="display: flex; gap: 10px; margin-top: 10px;">
+                            <button @click="startSpin" v-if="!isSpinning" style="flex: 1; font-size: 0.8em;">▶ Auto-Spin</button>
+                            <button @click="stopSpin" v-else class="danger" style="flex: 1; font-size: 0.8em;">⏹ Stop</button>
+                        </div>
+                    </div>
+                    <div v-if="layerStack.length === 0" style="position:absolute; top:50%; width:100%; text-align:center; color:var(--comment); pointer-events:none;">
+                        Add layers to stack to see preview
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const { createApp, ref, onMounted, watch, computed, nextTick } = Vue;
+
+createApp({
+    setup() {
+        const API = 'http://localhost:8000';
+        const layers = ref({"L1": []});
+        const currentLayer = ref("L1");
+        const layerStack = ref([]);
+        const lattice = ref({a: 5.0, b: 5.0, alpha: 90.0, beta: 90.0, gamma: 90.0});
+        // Updated Default Options with separate steps
+        const gridOptions = ref({
+            cartesian: true, diagonal: false, 
+            step_x: 0.2, step_y: 0.2, step_diag: 0.2
+        });
+        
+        const showCreateLayer = ref(false);
+        const newLayerName = ref("");
+        const inputType = ref("A");
+        const spacerIdx = ref(1);
+        const inputU = ref(0.5);
+        const inputV = ref(0.5);
+        const gridCanvas = ref(null);
+        const showOtherLayers = ref(false);
+        const traceImage = ref(null);
+        const showTraceImage = ref(false);
+        const selectedOverlayLayer = ref("");
+        
+        // Selected atom for editing (null = add new, number = edit existing)
+        const selectedAtomIndex = ref(null);
+        
+        // 3D Rotation state (azimuth and elevation)
+        const rotation = ref(45);  // Azimuth (horizontal rotation)
+        const elevation = ref(30); // Elevation (vertical angle: 0=below, 90=side, 180=above)
+        const isSpinning = ref(false);
+        let spinInterval = null;
+
+        const currentAtoms = computed(() => layers.value[currentLayer.value] || []);
+        
+        // Computed URL for the 3D image
+        // We add a timestamp 't' to force the browser to re-fetch when data changes
+        const snapshotUrl = computed(() => {
+            // Dependency triggers: when layerStack or lattice changes, we want a refresh
+            const _ = layerStack.value.length + lattice.value.a; 
+            return `${API}/render/3d?angle=${rotation.value}&elev=${elevation.value}&spacing=3.0&t=${Date.now()}`;
+        });
+
+        const loadState = async () => {
+            try {
+                const res = await axios.get(`${API}/state`);
+                layers.value = res.data.layers;
+                currentLayer.value = res.data.current_layer;
+                layerStack.value = res.data.layer_stack || [];
+                lattice.value = res.data.lattice;
+                // Merge defaults in case backend is missing fields
+                gridOptions.value = {...gridOptions.value, ...res.data.grid_options};
+                await nextTick(); drawGrid(); update3D();
+            } catch(e) { console.error(e); }
+        };
+
+        const syncLattice = async () => { await axios.post(`${API}/lattice`, lattice.value); drawGrid(); update3D(); };
+        const syncGrid = async () => { await axios.post(`${API}/grid`, gridOptions.value); drawGrid(); };
+        const selectLayer = async () => { 
+            selectedAtomIndex.value = null; // Clear selection when switching layers
+            await axios.post(`${API}/layer/select/${currentLayer.value}`); 
+            drawGrid(); 
+        };
+        
+        const createLayer = async () => {
+            if (!newLayerName.value) return;
+            await axios.post(`${API}/layer/create`, {name: newLayerName.value});
+            await loadState(); newLayerName.value = ""; showCreateLayer.value = false;
+        };
+
+        const selectAtom = (idx) => {
+            selectedAtomIndex.value = idx;
+            // Update input fields to show selected atom's position
+            const atom = currentAtoms.value[idx];
+            inputU.value = atom[1];
+            inputV.value = atom[2];
+            drawGrid(); // Redraw to show selection
+        };
+        
+        const addAtom = async () => {
+            try {
+                // If an atom is selected, update it; otherwise add new
+                if (selectedAtomIndex.value !== null && selectedAtomIndex.value >= 0) {
+                    await updateAtomPosition(selectedAtomIndex.value, inputU.value, inputV.value);
+                    selectedAtomIndex.value = null; // Clear selection after updating
+                } else {
+                    const code = inputType.value === 'Spacer' ? `S${spacerIdx.value}` : inputType.value;
+                    const res = await axios.post(`${API}/atom/add`, {code, u: inputU.value, v: inputV.value});
+                    // Ensure we update the correct layer with the full array from backend
+                    if (res.data && Array.isArray(res.data)) {
+                        // Use Vue's reactivity by creating a new object reference
+                        layers.value = {...layers.value, [currentLayer.value]: res.data};
+                        drawGrid();
+                        update3D();
+                    }
+                }
+            } catch(e) {
+                console.error("Add/Update atom error:", e);
+            }
+        };
+        
+        const updateAtomPosition = async (idx, u, v) => {
+            try {
+                const res = await axios.post(`${API}/atom/update`, {idx: idx, u: u, v: v});
+                if (res.data && Array.isArray(res.data)) {
+                    layers.value = {...layers.value, [currentLayer.value]: res.data};
+                    drawGrid();
+                    update3D();
+                }
+            } catch(e) {
+                console.error("Update atom error:", e);
+            }
+        };
+
+        const deleteAtom = async (idx, event) => {
+            // Explicitly stop event propagation if event is provided
+            if (event) {
+                event.stopPropagation();
+                event.preventDefault();
+            }
+            try {
+                const res = await axios.post(`${API}/atom/delete`, {idx: idx});
+                // Update local state directly from response
+                if (res.data && Array.isArray(res.data)) {
+                    layers.value[currentLayer.value] = res.data;
+                    // Clear selection if deleted atom was selected
+                    if (selectedAtomIndex.value === idx) {
+                        selectedAtomIndex.value = null;
+                    } else if (selectedAtomIndex.value > idx) {
+                        // Adjust selection index if atom before selected was deleted
+                        selectedAtomIndex.value = selectedAtomIndex.value - 1;
+                    }
+                    drawGrid();
+                    update3D();
+                }
+            } catch(e) {
+                console.error("Delete error:", e);
+            }
+        };
+
+        const addToStack = async () => {
+            const res = await axios.post(`${API}/stack/add`);
+            layerStack.value = res.data; update3D();
+        };
+
+        const removeFromStack = async (idx) => {
+            const res = await axios.post(`${API}/stack/remove/${idx}`);
+            layerStack.value = res.data; update3D();
+        };
+
+        const clearStack = async () => {
+            const res = await axios.post(`${API}/stack/clear`);
+            layerStack.value = res.data; update3D();
+        };
+
+        const exportProject = async () => {
+            const res = await axios.post(`${API}/export`);
+            const blob = new Blob([JSON.stringify(res.data, null, 2)], {type: 'application/json'});
+            const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = 'structure.json'; link.click();
+        };
+
+        const handleImport = async (e) => {
+            const file = e.target.files[0]; if (!file) return;
+            const fd = new FormData(); fd.append('file', file);
+            await axios.post(`${API}/import`, fd); await loadState();
+        };
+
+        const handleTraceImageUpload = (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const img = new Image();
+                img.onload = () => {
+                    traceImage.value = img;
+                    showTraceImage.value = true;
+                    drawGrid();
+                };
+                img.src = event.target.result;
+            };
+            reader.readAsDataURL(file);
+        };
+
+        const clearTraceImage = () => {
+            traceImage.value = null;
+            showTraceImage.value = false;
+            // Clear the file input
+            const fileInput = document.querySelector('input[type="file"][accept="image/*"]');
+            if (fileInput) fileInput.value = '';
+            drawGrid();
+        };
+
+        const onOverlayLayerChange = () => {
+            // Automatically show overlay when a layer is selected
+            if (selectedOverlayLayer.value && selectedOverlayLayer.value !== currentLayer.value) {
+                showOtherLayers.value = true;
+            } else {
+                showOtherLayers.value = false;
+            }
+            drawGrid();
+        };
+
+        const getColor = (code) => {
+            if(code.startsWith('A')) return '#50fa7b';
+            if(code.startsWith('B')) return '#8be9fd';
+            if(code.startsWith('X')) return '#ff5555';
+            return '#ffb86c';
+        };
+
+        // --- DRAWING LOGIC WITH CUSTOM STEPS ---
+        const drawGrid = () => {
+            if(!gridCanvas.value) return;
+            const ctx = gridCanvas.value.getContext('2d');
+            const w = gridCanvas.value.width, h = gridCanvas.value.height;
+            
+            ctx.fillStyle = '#282a36'; ctx.fillRect(0, 0, w, h);
+            
+            // Draw trace image with transparency if enabled (drawn first, behind everything)
+            if(showTraceImage.value && traceImage.value) {
+                ctx.globalAlpha = 0.5; // 50% transparency
+                ctx.drawImage(traceImage.value, 0, 0, w, h);
+                ctx.globalAlpha = 1.0; // Reset alpha
+            }
+            
+            const gamma_rad = lattice.value.gamma * Math.PI / 180;
+            const v1 = [lattice.value.a, 0];
+            const v2 = [lattice.value.b * Math.cos(gamma_rad), lattice.value.b * Math.sin(gamma_rad)];
+            
+            const pad = 40;
+            const max_x = Math.max(v1[0], v2[0], v1[0]+v2[0]);
+            const max_y = Math.max(v1[1], v2[1], v1[1]+v2[1]);
+            const min_x = Math.min(0, v1[0], v2[0]);
+            const min_y = Math.min(0, v1[1], v2[1]);
+            const span = Math.max(max_x-min_x, max_y-min_y);
+            const s = (w - 2*pad) / (span || 1);
+            
+            const toPx = (u, v) => {
+                const cx = u*v1[0] + v*v2[0];
+                const cy = u*v1[1] + v*v2[1];
+                return [pad + (cx-min_x)*s, h - (pad + (cy-min_y)*s)];
+            };
+
+            // 1. Cartesian Grid (Uses step_x and step_y)
+            if(gridOptions.value.cartesian) {
+                ctx.strokeStyle = '#44475a'; ctx.lineWidth = 1;
+                
+                // Vertical lines (Steps of U)
+                const sx = gridOptions.value.step_x || 0.2;
+                for(let i=-1.0; i<=2.0; i+=sx) {
+                    let p1 = toPx(i, -1), p2 = toPx(i, 2);
+                    ctx.beginPath(); ctx.moveTo(p1[0], p1[1]); ctx.lineTo(p2[0], p2[1]); ctx.stroke();
+                }
+                
+                // Horizontal lines (Steps of V)
+                const sy = gridOptions.value.step_y || 0.2;
+                for(let i=-1.0; i<=2.0; i+=sy) {
+                    let p3 = toPx(-1, i), p4 = toPx(2, i);
+                    ctx.beginPath(); ctx.moveTo(p3[0], p3[1]); ctx.lineTo(p4[0], p4[1]); ctx.stroke();
+                }
+            }
+
+            // 2. Unit Cell
+            ctx.strokeStyle = '#bd93f9'; ctx.lineWidth = 2;
+            const c = [toPx(0,0), toPx(1,0), toPx(1,1), toPx(0,1)];
+            ctx.beginPath(); ctx.moveTo(c[0][0], c[0][1]);
+            c.slice(1).forEach(p => ctx.lineTo(p[0], p[1]));
+            ctx.closePath(); ctx.stroke();
+
+            // 3. Diagonals (Uses step_diag)
+            if(gridOptions.value.diagonal) {
+                ctx.strokeStyle = '#6272a4'; ctx.lineWidth = 1;
+                const sd = gridOptions.value.step_diag || 0.2;
+                
+                // Draw diagonals u + v = k
+                for(let k=-2.0; k<=4.0; k+=sd) {
+                    // Line where u+v=k -> v = k-u. From u=-1 to u=2
+                    let p1 = toPx(-1, k - (-1)), p2 = toPx(2, k - 2);
+                    ctx.beginPath(); ctx.moveTo(p1[0], p1[1]); ctx.lineTo(p2[0], p2[1]); ctx.stroke();
+                }
+                // Draw anti-diagonals u - v = k
+                for(let k=-2.0; k<=4.0; k+=sd) {
+                    let p1 = toPx(-1, -1 - k), p2 = toPx(2, 2 - k);
+                    ctx.beginPath(); ctx.moveTo(p1[0], p1[1]); ctx.lineTo(p2[0], p2[1]); ctx.stroke();
+                }
+            }
+
+            // 4. Draw selected other layer with transparency (if enabled)
+            if(showOtherLayers.value && selectedOverlayLayer.value && selectedOverlayLayer.value !== currentLayer.value) {
+                const otherAtoms = layers.value[selectedOverlayLayer.value] || [];
+                otherAtoms.forEach((a) => {
+                    const [cx, cy] = toPx(a[1], a[2]);
+                    ctx.globalAlpha = 0.5; // 50% transparency
+                    ctx.fillStyle = getColor(a[0]);
+                    ctx.strokeStyle = '#272935';
+                    ctx.lineWidth = 1;
+                    const size = 10; // Slightly smaller for other layers
+                    
+                    const code = a[0];
+                    if (code.startsWith('A')) {
+                        ctx.beginPath();
+                        ctx.arc(cx, cy, size, 0, 2*Math.PI);
+                        ctx.fill();
+                        ctx.stroke();
+                    } else if (code.startsWith('B')) {
+                        ctx.fillRect(cx - size, cy - size, size * 2, size * 2);
+                        ctx.strokeRect(cx - size, cy - size, size * 2, size * 2);
+                    } else if (code.startsWith('X')) {
+                        ctx.beginPath();
+                        ctx.arc(cx, cy, size, 0, 2*Math.PI);
+                        ctx.fill();
+                        ctx.stroke();
+                        const xSize = size * 0.8;
+                        ctx.strokeStyle = '#272935';
+                        ctx.lineWidth = 2;
+                        ctx.beginPath();
+                        ctx.moveTo(cx - xSize, cy - xSize);
+                        ctx.lineTo(cx + xSize, cy + xSize);
+                        ctx.moveTo(cx + xSize, cy - xSize);
+                        ctx.lineTo(cx - xSize, cy + xSize);
+                        ctx.stroke();
+                    } else {
+                        // Triangle for Spacers
+                        ctx.beginPath();
+                        ctx.moveTo(cx, cy - size);
+                        ctx.lineTo(cx - size * 0.866, cy + size * 0.5);
+                        ctx.lineTo(cx + size * 0.866, cy + size * 0.5);
+                        ctx.closePath();
+                        ctx.fill();
+                        ctx.stroke();
+                    }
+                    
+                    // Draw label for S# spacers in other layers
+                    if (code.startsWith('S')) {
+                        ctx.fillStyle = '#f8f8f2';
+                        ctx.globalAlpha = 0.5; // Keep transparency for labels too
+                        ctx.font = 'bold 9px sans-serif';
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'middle';
+                        // Position label above the triangle
+                        ctx.fillText(code, cx, cy - size - 6);
+                        ctx.globalAlpha = 0.5; // Reset to 0.5 for other elements
+                    }
+                });
+                ctx.globalAlpha = 1.0; // Reset alpha
+            }
+
+            // 5. Atoms & Ghost (with different shapes: A=Circle, B=Square, X=X, Spacer=Triangle)
+            currentAtoms.value.forEach((a, idx) => {
+                const [cx, cy] = toPx(a[1], a[2]);
+                ctx.fillStyle = getColor(a[0]);
+                // Highlight selected atom with a ring
+                const isSelected = selectedAtomIndex.value === idx;
+                ctx.strokeStyle = isSelected ? '#bd93f9' : '#272935';
+                ctx.lineWidth = isSelected ? 3 : 1.5;
+                const size = 13; // 5px bigger (was 8)
+                
+                const code = a[0];
+                if (code.startsWith('A')) {
+                    // Circle for A
+                    ctx.beginPath();
+                    ctx.arc(cx, cy, size, 0, 2*Math.PI);
+                    ctx.fill();
+                    ctx.stroke();
+                } else if (code.startsWith('B')) {
+                    // Square for B
+                    ctx.fillRect(cx - size, cy - size, size * 2, size * 2);
+                    ctx.strokeRect(cx - size, cy - size, size * 2, size * 2);
+                } else if (code.startsWith('X')) {
+                    // X shape for X - draw filled circle first, then X on top
+                    ctx.beginPath();
+                    ctx.arc(cx, cy, size, 0, 2*Math.PI);
+                    ctx.fill();
+                    ctx.stroke();
+                    // Draw X lines
+                    const xSize = size * 0.8;
+                    ctx.strokeStyle = '#272935';
+                    ctx.lineWidth = 2.5;
+                    ctx.beginPath();
+                    ctx.moveTo(cx - xSize, cy - xSize);
+                    ctx.lineTo(cx + xSize, cy + xSize);
+                    ctx.moveTo(cx + xSize, cy - xSize);
+                    ctx.lineTo(cx - xSize, cy + xSize);
+                    ctx.stroke();
+                    ctx.strokeStyle = '#272935'; // Reset
+                } else {
+                    // Triangle for Spacers
+                    ctx.beginPath();
+                    ctx.moveTo(cx, cy - size);
+                    ctx.lineTo(cx - size * 0.866, cy + size * 0.5);
+                    ctx.lineTo(cx + size * 0.866, cy + size * 0.5);
+                    ctx.closePath();
+                    ctx.fill();
+                    ctx.stroke();
+                }
+                
+                // Draw label for S# spacers
+                if (code.startsWith('S')) {
+                    ctx.fillStyle = '#f8f8f2';
+                    ctx.font = 'bold 10px sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    // Position label above the triangle
+                    ctx.fillText(code, cx, cy - size - 8);
+                }
+                
+                // Draw selection ring for selected atom
+                if (isSelected) {
+                    ctx.strokeStyle = '#bd93f9';
+                    ctx.lineWidth = 2;
+                    ctx.setLineDash([5, 5]);
+                    ctx.beginPath();
+                    ctx.arc(cx, cy, size + 4, 0, 2*Math.PI);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                }
+            });
+            // Ghost preview (circle, 5px bigger)
+            const [gx, gy] = toPx(inputU.value, inputV.value);
+            ctx.strokeStyle = 'white';
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([4,4]);
+            ctx.beginPath();
+            ctx.arc(gx, gy, 12, 0, 2*Math.PI); // 5px bigger (was 7)
+            ctx.stroke();
+            ctx.setLineDash([]);
+        };
+
+        const update3D = async () => {
+            // Force image refresh by updating rotation slightly (will be reset by watch)
+            // The computed snapshotUrl will automatically update
+        };
+        
+        const startSpin = () => {
+            isSpinning.value = true;
+            spinInterval = setInterval(() => {
+                rotation.value = (rotation.value + 10) % 360; // 10 degree steps
+            }, 200); // 200ms = 5 frames per second (Low FPS "Hish" style)
+        };
+        
+        const stopSpin = () => {
+            isSpinning.value = false;
+            if (spinInterval) {
+                clearInterval(spinInterval);
+                spinInterval = null;
+            }
+        };
+
+        // --- Init JSmol & Listeners ---
+        const handleClick = (e) => {
+            const rect = gridCanvas.value.getBoundingClientRect();
+            const x = e.clientX - rect.left, y = e.clientY - rect.top;
+            
+            const gamma = lattice.value.gamma * Math.PI/180;
+            const v1 = [lattice.value.a, 0];
+            const v2 = [lattice.value.b * Math.cos(gamma), lattice.value.b * Math.sin(gamma)];
+            
+            const pad = 40, w = rect.width, h = rect.height;
+            const max_x = Math.max(v1[0], v2[0], v1[0]+v2[0]);
+            const max_y = Math.max(v1[1], v2[1], v1[1]+v2[1]);
+            const min_x = Math.min(0, v1[0], v2[0]);
+            const min_y = Math.min(0, v1[1], v2[1]);
+            const s = (w - 2*pad) / (Math.max(max_x-min_x, max_y-min_y) || 1);
+
+            const cx = min_x + (x - pad) / s;
+            const cy = min_y + (h - pad - y) / s;
+
+            const det = v1[0]*v2[1] - v1[1]*v2[0];
+            if(Math.abs(det) > 1e-9) {
+                const u = (cx*v2[1] - cy*v2[0])/det;
+                const v = (cy*v1[0] - cx*v1[1])/det;
+                const u_val = parseFloat(u.toFixed(3));
+                const v_val = parseFloat(v.toFixed(3));
+                
+                // If an atom is selected, update its position; otherwise update input fields
+                if (selectedAtomIndex.value !== null && selectedAtomIndex.value >= 0) {
+                    updateAtomPosition(selectedAtomIndex.value, u_val, v_val);
+                    inputU.value = u_val;
+                    inputV.value = v_val;
+                } else {
+                    inputU.value = u_val;
+                    inputV.value = v_val;
+                    drawGrid();
+                }
+            }
+        };
+
+        const handleMouseMove = (e) => {}; // Placeholder
+
+        watch([inputU, inputV, inputType, showOtherLayers, showTraceImage, selectedOverlayLayer], drawGrid);
+        watch([layers, currentLayer], () => {
+            // Redraw grid when layers change
+            drawGrid();
+        });
+        watch([layerStack, lattice], () => {
+            // Force image refresh when structure changes
+            update3D();
+        });
+        
+        onMounted(() => {
+            loadState();
+        });
+
+        return {
+            layers, currentLayer, layerStack, lattice, gridOptions,
+            inputType, spacerIdx, inputU, inputV,
+            gridCanvas, showCreateLayer, newLayerName, currentAtoms,
+            selectLayer, createLayer, syncLattice, syncGrid, 
+            selectAtom, addAtom, deleteAtom, updateAtomPosition, addToStack, removeFromStack, clearStack,
+            exportProject, handleImport, handleClick, handleMouseMove, getColor,
+            rotation, elevation, snapshotUrl, isSpinning, startSpin, stopSpin,
+            selectedAtomIndex, showOtherLayers, traceImage, showTraceImage,
+            handleTraceImageUpload, clearTraceImage, selectedOverlayLayer, onOverlayLayerChange
+        };
+    }
+}).mount('#app');
+</script>
+</body>
+</html>
