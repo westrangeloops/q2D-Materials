@@ -7,6 +7,7 @@ This module combines:
 - Special handling for small molecules like NH3
 """
 
+from typing import List, Tuple, Optional
 import numpy as np
 import pandas as pd
 from ase import Atoms
@@ -976,4 +977,103 @@ def place_atoms_at_location(atoms, r):
     mod_atoms = com_to_origin(mod_atoms)
     mod_atoms = translate_atoms(mod_atoms, r)
     return mod_atoms
+
+
+def get_nearby_atoms_pbc(atoms: Atoms, center: np.ndarray,
+                         cutoff: float) -> List[Tuple[int, np.ndarray]]:
+    """
+    Get atoms within cutoff distance, considering PBC.
+
+    Based on mofun approach for better PBC-aware neighbor finding.
+
+    Parameters
+    ----------
+    atoms : ase.Atoms
+        The structure to search
+    center : np.ndarray
+        Center point for distance calculation
+    cutoff : float
+        Maximum distance to include atoms
+
+    Returns
+    -------
+    List[Tuple[int, np.ndarray]]
+        List of (atom_index, position) tuples within cutoff
+    """
+    if atoms.cell is None:
+        # Non-periodic: simple distance check
+        positions = atoms.get_positions()
+        dists = np.linalg.norm(positions - center, axis=1)
+        return [(i, pos) for i, pos in enumerate(positions) if dists[i] < cutoff]
+
+    # PBC-aware: check all 27 unit cell images
+    cell = atoms.cell
+    positions = atoms.get_positions()
+
+    # Get unit cell neighbor offsets (same as mofun)
+    multipliers = np.array(np.meshgrid([-1, 0, 1], [-1, 0, 1], [-1, 0, 1])).T.reshape(-1, 1, 3)
+    uc_offsets = np.array([np.matmul(cell.T, mult[0]) for mult in multipliers])
+
+    nearby = []
+    for i, pos in enumerate(positions):
+        pos_images = pos + uc_offsets
+        dists = np.linalg.norm(pos_images - center, axis=1)
+        min_dist = np.min(dists)
+        if min_dist < cutoff:
+            # Find which image is closest and return that position
+            closest_idx = np.argmin(dists)
+            nearby_pos = pos + uc_offsets[closest_idx]
+            nearby.append((i, nearby_pos))
+
+    return nearby
+
+
+def find_molecule_patterns(structure: Atoms, pattern: Atoms,
+                           atol: float = 0.1) -> List[Tuple[int, ...]]:
+    """
+    Find instances of pattern molecule in structure.
+
+    Based on mofun's find_pattern_in_structure approach, simplified for ASE Atoms.
+
+    Parameters
+    ----------
+    structure : ase.Atoms
+        The structure to search in
+    pattern : ase.Atoms
+        The pattern molecule to find
+    atol : float
+        Absolute tolerance for atom position matching
+
+    Returns
+    -------
+    List[Tuple[int, ...]]
+        List of atom index tuples matching the pattern
+    """
+    from scipy.spatial.distance import cdist
+
+    if len(pattern) > len(structure):
+        return []
+
+    # Pre-calculate pattern distance matrix
+    pattern_positions = pattern.get_positions()
+    pattern_dists = cdist(pattern_positions, pattern_positions)
+    pattern_elements = pattern.get_chemical_symbols()
+
+    matches = []
+
+    # For each possible starting position in structure
+    for i in range(len(structure) - len(pattern) + 1):
+        # Quick element check: first few atoms must match
+        if structure.get_chemical_symbols()[i:i+len(pattern)] != pattern_elements:
+            continue
+
+        # Check distance matrix
+        struct_positions = structure.positions[i:i+len(pattern)]
+        struct_dists = cdist(struct_positions, struct_positions)
+
+        # Check if distance matrices match within tolerance
+        if np.allclose(pattern_dists, struct_dists, atol=atol):
+            matches.append(tuple(range(i, i+len(pattern))))
+
+    return matches
 

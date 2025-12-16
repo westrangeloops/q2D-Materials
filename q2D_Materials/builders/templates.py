@@ -55,6 +55,8 @@ def build_floor_schema(
     sharp_spacer_nn_distance: Optional[float] = None,
     glazer_angles: Optional[List[float]] = None,
     glazer_pattern: Optional[List[str]] = None,
+    lattice_multipliers: Optional[List[float]] = None,
+    interlayer_distances: Optional[Dict[int, float]] = None,
 ) -> FloorSchema:
     """
     Build a numbered-floor schema with cartesian coordinates.
@@ -68,11 +70,15 @@ def build_floor_schema(
 
     layers, layer_names = _resolve_layers(data, layer_sequence)
     z_positions, total_height = _compute_layer_heights(
-        layers, layer_names, BX_dist=BX_dist, sharp_spacer_nn_distance=sharp_spacer_nn_distance
+        layers, layer_names, BX_dist=BX_dist, sharp_spacer_nn_distance=sharp_spacer_nn_distance, interlayer_distances=interlayer_distances
     )
 
     lattice_lengths = _calculate_lattice_lengths(
-        data, BX_dist, total_height, jahn_teller_dist=jahn_teller_dist
+        data,
+        BX_dist,
+        total_height,
+        jahn_teller_dist=jahn_teller_dist,
+        lattice_multipliers_override=lattice_multipliers,
     )
     cell_matrix = cell_matrix_from_parameters(*lattice_lengths, *angles)
 
@@ -224,6 +230,7 @@ def _compute_layer_heights(
     layer_names: List[str],
     BX_dist: float,
     sharp_spacer_nn_distance: Optional[float],
+    interlayer_distances: Optional[Dict[int, float]] = None,
 ) -> Tuple[List[float], float]:
     """
     Return absolute z for each layer start and total c-length.
@@ -241,7 +248,10 @@ def _compute_layer_heights(
         prev_layer = layers[idx - 1]
         curr_layer = layers[idx]
         gap = BX_dist
-        if _layer_has_spacer_sites(prev_layer) and _layer_has_spacer_sites(curr_layer):
+        # Check if user specified a custom interlayer distance for this gap
+        if interlayer_distances is not None and idx - 1 in interlayer_distances:
+            gap = interlayer_distances[idx - 1]
+        elif _layer_has_spacer_sites(prev_layer) and _layer_has_spacer_sites(curr_layer):
             gap = sharp_spacer_nn_distance if sharp_spacer_nn_distance is not None else 2.0 * BX_dist
         cumulative += gap
         z_positions.append(cumulative)
@@ -280,8 +290,9 @@ def _calculate_lattice_lengths(
     BX_dist: float,
     total_height: float,
     jahn_teller_dist: float,
+    lattice_multipliers_override: Optional[List[float]] = None,
 ) -> Tuple[float, float, float]:
-    multipliers = data.get("lattice_multipliers", [2.0, 2.0, 2.0])
+    multipliers = lattice_multipliers_override or data.get("lattice_multipliers", [2.0, 2.0, 2.0])
     if len(multipliers) == 2:
         multipliers = [multipliers[0], multipliers[1], 1.0]
 
@@ -336,6 +347,10 @@ def _apply_glazer_to_floors(
 ) -> Tuple["OrderedDict[str, List[List[float]]]", np.ndarray, Tuple[float, float, float]]:
     """
     Apply Glazer tilting to X-sites and return updated floors and cell.
+
+    Glazer tilting requires both B and X networks. If either B or X is absent
+    in the position matrix, the tilting step is skipped and the original
+    geometry is returned unchanged.
     """
     # Build position matrix grouped by site
     position_matrix: Dict[str, List[List[float]]] = {}
@@ -344,8 +359,13 @@ def _apply_glazer_to_floors(
             position_matrix.setdefault(site, []).append([x, y, z])
     original_positions = {k: [list(p) for p in v] for k, v in position_matrix.items()}
 
-    # Tilt only if we have X sites
-    if "X" not in position_matrix or len(position_matrix["X"]) == 0:
+    # Tilt only if we have both B and X sites
+    if (
+        "X" not in position_matrix
+        or len(position_matrix["X"]) == 0
+        or "B" not in position_matrix
+        or len(position_matrix["B"]) == 0
+    ):
         cell_matrix = cell_matrix_from_parameters(*lattice_lengths, 90.0, 90.0, 90.0)
         return floors, cell_matrix, lattice_lengths
 
