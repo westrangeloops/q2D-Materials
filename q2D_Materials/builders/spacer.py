@@ -173,6 +173,26 @@ def _find_terminal_nitrogens(mol: Atoms) -> Tuple[List[int], List[int]]:
     return n_indices, nh3_n_indices
 
 
+def count_nh3_groups(mol: Atoms) -> int:
+    """
+    Count the number of NH3+ groups in a molecule.
+
+    This is a convenience wrapper around _find_terminal_nitrogens().
+
+    Parameters
+    ----------
+    mol : Atoms
+        The molecule to analyze
+
+    Returns
+    -------
+    int
+        Number of NH3+ groups found
+    """
+    _, nh3_n_indices = _find_terminal_nitrogens(mol)
+    return len(nh3_n_indices)
+
+
 def _place_molecule(
     mol: Atoms,
     target_xyz: List[float],
@@ -371,39 +391,6 @@ def calculate_molecule_radius(molecule: Atoms, n1_index: Optional[int] = None, n
     mask[[n1_index, n2_index]] = False
 
     return float(dists[mask].max()) if np.any(mask) else 0.0
-
-
-def elongate_molecule(molecule: str | Atoms, step_size: float = 0.5, max_iterations: int = 50) -> Atoms:
-    """
-    Elongate a molecule by maximizing the distance between terminal NH3+ groups.
-
-    Uses kinematic constraints to find the maximum achievable distance between
-    terminal NH3+ nitrogen atoms while respecting bond rigidity and connectivity.
-
-    Parameters
-    ----------
-    molecule : str | Atoms
-        Input molecule as SMILES string or ASE Atoms object
-    step_size : float, default 0.5
-        Distance increment (Å) for each elongation attempt
-    max_iterations : int, default 50
-        Maximum number of elongation steps to attempt
-
-    Returns
-    -------
-    Atoms
-        Elongated molecule at maximum achievable N-N distance
-
-    Notes
-    -----
-    The function identifies terminal NH3+ groups and iteratively increases the target
-    distance along the N-N axis, using the kinematic solver to find the maximum
-    distance that can be achieved without violating bond constraints.
-
-    If the molecule has fewer than 2 NH3+ groups, returns the input molecule unchanged.
-    """
-    from .optimizers import elongate_molecule as _elongate_molecule
-    return _elongate_molecule(molecule, step_size=step_size, max_iterations=max_iterations)
 
 
 def replace_spacer_molecule(

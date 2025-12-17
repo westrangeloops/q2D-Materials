@@ -9,8 +9,8 @@ from q2D_Materials.core.creator import q2D_creator
 from q2D_Materials.core.structure import q2DStructure
 from q2D_Materials.builders.spacer import calculate_double_spacer_nh3_distances as nh3_distance
 from q2D_Materials.builders.spacer import calculate_molecule_radius as molecule_radius
-from q2D_Materials.builders.spacer import elongate_molecule
-from q2D_Materials.utils.molecule_builder import smiles_to_ase_atoms
+from q2D_Materials.builders.optimizers import elongate_molecule
+from q2D_Materials.builders.molecule_builder import smiles_to_ase_atoms
 from ase.io import write, read
 
 molecules_list = ['CC(C)(CC[NH3+])C(C)(C)CC[NH3+]', '[NH3+]CCCCCC[NH3+]', 'CC(C)(CCC[NH3+])CCC[NH3+]', 'CC(C)(CCC[NH3+])C(C)(C)CCC[NH3+]', '[NH3+]C1CCC([NH3+])CC1', '[NH3+]CCCCCCCCC[NH3+]', '[NH3+]CCCC[NH3+]', 'CC(C)(CC[NH3+])CC[NH3+]', '[NH3+]CC1=CC=C(C[NH3+])C=C1', '[NH3+]CCCCC[NH3+]', '[NH3+]CCCCCCCCCC[NH3+]', '[NH3+]CCC1CCC(CC[NH3+])CC1', '[NH3+]CCC1=CC=C(CC[NH3+])C=C1', 'CC(C)(C[NH3+])C(C)(C)C[NH3+]', '[NH3+]CC1CCC(C[NH3+])CC1', 'CC(C)(C[NH3+])C[NH3+]', 'CC(C)(CCCC[NH3+])C(C)(C)CCCC[NH3+]', '[NH3+]CCCC1CCC(CCC[NH3+])CC1', '[NH3+]CCCC1=CC=C(CCC[NH3+])C=C1', '[NH3+]C1=CC=C([NH3+])C=C1', '[NH3+]CCCCCCCC[NH3+]', 'CC(C)(CCCC[NH3+])CCCC[NH3+]', '[NH3+]CCCCCCC[NH3+]', '[NH3+]CCC[NH3+]']

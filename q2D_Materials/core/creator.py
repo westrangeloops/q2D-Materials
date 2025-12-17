@@ -56,17 +56,14 @@ class q2D_creator:
         - Optimizer selects the method for placing sharp spacers: "Off" (pure geometry),
           "KS" (Kinematic Solver, default), or "UFF" (UFF force field optimization).
         """
-        # Normalize sharp_spacer: convert single value to list
-        if sharp_spacer is not None and not isinstance(sharp_spacer, list):
-            sharp_spacer = [sharp_spacer]
-
         # Determine effective BX distance:
         # - If B and X are provided, use ionic radii data.
         # - Otherwise fall back to a small default span suitable for salts.
         if BX_dist is None:
             if B_ions is not None and X_ions is not None:
-                B_first = B_ions[0] if isinstance(B_ions, list) else B_ions
-                X_first = X_ions[0] if isinstance(X_ions, list) else X_ions
+                from q2D_Materials.pipeline.common import _get_first_element
+                B_first = _get_first_element(B_ions)
+                X_first = _get_first_element(X_ions)
                 BX_dist = auto_calculate_BX_distance(B_first, X_first)
             else:
                 BX_dist = 3.0
@@ -321,8 +318,11 @@ class q2D_creator:
         """
         Create a twisted bilayer from two monolayer structures.
 
+        .. deprecated::
+            Twist() is deprecated. Use twist() instead for more flexible multi-layer stacking.
+
         This is a simplified API for creating twisted bilayers from two monolayers.
-        The heavy lifting is done by create_twisted_bilayer in twist_monolayer.py.
+        It is now a convenience wrapper around the more general twist() method.
 
         Parameters
         ----------
@@ -341,8 +341,20 @@ class q2D_creator:
 
         Returns
         -------
-        Atoms
-            ASE Atoms object of the twisted bilayer
+        q2DStructure
+            Twisted bilayer structure
         """
-        from q2D_Materials.utils.twist_monolayer import create_twisted_bilayer
-        return create_twisted_bilayer(m1, m2, m, n, interlayer_distance, vacuum)
+        import warnings
+        warnings.warn(
+            "Twist() is deprecated. Use twist() instead for more flexible multi-layer stacking.",
+            DeprecationWarning,
+            stacklevel=2
+        )
+
+        # Wrap the call to the new twist() method
+        return self.twist(
+            monolayers=[m1, m2],
+            twist_angles=[(m, n)],
+            interlayer_distances=[interlayer_distance],
+            vacuum=vacuum
+        )
