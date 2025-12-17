@@ -12,7 +12,7 @@ from typing import Union, List, Tuple, Dict, Optional, Any
 
 from .q_builder import QBuilderOutput
 from .templates import FloorSchema, flatten_floor_schema
-from ..utils.molecule_builder import (
+from .molecule_builder import (
     align_ase_molecule_for_perovskite,
     center_of_mass_correction,
     place_atoms_at_location,
@@ -24,7 +24,7 @@ from ..utils.molecule_builder import (
 )
 from ..utils.A_sites import get_ionic_radius, is_molecular_a_cation, get_a_site_object
 from .optimizers import find_shortest_pbc_vector, find_optimal_spacer_vectors_global
-from .spacer import calculate_molecule_radius
+from .spacer import calculate_molecule_radius, count_nh3_groups
 
 
 def place_spacer_at_location(atoms, r, attachment_end):
@@ -83,33 +83,106 @@ def place_spacer_at_location(atoms, r, attachment_end):
     return mod_atoms
 
 
+def _normalize_ion_list(
+    ions: Union[str, Atoms, List[Union[str, Atoms]], None],
+    normalize_func,
+    copy_atoms: bool = False
+) -> Union[str, Atoms, List[Union[str, Atoms]], None]:
+    """
+    Generic helper to normalize ion lists (single values or lists).
+
+    Handles the common pattern of checking if input is a list, and if so,
+    normalizing each element. If not a list, normalizes the single value.
+
+    Parameters
+    ----------
+    ions : str, Atoms, list, or None
+        Input ions (single or list)
+    normalize_func : callable
+        Function to normalize string inputs (e.g., normalize_a_site or normalize_spacer)
+    copy_atoms : bool
+        Whether to copy Atoms objects (needed for sharp_spacer)
+
+    Returns
+    -------
+    str, Atoms, list, or None
+        Normalized ions in same structure as input
+    """
+    if ions is None:
+        return None
+
+    if isinstance(ions, list):
+        normalized = []
+        for ion in ions:
+            if isinstance(ion, Atoms):
+                normalized.append(ion.copy() if copy_atoms else ion)
+            elif isinstance(ion, str):
+                normalized.append(normalize_func(ion))
+            else:
+                normalized.append(normalize_func(ion))
+        return normalized
+    else:
+        # Single value
+        if isinstance(ions, Atoms):
+            return ions.copy() if copy_atoms else ions
+        elif isinstance(ions, str):
+            return normalize_func(ions)
+        else:
+            return normalize_func(ions)
+
+
+def _get_next_ion_from_list(ions, site_type: str, site_counters: Dict[str, int]):
+    """
+    Get the next ion from a list (cycling through) or single value, with Atoms copying.
+
+    Handles the common pattern of cycling through ion lists for assignment.
+
+    Parameters
+    ----------
+    ions : str, Atoms, or list
+        Input ions (single value or list to cycle through)
+    site_type : str
+        Site type for counter tracking (e.g., 'A', 'B', 'X')
+    site_counters : dict
+        Dictionary to track counters for each site type
+
+    Returns
+    -------
+    str or Atoms
+        Next ion to assign, with Atoms objects copied
+    """
+    if isinstance(ions, list):
+        if site_type not in site_counters:
+            site_counters[site_type] = 0
+        ion = ions[site_counters[site_type] % len(ions)]
+        site_counters[site_type] += 1
+    else:
+        ion = ions
+
+    # Always copy Atoms objects to avoid shared references
+    if isinstance(ion, Atoms):
+        ion = ion.copy()
+
+    return ion
+
+
 def normalize_a_site(A: Union[str, Atoms]) -> Union[str, Atoms]:
     """
     Normalize A-site input to handle both strings and Atoms objects.
     Converts molecular cation strings (MA, FA, etc.) to Atoms objects.
-    
+
     Parameters
     ----------
     A : str or Atoms
         A-site cation (string like "MA", "FA", "Cs" or Atoms object)
-        
+
     Returns
     -------
     str or Atoms
         Atomic cations as strings, molecular cations as Atoms objects
     """
-    if isinstance(A, Atoms):
-        return A
-    
-    if isinstance(A, str):
-        # Check if it's a molecular cation that needs conversion
-        try:
-            return get_a_site_object(A)
-        except (ImportError, ValueError):
-            # If conversion fails or not available, return as-is (atomic cation)
-            return A
-    
-    return A
+    from q2D_Materials.pipeline.common import _normalize_to_atoms_or_string
+    return _normalize_to_atoms_or_string(A, return_atoms_only=False)
 
 
 def apply_penetration_offsets(
@@ -287,43 +360,19 @@ def assign_ions_to_sites(
         
         # Handle A sites (but Ap will override later)
         if site_type == 'A':
-            if isinstance(A_ions, list):
-                if 'A' not in site_counters:
-                    site_counters['A'] = 0
-                ion = A_ions[site_counters['A'] % len(A_ions)]
-                site_counters['A'] += 1
-            else:
-                ion = A_ions
-            if isinstance(ion, Atoms):
-                ion = ion.copy()
+            ion = _get_next_ion_from_list(A_ions, 'A', site_counters)
             assignments.append((site_type, ion, pos, label))
             continue
-        
+
         # Handle B sites
         if site_type == 'B':
-            if isinstance(B_ions, list):
-                if 'B' not in site_counters:
-                    site_counters['B'] = 0
-                ion = B_ions[site_counters['B'] % len(B_ions)]
-                site_counters['B'] += 1
-            else:
-                ion = B_ions
-            if isinstance(ion, Atoms):
-                ion = ion.copy()
+            ion = _get_next_ion_from_list(B_ions, 'B', site_counters)
             assignments.append((site_type, ion, pos, label))
             continue
-        
+
         # Handle X sites
         if site_type == 'X':
-            if isinstance(X_ions, list):
-                if 'X' not in site_counters:
-                    site_counters['X'] = 0
-                ion = X_ions[site_counters['X'] % len(X_ions)]
-                site_counters['X'] += 1
-            else:
-                ion = X_ions
-            if isinstance(ion, Atoms):
-                ion = ion.copy()
+            ion = _get_next_ion_from_list(X_ions, 'X', site_counters)
             assignments.append((site_type, ion, pos, label))
             continue
     
@@ -358,29 +407,6 @@ def assign_ions_to_sites(
                     assignments.append(('Ap', ion, pos, label))
     
     return assignments
-
-
-def _count_nh3_groups(spacer: Atoms) -> int:
-    """Return the number of NH3-like nitrogens (N with 3 nearby H)."""
-    symbols = spacer.get_chemical_symbols()
-    positions = spacer.get_positions()
-    n_indices = [i for i, s in enumerate(symbols) if s == 'N']
-    h_indices = [i for i, s in enumerate(symbols) if s == 'H']
-
-    if not n_indices or not h_indices:
-        return 0
-
-    h_positions = positions[h_indices]
-    nh3_count = 0
-    nh_bond_cutoff = 1.2
-
-    for n_idx in n_indices:
-        n_pos = positions[n_idx]
-        distances = np.linalg.norm(h_positions - n_pos, axis=1)
-        if np.sum(distances < nh_bond_cutoff) == 3:
-            nh3_count += 1
-
-    return nh3_count
 
 
 def _place_mono_sharp_spacer(molecule: Atoms, position: np.ndarray, attachment_end: str) -> Optional[Atoms]:
@@ -596,7 +622,7 @@ def _find_shortest_xy_pbc_vector(p1: np.ndarray, p2: np.ndarray, cell: np.ndarra
     Find the shortest vector from p1 to p2 considering only XY periodic boundary conditions.
     Z coordinate is kept fixed (no wrapping in Z direction).
     Checks all 9 XY periodic images (center + 8 neighbors).
-    
+
     Parameters
     ----------
     p1 : np.ndarray
@@ -605,54 +631,14 @@ def _find_shortest_xy_pbc_vector(p1: np.ndarray, p2: np.ndarray, cell: np.ndarra
         Second point [x, y, z]
     cell : np.ndarray
         Unit cell matrix (3x3)
-        
+
     Returns
     -------
     np.ndarray
         Shortest vector from p1 to p2 considering XY PBC only
     """
-    p1 = np.asarray(p1, dtype=np.float64)
-    p2 = np.asarray(p2, dtype=np.float64)
-    cell = np.asarray(cell, dtype=np.float64)
-    
-    # Calculate base difference
-    diff_base = p2 - p1
-    
-    # Convert to fractional coordinates
-    try:
-        inv_cell = np.linalg.inv(cell)
-    except np.linalg.LinAlgError:
-        return diff_base
-    
-    diff_frac = diff_base @ inv_cell.T  # Shape: (3,)
-    diff_frac_xy = diff_frac[:2]  # XY fractional coords
-    diff_frac_z = diff_frac[2]  # Z fractional coord (keep as-is)
-    
-    # Generate all 9 XY periodic images
-    shifts = np.array([(dx, dy) for dx in [-1, 0, 1] for dy in [-1, 0, 1]], dtype=np.float64)
-    
-    # Find the shortest vector among all 9 XY images
-    best_vector = None
-    best_distance = np.inf
-    
-    for shift in shifts:
-        # Apply shift to fractional XY coordinates only
-        diff_frac_xy_shifted = diff_frac_xy - shift
-        
-        # Create full fractional coords with shifted XY and original Z
-        diff_frac_shifted = np.array([diff_frac_xy_shifted[0], diff_frac_xy_shifted[1], diff_frac_z])
-        
-        # Convert back to Cartesian
-        diff_shifted = diff_frac_shifted @ cell
-        
-        # Calculate distance
-        distance = np.linalg.norm(diff_shifted)
-        
-        if distance < best_distance:
-            best_distance = distance
-            best_vector = diff_shifted
-    
-    return best_vector if best_vector is not None else diff_base
+    from .optimizers import _find_shortest_pbc_vector_general
+    return _find_shortest_pbc_vector_general(p1, p2, cell, dimensions=(0, 1))
 
 
 def _calculate_xy_pbc_distances(reference_pos: np.ndarray, positions: np.ndarray, cell: np.ndarray) -> np.ndarray:
@@ -797,7 +783,7 @@ def populate_sharp(
         if not ground_entries or not sky_entries:
             continue
 
-        nh3_groups = _count_nh3_groups(spacer_template)
+        nh3_groups = count_nh3_groups(spacer_template)
 
         if nh3_groups >= 2:
             # Calculate molecule radius for this spacer template
@@ -1046,56 +1032,27 @@ def populate_structure(
     Handles double spacers (sharp_spacer) for S# sites that connect adjacent layers.
     """
     # Normalize A-site ions (convert molecular strings to Atoms objects)
-    if isinstance(A_ions, list):
-        A_ions_normalized = []
-        for A in A_ions:
-            if isinstance(A, Atoms):
-                A_ions_normalized.append(A)
-            elif isinstance(A, str):
-                A_ions_normalized.append(normalize_a_site(A))
-            else:
-                A_ions_normalized.append(normalize_a_site(A))
-        A_ions = A_ions_normalized
-    else:
-        # Single value
-        if isinstance(A_ions, str):
-            A_ions = normalize_a_site(A_ions)
-        # else: already Atoms object
+    A_ions = _normalize_ion_list(A_ions, normalize_a_site)
 
     # Normalize Ap-site ions if provided
-    if Ap_ions is not None:
-        if isinstance(Ap_ions, list):
-            Ap_normalized = []
-            for Ap in Ap_ions:
-                if isinstance(Ap, Atoms):
-                    Ap_normalized.append(Ap)
-                elif isinstance(Ap, str):
-                    Ap_normalized.append(normalize_a_site(Ap))
-                else:
-                    Ap_normalized.append(normalize_a_site(Ap))
-            Ap_ions = Ap_normalized
-        else:
-            if isinstance(Ap_ions, str):
-                Ap_ions = normalize_a_site(Ap_ions)
-            # else: already Atoms object
-    
+    Ap_ions = _normalize_ion_list(Ap_ions, normalize_a_site)
+
     # Normalize sharp_spacer if provided
-    sharp_spacer_normalized = None
     if sharp_spacer is not None:
-        sharp_spacer_normalized = []
-        for ds in sharp_spacer:
-            if isinstance(ds, Atoms):
-                sharp_spacer_normalized.append(ds.copy())
-            elif isinstance(ds, str):
-                # Try to normalize as spacer
+        def normalize_spacer_or_fallback(ds):
+            if isinstance(ds, str):
+                # Try to normalize as spacer first
                 try:
                     from q2D_Materials.pipeline.common import normalize_spacer
-                    sharp_spacer_normalized.append(normalize_spacer(ds))
+                    return normalize_spacer(ds)
                 except:
                     # Fallback to A-site normalization
-                    sharp_spacer_normalized.append(normalize_a_site(ds))
-            else:
-                sharp_spacer_normalized.append(ds)
+                    return normalize_a_site(ds)
+            return ds
+
+        sharp_spacer_normalized = _normalize_ion_list(sharp_spacer, normalize_spacer_or_fallback, copy_atoms=True)
+    else:
+        sharp_spacer_normalized = None
     
     # Assign ions to positions using patterns with site labels
     assignments = assign_ions_to_sites(

@@ -263,11 +263,88 @@ class KinematicChainSolver:
         return self.atoms
 
 
+def _find_shortest_pbc_vector_general(
+    p1: np.ndarray,
+    p2: np.ndarray,
+    cell: np.ndarray,
+    dimensions: Tuple[int, ...] = (0, 1, 2)
+) -> np.ndarray:
+    """
+    General helper function for finding shortest PBC vectors in specified dimensions.
+
+    Parameters
+    ----------
+    p1 : np.ndarray
+        First point (Cartesian coordinates)
+    p2 : np.ndarray
+        Second point (Cartesian coordinates)
+    cell : np.ndarray
+        Unit cell matrix (3x3)
+    dimensions : tuple of int
+        Which dimensions to consider for PBC (e.g., (0, 1) for XY only, (0, 1, 2) for 3D)
+
+    Returns
+    -------
+    np.ndarray
+        Shortest vector from p1 to p2 considering PBC in specified dimensions
+    """
+    p1 = np.asarray(p1, dtype=np.float64)
+    p2 = np.asarray(p2, dtype=np.float64)
+    cell = np.asarray(cell, dtype=np.float64)
+
+    # Calculate base difference
+    raw_diff = p2 - p1
+
+    try:
+        inv_cell = np.linalg.inv(cell)
+    except np.linalg.LinAlgError:
+        return raw_diff
+
+    # Convert to fractional coordinates
+    diff_frac = raw_diff @ inv_cell.T  # Shape: (3,)
+
+    # Split fractional coordinates into PBC and non-PBC dimensions
+    pbc_dims = list(dimensions)
+    non_pbc_dims = [i for i in range(3) if i not in pbc_dims]
+
+    diff_frac_pbc = diff_frac[pbc_dims]  # Fractional coords for PBC dimensions
+    diff_frac_fixed = diff_frac[non_pbc_dims]  # Fractional coords for fixed dimensions
+
+    # Generate all combinations of shifts for PBC dimensions
+    shift_range = [-1, 0, 1]
+    shifts = np.array(np.meshgrid(*[shift_range for _ in pbc_dims])).T.reshape(-1, len(pbc_dims))
+
+    # Find the shortest vector among all shifted images
+    best_vector = None
+    best_distance = np.inf
+
+    for shift in shifts:
+        # Apply shift to PBC fractional coordinates
+        diff_frac_pbc_shifted = diff_frac_pbc - shift
+
+        # Create full fractional coords with shifted PBC and original fixed dimensions
+        diff_frac_shifted = np.zeros(3)
+        diff_frac_shifted[pbc_dims] = diff_frac_pbc_shifted
+        diff_frac_shifted[non_pbc_dims] = diff_frac_fixed
+
+        # Convert back to Cartesian
+        diff_shifted = diff_frac_shifted @ cell
+
+        # Calculate distance
+        distance = np.linalg.norm(diff_shifted)
+
+        if distance < best_distance:
+            best_distance = distance
+            best_vector = diff_shifted
+
+    return best_vector if best_vector is not None else raw_diff
+
+
 def find_shortest_pbc_vector(p1: np.ndarray, p2: np.ndarray, cell: Optional[np.ndarray] = None) -> np.ndarray:
     """
     Find the shortest vector from p1 to p2 considering periodic boundary conditions.
-    
-    Correctly handles non-rectangular (skewed) cells by checking all 27 
+
+    Correctly handles non-rectangular (skewed) cells by checking all 27
     nearest periodic images instead of relying on fractional rounding.
 
     Parameters
@@ -278,7 +355,7 @@ def find_shortest_pbc_vector(p1: np.ndarray, p2: np.ndarray, cell: Optional[np.n
         Second point (Cartesian coordinates)
     cell : np.ndarray, optional
         Unit cell matrix (3x3). If None, returns p2 - p1 (no PBC)
-        
+
     Returns
     -------
     np.ndarray
@@ -287,48 +364,16 @@ def find_shortest_pbc_vector(p1: np.ndarray, p2: np.ndarray, cell: Optional[np.n
     p1 = np.array(p1)
     p2 = np.array(p2)
     raw_diff = p2 - p1
-    
+
     if cell is None:
         return raw_diff
-    
+
     cell = np.array(cell)
     if cell.shape != (3, 3) or np.allclose(cell, 0):
         return raw_diff
 
-    try:
-        inv_cell = np.linalg.inv(cell)
-    except np.linalg.LinAlgError:
-        return raw_diff
-        
-    # 1. Convert to fractional coordinates
-    # Note: Using row-vector convention (v @ inv_cell)
-    diff_frac = raw_diff @ inv_cell
-    
-    # 2. Wrap to the "central" image [-0.5, 0.5]
-    # This finds the nearest image according to the "rectangular" logic
-    diff_frac_wrapped = diff_frac - np.round(diff_frac)
-    
-    # 3. Robust Check: Inspect all 27 nearest neighbor images.
-    # In highly skewed cells, the true nearest neighbor might be at fractional
-    # offset like +1 or -1 from the wrapped position.
-    
-    # Generate shifts [-1, 0, 1] for x, y, z
-    # shape: (27, 3)
-    shifts = np.array(np.meshgrid([-1, 0, 1], [-1, 0, 1], [-1, 0, 1])).T.reshape(-1, 3)
-    
-    # Apply shifts to the wrapped fractional difference
-    # shape: (27, 3)
-    candidates_frac = diff_frac_wrapped + shifts
-    
-    # Convert back to Cartesian coordinates
-    # shape: (27, 3)
-    candidates_cart = candidates_frac @ cell
-    
-    # 4. Find the vector with the minimum Euclidean norm
-    dists_sq = np.sum(candidates_cart**2, axis=1)
-    min_idx = np.argmin(dists_sq)
-    
-    return candidates_cart[min_idx]
+    # Use the general helper for 3D PBC
+    return _find_shortest_pbc_vector_general(p1, p2, cell, dimensions=(0, 1, 2))
 
 
 def relax_spacer_with_uff(
