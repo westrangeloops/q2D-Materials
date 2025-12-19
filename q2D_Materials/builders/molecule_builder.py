@@ -206,20 +206,36 @@ def smiles_to_ase_atoms(smiles: str):
     
     import tempfile
     import os
+    import time
     
     # Create temporary XYZ file
-    with tempfile.NamedTemporaryFile(mode='w+', delete=False, suffix='.xyz') as tmp_file:
-        try:
+    tmp_file_path = None
+    try:
+        with tempfile.NamedTemporaryFile(mode='w+', delete=False, suffix='.xyz') as tmp_file:
+            tmp_file_path = tmp_file.name
             # Use the robust smiles_to_xyz function
-            smiles_to_xyz(smiles, tmp_file.name, optimize_geometry=True)
-            # Read back as ASE Atoms object
-            from ase.io import read
-            atoms = read(tmp_file.name)
-            return atoms
-        finally:
-            # Clean up temporary file
-            if os.path.exists(tmp_file.name):
-                os.remove(tmp_file.name)
+            smiles_to_xyz(smiles, tmp_file_path, optimize_geometry=True)
+        
+        # Read back as ASE Atoms object after file is closed
+        # This ensures the file handle is released on Windows
+        from ase.io import read
+        atoms = read(tmp_file_path)
+        return atoms
+    finally:
+        # Clean up temporary file with retry logic for Windows
+        if tmp_file_path and os.path.exists(tmp_file_path):
+            # On Windows, file deletion may fail if still in use
+            # Retry a few times with small delays
+            for attempt in range(5):
+                try:
+                    os.remove(tmp_file_path)
+                    break
+                except (PermissionError, OSError):
+                    if attempt < 4:
+                        time.sleep(0.1)
+                    else:
+                        # If still can't delete, just leave it (temp files will be cleaned up eventually)
+                        pass
 
 
 def validate_smiles(smiles: str) -> bool:

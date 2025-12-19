@@ -58,5 +58,6 @@ for molecule in molecules_list:
             
         )
         
-        path = "../SALTS"
-        write(f"{path}/{molecule}_{halogen}.vasp", atoms, format="vasp", sort=True)
+        path = Path("../SALTS")
+        path.mkdir(parents=True, exist_ok=True)
+        write(path / f"{molecule}_{halogen}.vasp", atoms, format="vasp", sort=True)
