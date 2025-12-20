@@ -431,44 +431,66 @@ def align_ase_molecule_for_perovskite(ase_atoms, attachment_end='top'):
     return aligned_atoms
 
 
-def _identify_nh3_groups(molecule_df):
+def _df_to_atoms_for_nh3_check(df) -> Atoms:
+    """Convert DataFrame to Atoms for NH3 detection."""
+    return Atoms(
+        symbols=df['Element'].tolist(),
+        positions=df[['X', 'Y', 'Z']].values
+    )
+
+
+def _find_next_atom_from_nh3(df: pd.DataFrame, nh3_n_idx: int) -> Optional[int]:
     """
-    Identify NH3+ groups in a molecule by finding N atoms with 3 H atoms nearby.
-    
+    Find the non-hydrogen atom bonded to an NH3+ nitrogen atom.
+
     Parameters
     ----------
-    molecule_df : pd.DataFrame
+    df : pd.DataFrame
         Molecule data with 'Element', 'X', 'Y', 'Z' columns
-        
+    nh3_n_idx : int
+        Index of the NH3+ nitrogen atom in the DataFrame
+
     Returns
     -------
-    list
-        List of indices (in the nitrogen_atoms DataFrame) of N atoms that are part of NH3+ groups
+    int or None
+        Index of the next non-hydrogen atom, or None if not found
     """
-    nitrogen_atoms = molecule_df[molecule_df['Element'] == 'N']
-    hydrogen_atoms = molecule_df[molecule_df['Element'] == 'H']
-    
-    nh3_indices = []
-    
-    if len(hydrogen_atoms) == 0:
-        return nh3_indices
-    
-    n_positions = nitrogen_atoms[['X', 'Y', 'Z']].values
-    h_positions = hydrogen_atoms[['X', 'Y', 'Z']].values
-    
-    # Typical N-H bond distance is around 1.0-1.1 Å
-    nh_bond_cutoff = 1.2
-    
-    for i, n_pos in enumerate(n_positions):
-        # Calculate distances from this N to all H atoms
-        distances = np.linalg.norm(h_positions - n_pos, axis=1)
-        nearby_h_count = np.sum(distances < nh_bond_cutoff)
-        
-        # NH3+ groups have 3 H atoms nearby
-        if nearby_h_count == 3:
-            nh3_indices.append(i)
-    
-    return nh3_indices
+    # Covalent radii (in Angstroms)
+    covalent_radii = {
+        'H': 0.31, 'C': 0.76, 'N': 0.71, 'O': 0.66, 'F': 0.57,
+        'S': 1.05, 'Cl': 0.99, 'Br': 1.20, 'I': 1.39, 'P': 1.07,
+        'Si': 1.11, 'B': 0.84, 'Al': 1.21, 'Mg': 1.41, 'Ca': 1.76
+    }
+
+    # Get NH3+ nitrogen position
+    n_pos = df.loc[nh3_n_idx, ['X', 'Y', 'Z']].values
+    n_symbol = df.loc[nh3_n_idx, 'Element']
+
+    # Find non-hydrogen atoms within bonding distance
+    bonded_atoms = []
+    for idx, row in df.iterrows():
+        if idx == nh3_n_idx:  # Skip self
+            continue
+
+        if row['Element'] == 'H':  # Skip hydrogens
+            continue
+
+        atom_pos = row[['X', 'Y', 'Z']].values
+        distance = np.linalg.norm(atom_pos - n_pos)
+
+        # Check if within bonding distance
+        r1 = covalent_radii.get(n_symbol, 0.71)  # Default to N
+        r2 = covalent_radii.get(row['Element'], 0.76)  # Default to C
+        bond_cutoff = r1 + r2 + 0.45  # Add tolerance
+
+        if distance <= bond_cutoff:
+            bonded_atoms.append((idx, distance))
+
+    # Return closest bonded atom
+    if bonded_atoms:
+        return min(bonded_atoms, key=lambda x: x[1])[0]
+
+    return None
 
 
 def align_molecule_for_perovskite_2d(molecule_df, attachment_end='top'):
@@ -508,17 +530,23 @@ def align_molecule_for_perovskite_2d(molecule_df, attachment_end='top'):
     
     # Identify NH3+ groups
     nitrogen_atoms = df[df['Element'] == 'N']
-    nh3_indices = _identify_nh3_groups(df)
-    
+    nitrogen_row_indices = nitrogen_atoms.index.tolist()  # Row indices in original df
+    from .spacer import _find_terminal_nitrogens
+    temp_atoms = _df_to_atoms_for_nh3_check(df)
+    _, nh3_indices = _find_terminal_nitrogens(temp_atoms)
+
     if len(nh3_indices) == 0:
         # No NH3+ groups found, return as-is (shouldn't happen for valid spacers)
         df['X'] += original_center[0]
         df['Y'] += original_center[1]
         df['Z'] += original_center[2]
         return df
-    
+
+    # Map nh3_indices (indices into df) to indices into nitrogen_atoms
+    nh3_positions_in_nitrogen_list = [nitrogen_row_indices.index(idx) for idx in nh3_indices]
+
     # Get NH3+ N atom positions
-    nh3_n_atoms = nitrogen_atoms.iloc[nh3_indices]
+    nh3_n_atoms = nitrogen_atoms.iloc[nh3_positions_in_nitrogen_list]
     nh3_n_positions = nh3_n_atoms[['X', 'Y', 'Z']].values
     
     # Calculate geometric center
@@ -610,13 +638,167 @@ def align_molecule_for_perovskite_2d(molecule_df, attachment_end='top'):
             elif attachment_end == 'bottom' and com_to_nh3_unit[2] > 0:
                 # NH3+ is above geometric center but should be below, flip
                 df['Z'] = -df['Z']
-    
+
+    # Enhanced alignment: ensure NH3+-next atom vector is optimally aligned
+    if len(nh3_indices) > 1:
+        # DJ molecules (2+ NH3+) - align NH3+-next atom vector parallel to N-N vector
+        # Get both NH3+ positions
+        nh3_n_positions_all = nh3_n_positions  # All NH3+ positions
+
+        if len(nh3_n_positions_all) >= 2:
+            # Calculate N-N vector
+            n_n_vector = nh3_n_positions_all[1] - nh3_n_positions_all[0]
+            n_n_length = np.linalg.norm(n_n_vector)
+            if n_n_length > 1e-6:
+                n_n_unit = n_n_vector / n_n_length
+
+                # Find next atom for the attachment-end NH3+ (already selected as nh3_n_coords)
+                next_atom_idx = _find_next_atom_from_nh3(df, nh3_indices[selected_idx])
+                if next_atom_idx is not None:
+                    next_atom_pos = df.loc[next_atom_idx, ['X', 'Y', 'Z']].values
+                    nh3_to_next_vector = next_atom_pos - nh3_n_coords
+                    nh3_to_next_length = np.linalg.norm(nh3_to_next_vector)
+
+                    if nh3_to_next_length > 1e-6:
+                        nh3_to_next_unit = nh3_to_next_vector / nh3_to_next_length
+
+                        # Project NH3-to-next vector onto plane perpendicular to N-N vector
+                        proj_parallel = np.dot(nh3_to_next_unit, n_n_unit) * n_n_unit
+                        proj_perp = nh3_to_next_unit - proj_parallel
+                        proj_perp_length = np.linalg.norm(proj_perp)
+
+                        if proj_perp_length > 1e-3:  # If there's a significant perpendicular component
+                            # Rotate around N-N axis to minimize the perpendicular component
+                            # This makes NH3-to-next vector as parallel as possible to N-N vector
+                            axis = n_n_unit  # Rotation axis is N-N vector
+
+                            # Get XY projections
+                            n_n_xy = n_n_unit[:2]  # [X, Y] components
+                            nh3_to_next_xy = nh3_to_next_unit[:2]  # [X, Y] components
+
+                            n_n_xy_length = np.linalg.norm(n_n_xy)
+                            nh3_to_next_xy_length = np.linalg.norm(nh3_to_next_xy)
+
+                            if n_n_xy_length > 1e-6 and nh3_to_next_xy_length > 1e-6:
+                                # Normalize XY projections
+                                n_n_xy_unit = n_n_xy / n_n_xy_length
+                                nh3_to_next_xy_unit = nh3_to_next_xy / nh3_to_next_xy_length
+
+                                # Calculate angle between XY projections
+                                cos_angle_xy = np.dot(n_n_xy_unit, nh3_to_next_xy_unit)
+                                cos_angle_xy = np.clip(cos_angle_xy, -1.0, 1.0)
+
+                                # Only rotate if not already well-aligned
+                                if abs(cos_angle_xy) < 0.95:  # cos(18°) ≈ 0.95
+                                    # Calculate rotation angle
+                                    # We want to rotate nh3_to_next_xy_unit to align with n_n_xy_unit
+                                    # Find the angle between them
+                                    cross_xy = n_n_xy_unit[0] * nh3_to_next_xy_unit[1] - n_n_xy_unit[1] * nh3_to_next_xy_unit[0]
+                                    sin_angle_xy = cross_xy  # This gives the sign
+
+                                    # Rotation matrix around Z axis
+                                    cos_theta = cos_angle_xy
+                                    sin_theta = sin_angle_xy
+
+                                    rotation_matrix_z = np.array([
+                                        [cos_theta, -sin_theta, 0],
+                                        [sin_theta, cos_theta, 0],
+                                        [0, 0, 1]
+                                    ])
+
+                                    # Apply rotation around Z axis passing through attachment NH3+
+                                    coords = df[['X', 'Y', 'Z']].values
+                                    coords_centered = coords - nh3_n_coords  # Center on attachment NH3+
+                                    coords_rotated = np.dot(coords_centered, rotation_matrix_z.T)
+                                    coords_final = coords_rotated + nh3_n_coords
+
+                                    df['X'] = coords_final[:, 0]
+                                    df['Y'] = coords_final[:, 1]
+                                    df['Z'] = coords_final[:, 2]
+    else:
+        # Single NH3+ molecules - align NH3+-next atom vector vertically
+        # Find next atom for the NH3+
+        next_atom_idx = _find_next_atom_from_nh3(df, nh3_indices[0])
+        if next_atom_idx is not None:
+            next_atom_pos = df.loc[next_atom_idx, ['X', 'Y', 'Z']].values
+            nh3_to_next_vector = next_atom_pos - nh3_n_coords
+            nh3_to_next_length = np.linalg.norm(nh3_to_next_vector)
+
+            if nh3_to_next_length > 1e-6:
+                nh3_to_next_unit = nh3_to_next_vector / nh3_to_next_length
+
+                # Target direction: vertical (Z axis) in attachment direction
+                target_z = 1.0 if attachment_end == 'top' else -1.0
+                target = np.array([0, 0, target_z])
+
+                # Project both vectors onto XY plane
+                nh3_to_next_xy = nh3_to_next_unit[:2]  # [X, Y] components
+                target_xy = target[:2]  # [0, 0] - target is vertical
+
+                nh3_to_next_xy_length = np.linalg.norm(nh3_to_next_xy)
+
+                # If NH3-to-next has XY components, rotate around Z to align with vertical
+                if nh3_to_next_xy_length > 1e-3:
+                    # We want to rotate so that nh3_to_next_unit aligns with target (vertical)
+                    # Calculate the rotation angle in XY plane
+                    cos_angle = nh3_to_next_unit[2]  # Z component (alignment with vertical)
+                    cos_angle = np.clip(cos_angle, -1.0, 1.0)
+
+                    # Calculate the angle in XY plane
+                    # Find angle of nh3_to_next_xy vector
+                    angle_xy = np.arctan2(nh3_to_next_xy[1], nh3_to_next_xy[0])
+
+                    # Rotation matrix around Z axis to align with vertical
+                    # Since target is [0,0,±1], we want to rotate so XY components become zero
+                    cos_theta = cos_angle
+                    sin_theta = -np.sin(angle_xy)  # Rotate to cancel XY components
+
+                    rotation_matrix_z = np.array([
+                        [cos_theta, -sin_theta, 0],
+                        [sin_theta, cos_theta, 0],
+                        [0, 0, 1]
+                    ])
+
+                    # But actually, simpler: rotate by -angle_xy to make XY components zero
+                    cos_theta = np.cos(-angle_xy)
+                    sin_theta = np.sin(-angle_xy)
+
+                    rotation_matrix_z = np.array([
+                        [cos_theta, -sin_theta, 0],
+                        [sin_theta, cos_theta, 0],
+                        [0, 0, 1]
+                    ])
+
+                    # Apply rotation around Z axis passing through NH3+
+                    coords = df[['X', 'Y', 'Z']].values
+                    coords_centered = coords - nh3_n_coords  # Center on NH3+
+                    coords_rotated = np.dot(coords_centered, rotation_matrix_z.T)
+                    coords_final = coords_rotated + nh3_n_coords
+
+                    df['X'] = coords_final[:, 0]
+                    df['Y'] = coords_final[:, 1]
+                    df['Z'] = coords_final[:, 2]
+
+                    # After rotation, check if direction is correct
+                    # Recalculate the vector after rotation
+                    next_atom_pos_rotated = df.loc[next_atom_idx, ['X', 'Y', 'Z']].values
+                    nh3_to_next_vector_rotated = next_atom_pos_rotated - nh3_n_coords
+                    nh3_to_next_unit_rotated = nh3_to_next_vector_rotated / np.linalg.norm(nh3_to_next_vector_rotated)
+
+                    # If Z component has wrong sign, flip around Z
+                    if (attachment_end == 'top' and nh3_to_next_unit_rotated[2] < 0) or \
+                       (attachment_end == 'bottom' and nh3_to_next_unit_rotated[2] > 0):
+                        df['Z'] = -df['Z']
+
     # Final check: ensure NH3+ is at the correct end
     # Re-identify NH3+ after rotation to get final position
-    nh3_indices_final = _identify_nh3_groups(df)
+    temp_atoms_final = _df_to_atoms_for_nh3_check(df)
+    _, nh3_indices_final = _find_terminal_nitrogens(temp_atoms_final)
     if len(nh3_indices_final) > 0:
         nitrogen_atoms_final = df[df['Element'] == 'N']
-        nh3_n_atoms_final = nitrogen_atoms_final.iloc[nh3_indices_final]
+        nitrogen_row_indices_final = nitrogen_atoms_final.index.tolist()  # Row indices in original df
+        nh3_positions_in_nitrogen_list_final = [nitrogen_row_indices_final.index(idx) for idx in nh3_indices_final]
+        nh3_n_atoms_final = nitrogen_atoms_final.iloc[nh3_positions_in_nitrogen_list_final]
         nh3_n_positions_final = nh3_n_atoms_final[['X', 'Y', 'Z']].values
         
         # Select the same NH3+ we used for alignment

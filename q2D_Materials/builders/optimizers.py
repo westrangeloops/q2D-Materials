@@ -1,49 +1,20 @@
-"""
-Optimizers for flexible spacer molecules.
-
-This module provides different optimization strategies for aligning spacer molecules
-between two anchor points (P1, P2):
-- Off: Pure geometric placement (rigid translation/rotation)
-- KS: Kinematic Chain Solver (CCD-based inverse kinematics)
-- UFF: Universal Force Field optimization with pinned anchors
-"""
+"""Optimizers for flexible spacer molecules."""
 
 from __future__ import annotations
 
-from typing import List, Set, Tuple, Optional, Union
+from typing import List, Set, Tuple, Optional, Union, Dict
 import warnings
 import itertools
-from scipy.spatial.distance import cdist
-from scipy.spatial import cKDTree
 import networkx as nx
 import numpy as np
 from ase import Atoms
 from ase.data import covalent_radii
 from ase.neighborlist import build_neighbor_list
-from ase.io import write
-from io import StringIO
 
-try:
-    from rdkit import Chem
-    from rdkit.Chem import AllChem
-    from rdkit.Geometry import Point3D
-    HAS_RDKIT = True
-except ImportError:
-    HAS_RDKIT = False
 
 
 class KinematicChainSolver:
-    """
-    Inverse Kinematics solver for molecules that respects chemical rigidity.
-
-    Uses Cyclic Coordinate Descent (CCD) to align a molecule between two points.
-
-    Locks:
-    1. Cycles (Rings) - detected via NetworkX
-    2. Double/Triple Bonds - inferred from bond length vs covalent radii
-
-    Only allows rotation around 'true' single bonds (rotors).
-    """
+    """CCD-based inverse kinematics solver respecting chemical rigidity (rings, double bonds)."""
 
     # Element pairs that can form bonds (optimization: skip distance checks for non-bondable pairs)
     BONDABLE_PAIRS = {
@@ -78,17 +49,7 @@ class KinematicChainSolver:
     }
 
     def __init__(self, atoms: Atoms, cutoff_buffer: float = 1.2, double_bond_threshold: float = 0.94):
-        """
-        Parameters
-        ----------
-        atoms : Atoms
-            The molecule to solve.
-        cutoff_buffer : float
-            Multiplier for covalent radii to determine connectivity.
-        double_bond_threshold : float
-            Factor to determine if a bond is double/rigid.
-            If dist < (r1 + r2) * threshold, it is treated as rigid.
-        """
+        """Initialize solver. cutoff_buffer: covalent radii multiplier. double_bond_threshold: rigid bond threshold."""
         self.atoms = atoms.copy()
         self.num_atoms = len(atoms)
         self.positions = self.atoms.get_positions()
@@ -148,20 +109,9 @@ class KinematicChainSolver:
             return subtree
         return []
 
-    def solve(
-        self,
-        anchor_idx: int,
-        mover_idx: int,
-        anchor_pos: np.ndarray,
-        target_pos: np.ndarray,
-        tolerance: float = 0.1,
-        max_iter: int = 100,
-    ) -> Atoms:
-        """
-        Align the molecule so that:
-        - atom[anchor_idx] is at anchor_pos (P1)
-        - atom[mover_idx] is as close as possible to target_pos (P2)
-        """
+    def solve(self, anchor_idx: int, mover_idx: int, anchor_pos: np.ndarray,
+              target_pos: np.ndarray, tolerance: float = 0.1, max_iter: int = 100) -> Atoms:
+        """Align molecule: anchor_idx at anchor_pos, mover_idx near target_pos."""
         # 1. Pre-translation: pin anchor to anchor_pos
         curr_pos = self.atoms.get_positions()
         shift = np.array(anchor_pos) - curr_pos[anchor_idx]
@@ -263,273 +213,89 @@ class KinematicChainSolver:
         return self.atoms
 
 
-def _find_shortest_pbc_vector_general(
-    p1: np.ndarray,
-    p2: np.ndarray,
-    cell: np.ndarray,
-    dimensions: Tuple[int, ...] = (0, 1, 2)
-) -> np.ndarray:
+def _find_directional_xy_pbc_vector(p1: np.ndarray, p2: np.ndarray, cell: np.ndarray) -> np.ndarray:
     """
-    General helper function for finding shortest PBC vectors in specified dimensions.
+    Find the vector from p1 to p2 deterministically based on fractional coordinates.
+    Z coordinate is kept fixed (no wrapping in Z direction).
+    
+    This function determines which periodic cell p2 is in based on its fractional
+    coordinates and selects the vector that points to that specific cell.
+    
+    Rules:
+    - X=0.N Y=0.N: within the center cell (0,0) -> shift (0,0)
+    - X=-0.N Y=0.N: cell to the left (-1,0) -> shift (-1,0)  
+    - X=1.N Y=0.N: cell to the right (1,0) -> shift (1,0)
+    - X=0.N Y=1.N: upper cell (0,1) -> shift (0,1)
+    - X=0.N Y=-0.N: lower cell (0,-1) -> shift (0,-1)
+    - Diagonals: X=-1.N Y=-1.N -> shift (-1,-1), X=1.N Y=1.N -> shift (1,1), etc.
 
     Parameters
     ----------
     p1 : np.ndarray
-        First point (Cartesian coordinates)
+        Ground point [x, y, z]
     p2 : np.ndarray
-        Second point (Cartesian coordinates)
+        Sky point [x, y, z]
     cell : np.ndarray
         Unit cell matrix (3x3)
-    dimensions : tuple of int
-        Which dimensions to consider for PBC (e.g., (0, 1) for XY only, (0, 1, 2) for 3D)
 
     Returns
     -------
     np.ndarray
-        Shortest vector from p1 to p2 considering PBC in specified dimensions
+        Vector from p1 to p2 pointing to the correct periodic cell
     """
     p1 = np.asarray(p1, dtype=np.float64)
     p2 = np.asarray(p2, dtype=np.float64)
     cell = np.asarray(cell, dtype=np.float64)
-
+    
     # Calculate base difference
     raw_diff = p2 - p1
-
+    
     try:
         inv_cell = np.linalg.inv(cell)
     except np.linalg.LinAlgError:
         return raw_diff
-
-    # Convert to fractional coordinates
-    diff_frac = raw_diff @ inv_cell.T  # Shape: (3,)
-
-    # Split fractional coordinates into PBC and non-PBC dimensions
-    pbc_dims = list(dimensions)
-    non_pbc_dims = [i for i in range(3) if i not in pbc_dims]
-
-    diff_frac_pbc = diff_frac[pbc_dims]  # Fractional coords for PBC dimensions
-    diff_frac_fixed = diff_frac[non_pbc_dims]  # Fractional coords for fixed dimensions
-
-    # Generate all combinations of shifts for PBC dimensions
-    shift_range = [-1, 0, 1]
-    shifts = np.array(np.meshgrid(*[shift_range for _ in pbc_dims])).T.reshape(-1, len(pbc_dims))
-
-    # Find the shortest vector among all shifted images
-    best_vector = None
-    best_distance = np.inf
-
-    for shift in shifts:
-        # Apply shift to PBC fractional coordinates
-        diff_frac_pbc_shifted = diff_frac_pbc - shift
-
-        # Create full fractional coords with shifted PBC and original fixed dimensions
-        diff_frac_shifted = np.zeros(3)
-        diff_frac_shifted[pbc_dims] = diff_frac_pbc_shifted
-        diff_frac_shifted[non_pbc_dims] = diff_frac_fixed
-
-        # Convert back to Cartesian
-        diff_shifted = diff_frac_shifted @ cell
-
-        # Calculate distance
-        distance = np.linalg.norm(diff_shifted)
-
-        if distance < best_distance:
-            best_distance = distance
-            best_vector = diff_shifted
-
-    return best_vector if best_vector is not None else raw_diff
-
-
-def find_shortest_pbc_vector(p1: np.ndarray, p2: np.ndarray, cell: Optional[np.ndarray] = None) -> np.ndarray:
-    """
-    Find the shortest vector from p1 to p2 considering periodic boundary conditions.
-
-    Correctly handles non-rectangular (skewed) cells by checking all 27
-    nearest periodic images instead of relying on fractional rounding.
-
-    Parameters
-    ----------
-    p1 : np.ndarray
-        First point (Cartesian coordinates)
-    p2 : np.ndarray
-        Second point (Cartesian coordinates)
-    cell : np.ndarray, optional
-        Unit cell matrix (3x3). If None, returns p2 - p1 (no PBC)
-
-    Returns
-    -------
-    np.ndarray
-        Shortest vector from p1 to p2 considering PBC
-    """
-    p1 = np.array(p1)
-    p2 = np.array(p2)
-    raw_diff = p2 - p1
-
-    if cell is None:
-        return raw_diff
-
-    cell = np.array(cell)
-    if cell.shape != (3, 3) or np.allclose(cell, 0):
-        return raw_diff
-
-    # Use the general helper for 3D PBC
-    return _find_shortest_pbc_vector_general(p1, p2, cell, dimensions=(0, 1, 2))
-
-
-def relax_spacer_with_uff(
-    molecule: Atoms, 
-    p1: np.ndarray, 
-    p2: np.ndarray, 
-    stiffness: float = 1000.0, 
-    cell: Optional[np.ndarray] = None,
-    target_vector: Optional[np.ndarray] = None
-) -> Atoms:
-    """
-    Fits a molecule between p1 and p2 using UFF with Linear Scaling and PBC.
     
-    Parameters
-    ----------
-    molecule : Atoms
-        Input molecule
-    p1, p2 : np.ndarray
-        Start and end points
-    stiffness : float
-        UFF force constant (unused in current implementation but kept for API compat)
-    cell : np.ndarray
-        Unit cell
-    target_vector : np.ndarray, optional
-        Explicit vector to use instead of calculating shortest PBC vector.
-    """
-    if not HAS_RDKIT:
-        raise ImportError("RDKit is required for UFF optimization.")
+    # Convert both points to fractional coordinates
+    p1_frac = p1 @ inv_cell.T  # Shape: (3,)
+    p2_frac = p2 @ inv_cell.T  # Shape: (3,)
+    
+    # Get XY fractional components
+    p1_frac_xy = p1_frac[:2]
+    p2_frac_xy = p2_frac[:2]
+    
+    # Determine which cell p2 is in based on integer part of fractional coordinates
+    # Use floor to handle negative coordinates correctly
+    # For example: -0.2 -> floor(-0.2) = -1, 1.2 -> floor(1.2) = 1, 0.5 -> floor(0.5) = 0
+    cell_u = int(np.floor(p2_frac_xy[0]))
+    cell_v = int(np.floor(p2_frac_xy[1]))
+    
+    # For salts templates, positions can be outside the 3x3 grid
+    # Don't clamp - allow any integer cell offset
+    pass
+    
+    # We want the vector to point TO the correct periodic image of p2
+    # First, wrap p2 to the center cell
+    shift = np.array([cell_u, cell_v])
+    p2_frac_xy_wrapped = p2_frac_xy - shift
 
-    from .spacer import _find_terminal_nitrogens
-    try:
-        from rdkit.Chem import rdDetermineBonds
-    except ImportError:
-        warnings.warn("RDKit version too old: missing rdDetermineBonds.")
-        return place_spacer_geometric(molecule, p1, p2, cell=cell, target_vector=target_vector)
+    # Convert wrapped p2 back to Cartesian
+    p2_frac_wrapped = np.array([p2_frac_xy_wrapped[0], p2_frac_xy_wrapped[1], p2_frac[2]])
+    p2_wrapped = p2_frac_wrapped @ cell
 
-    # --- 1. Identify Anchors ---
-    _, nh3_indices = _find_terminal_nitrogens(molecule)
-    if len(nh3_indices) < 2:
-        return molecule.copy()
-    
-    idx_a = int(nh3_indices[0])
-    idx_b = int(nh3_indices[1])
+    # Vector to wrapped p2 in center cell
+    vec_to_wrapped = p2_wrapped - p1
 
-    # --- 2. Rigid Alignment (PBC aware) ---
-    # Pass target_vector explicitly to geometric placer
-    molecule_aligned = place_spacer_geometric(molecule, p1, p2, cell=cell, target_vector=target_vector)
-    
-    # --- 3. ASE -> RDKit (Topology Calculation) ---
-    xyz_io = StringIO()
-    write(xyz_io, molecule_aligned, format='xyz')
-    xyz_io.seek(0)
-    rd_mol = Chem.MolFromXYZBlock(xyz_io.read())
-    
-    if rd_mol is None: 
-        return molecule_aligned
+    # Add the cell offset to get vector to correct periodic image
+    cell_offset = cell_u * cell[0] + cell_v * cell[1]  # Cartesian cell offset
+    final_vec = vec_to_wrapped + cell_offset
 
-    try:
-        rdDetermineBonds.DetermineConnectivity(rd_mol)
-        rdDetermineBonds.DetermineBondOrders(rd_mol)
-        Chem.rdmolops.SanitizeMol(rd_mol)
-    except Exception:
-        return molecule_aligned
-
-    # --- 4. Linear Scaling ---
-    positions = molecule_aligned.get_positions()
-    n1_pos = positions[idx_a]
-    n2_pos = positions[idx_b]
-    
-    current_vec = n2_pos - n1_pos
-    
-    # Use passed vector if available, else calculate
-    vec = target_vector if target_vector is not None else find_shortest_pbc_vector(p1, p2, cell)
-    
-    current_dist = np.linalg.norm(current_vec)
-    target_dist = np.linalg.norm(vec)
-    
-    conf = rd_mol.GetConformer()
-    
-    if current_dist > 0.1:
-        # Calculate stretch factor
-        scale = target_dist / current_dist
-        axis = vec / target_dist
-        
-        # Apply scaling to ALL atoms in the RDKit conformer
-        for i in range(len(molecule)):
-            pos = positions[i]
-            rel_pos = pos - n1_pos
-            
-            # Project onto the N1->N2 axis
-            proj = np.dot(rel_pos, axis)
-            # Vector rejection (perpendicular component)
-            perp = rel_pos - (proj * axis)
-            
-            # Scale ONLY the distance along the axis, keep width the same
-            new_rel_pos = (proj * scale * axis) + perp
-            new_pos_coord = n1_pos + new_rel_pos
-            
-            conf.SetAtomPosition(i, Point3D(float(new_pos_coord[0]), float(new_pos_coord[1]), float(new_pos_coord[2])))
-
-    # --- 5. Pin & Relax ---
-    # Pin N1 to p1, and N2 to the "virtual" p2 (p1 + pbc_vector)
-    ff = AllChem.UFFGetMoleculeForceField(rd_mol)
-    if ff:
-        virtual_p2 = p1 + vec
-        conf.SetAtomPosition(idx_a, Point3D(float(p1[0]), float(p1[1]), float(p1[2])))
-        conf.SetAtomPosition(idx_b, Point3D(float(virtual_p2[0]), float(virtual_p2[1]), float(virtual_p2[2])))
-        
-        ff.AddFixedPoint(idx_a)
-        ff.AddFixedPoint(idx_b)
-        try:
-            ff.Minimize(maxIts=500)
-        except:
-            pass
-
-    # --- 6. Export back to ASE ---
-    new_pos_array = molecule_aligned.get_positions().copy()
-    for i in range(len(molecule)):
-        pt = conf.GetAtomPosition(i)
-        new_pos_array[i] = [pt.x, pt.y, pt.z]
-        
-    molecule_optimized = molecule_aligned.copy()
-    molecule_optimized.set_positions(new_pos_array)
-    
-    return molecule_optimized
+    return final_vec
 
 
-def place_spacer_geometric(
-    molecule: Atoms, 
-    p1: np.ndarray, 
-    p2: np.ndarray, 
-    cell: Optional[np.ndarray] = None,
-    target_vector: Optional[np.ndarray] = None
-) -> Atoms:
-    """
-    Pure geometric placement: rigid translation/rotation to align terminal NH3+ groups.
-    
-    Parameters
-    ----------
-    molecule : Atoms
-        The molecule to place
-    p1 : np.ndarray
-        Target position for first terminal NH3+ nitrogen
-    p2 : np.ndarray
-        Target position for second terminal NH3+ nitrogen
-    cell : np.ndarray, optional
-        Unit cell matrix (3x3) for PBC-aware shortest vector calculation
-    target_vector : np.ndarray, optional
-        Explicit vector from p1 to p2 (p2_image - p1). If provided, this overrides
-        the internal shortest vector calculation.
-        
-    Returns
-    -------
-    Atoms
-        Molecule aligned geometrically
-    """
+def place_spacer_geometric(molecule: Atoms, p1: np.ndarray, p2: np.ndarray,
+                           cell: Optional[np.ndarray] = None,
+                           target_vector: Optional[np.ndarray] = None) -> Atoms:
+    """Rigid translation/rotation to align terminal NH3+ groups to p1 and p2."""
     from .spacer import _find_terminal_nitrogens
     
     mol_copy = molecule.copy()
@@ -537,7 +303,12 @@ def place_spacer_geometric(
     positions = mol_copy.get_positions()
     
     # Determine the vector to use (Explicit or Calculated)
-    vec = target_vector if target_vector is not None else find_shortest_pbc_vector(p1, p2, cell)
+    if target_vector is not None:
+        vec = target_vector
+    elif cell is not None:
+        vec = _find_directional_xy_pbc_vector(p1, p2, cell)
+    else:
+        vec = np.array(p2) - np.array(p1)
     
     if len(nh3_indices) < 2:
         # Fallback: Rigid translation to center
@@ -606,56 +377,67 @@ def place_spacer_geometric(
     # Adjust both positions to match targets
     correction = (p1 - final_n1 + virtual_p2 - final_n2) / 2.0
     mol_copy.translate(correction)
-    
+
+    # Basic check: ensure molecule is oriented along the placement vector
+    final_positions = mol_copy.get_positions()
+    placement_axis = (p2 - p1) / np.linalg.norm(p2 - p1)
+    # Simple check without graph analysis for geometric placement
+    n1_pos = final_positions[idx1]
+    n2_pos = final_positions[idx2]
+    rel_pos = final_positions - n1_pos
+    proj_scalars = np.dot(rel_pos, placement_axis)
+    proj_vecs = proj_scalars[:, np.newaxis] * placement_axis
+    orth_vecs = rel_pos - proj_vecs
+    distances_from_axis = np.linalg.norm(orth_vecs, axis=1)
+    max_distance = np.max(distances_from_axis)
+
+    if max_distance > 2.0:  # If not straight, try to elongate it slightly
+        # If not straight, try to elongate it slightly
+        try:
+            elongated = _elongate_single_molecule(mol_copy, step_size=0.1, max_iterations=10,
+                                                 target_distance=np.linalg.norm(p2 - p1))
+            if elongated is not None:
+                mol_copy = elongated
+        except:
+            pass  # Keep original if elongation fails
+
+    # Wrap atoms back into the unit cell before returning
+    mol_copy.wrap()
+
     return mol_copy
 
 
-def place_spacer_with_optimizer(
-    molecule: Atoms,
-    p1: np.ndarray,
-    p2: np.ndarray,
-    optimizer: str = "KS",
-    cell: Optional[np.ndarray] = None,
-    target_vector: Optional[np.ndarray] = None
-) -> Atoms:
-    """
-    Place a spacer molecule between two points using the specified optimizer.
-    
-    Parameters
-    ----------
-    molecule : Atoms
-        The molecule to place
-    p1 : np.ndarray
-        Target position for first terminal NH3+ nitrogen
-    p2 : np.ndarray
-        Target position for second terminal NH3+ nitrogen
-    optimizer : str, default "KS"
-        Optimizer to use: "Off", "KS", or "UFF"
-    cell : np.ndarray, optional
-        Unit cell matrix (3x3) for PBC-aware shortest vector calculation
-    target_vector : np.ndarray, optional
-        Explicit vector from p1 to p2. If provided, overrides internal shortest path calculation.
-        
-    Returns
-    -------
-    Atoms
-        Optimized molecule aligned between p1 and p2
-    """
+def place_spacer_with_optimizer(molecule: Atoms, p1: np.ndarray, p2: np.ndarray,
+                                optimizer: str = "KS", cell: Optional[np.ndarray] = None,
+                                target_vector: Optional[np.ndarray] = None) -> Atoms:
+    """Place spacer between p1 and p2. Options: "Off" (geometric only), "KS" (elongate + KS, default)."""
     optimizer = optimizer.upper()
     
     if optimizer == "OFF":
         return place_spacer_geometric(molecule, p1, p2, cell=cell, target_vector=target_vector)
         
-    elif optimizer == "KS":
-        solver = KinematicChainSolver(molecule)
+    else:  # KS or UFF: do elongation if needed, then geometric placement
         from .spacer import _find_terminal_nitrogens
         _, nh3_indices = _find_terminal_nitrogens(molecule)
-        
-        if len(nh3_indices) < 2:
-            return place_spacer_geometric(molecule, p1, p2, cell=cell, target_vector=target_vector)
-        
-        # Pick the two furthest NH3 groups if > 2
+
+        # Check if molecule needs elongation
         positions = molecule.get_positions()
+        current_distance = np.linalg.norm(positions[nh3_indices[1]] - positions[nh3_indices[0]])
+
+        if len(nh3_indices) >= 2:
+            # Double spacer: Check if already reasonably elongated
+            min_reasonable_distance = 8.0  # Å - reasonable minimum for double spacers
+
+            if current_distance < min_reasonable_distance:
+                # Need elongation first
+                molecule = _elongate_single_molecule(molecule, step_size=0.5, max_iterations=100,
+                                                   target_distance=None)  # None = use default max elongation
+
+        # Use geometric placement for all cases (preserves molecular conformation)
+        return place_spacer_geometric(molecule, p1, p2, cell=cell, target_vector=target_vector)
+
+        # Pick the two furthest NH3 groups if > 2
+        positions = elongated.get_positions()
         if len(nh3_indices) > 2:
             max_d = -1.0
             best_pair = (0, 1)
@@ -669,48 +451,21 @@ def place_spacer_with_optimizer(
             idx1, idx2 = nh3_indices[best_pair[0]], nh3_indices[best_pair[1]]
         else:
             idx1, idx2 = nh3_indices[0], nh3_indices[1]
-        
-        # Use passed vector if available, else calculate
-        vec = target_vector if target_vector is not None else find_shortest_pbc_vector(p1, p2, cell)
-        
+
         aligned_mol = solver.solve(
             anchor_idx=idx1,
             mover_idx=idx2,
             anchor_pos=p1,
-            target_pos=p1 + vec, # Use the explicit vector for the target position
+            target_pos=p1 + vec,
             tolerance=0.1,
             max_iter=150
         )
         return aligned_mol
-        
-    elif optimizer == "UFF":
-        return relax_spacer_with_uff(molecule, p1, p2, cell=cell, target_vector=target_vector)
-        
-    else:
-        warnings.warn(f"Unknown optimizer '{optimizer}', falling back to 'Off'")
-        return place_spacer_geometric(molecule, p1, p2, cell=cell, target_vector=target_vector)
 
 
-def _elongate_single_molecule(molecule: str | Atoms, step_size: float = 0.5, max_iterations: int = 100) -> Atoms:
-    """
-    Internal function to elongate a single molecule to maximum possible distance.
-
-    Enhanced version that aggressively finds the most elongate conformation possible.
-    
-    Parameters
-    ----------
-    molecule : str | Atoms
-        Input molecule as SMILES string or ASE Atoms object
-    step_size : float, default 0.5
-        Distance increment (Å) for each elongation attempt
-    max_iterations : int, default 100
-        Maximum number of elongation steps to attempt (increased for more aggressive elongation)
-        
-    Returns
-    -------
-    Atoms
-        Elongated molecule at maximum achievable N-N distance
-    """
+def _elongate_single_molecule(molecule: str | Atoms, step_size: float = 0.5,
+                              max_iterations: int = 100, target_distance: Optional[float] = None) -> Atoms:
+    """Elongate molecule towards target N-N distance using kinematic solver."""
     # Convert SMILES to Atoms if needed
     if isinstance(molecule, str):
         from .molecule_builder import smiles_to_ase_atoms
@@ -735,366 +490,210 @@ def _elongate_single_molecule(molecule: str | Atoms, step_size: float = 0.5, max
     # Unit vector along N-N axis
     direction = (n2_pos - n1_pos) / current_distance
 
-    # Start elongation from current distance
-    target_distance = current_distance
+    # Helper function to check if molecule is straight along N-N axis
+    def is_molecule_straight(positions, n1_idx, n2_idx, axis_vec, mol_atoms):
+        """Check if molecule is oriented correctly along the N-N axis."""
+        n1_pos = positions[n1_idx]
+        n2_pos = positions[n2_idx]
+
+        # Get all atom positions relative to N1
+        rel_pos = positions - n1_pos
+
+        # Project onto the N-N axis
+        proj_scalars = np.dot(rel_pos, axis_vec)
+
+        # Check that N2 is further along the axis than N1 (basic sanity check)
+        n1_proj = proj_scalars[n1_idx]
+        n2_proj = proj_scalars[n2_idx]
+
+        if n2_proj <= n1_proj:
+            return False  # N2 should be further along the axis than N1
+
+        # Check perpendicular distances from axis - should be reasonable
+        axis_length = np.linalg.norm(axis_vec)
+        if axis_length < 1e-6:
+            return False
+
+        # Project positions onto axis
+        axis_unit = axis_vec / axis_length
+        proj_vecs = proj_scalars[:, np.newaxis] * axis_unit
+        orth_vecs = rel_pos - proj_vecs
+        distances_from_axis = np.linalg.norm(orth_vecs, axis=1)
+
+        # For a straight molecule, most atoms should be close to the axis
+        # Allow some tolerance for molecular structure
+        max_distance = np.max(distances_from_axis)
+        return max_distance <= 2.0  # 2Å tolerance for molecular width
+
+    # If no target distance provided, use the old maximum elongation behavior
+    if target_distance is None:
+        target_distance = current_distance * 2.5  # Old behavior: maximize
+    else:
+        # Ensure target is reasonable (not less than current distance)
+        target_distance = max(target_distance, current_distance)
+
+    # Initialize best result tracking
     best_atoms = mol_atoms.copy()
     best_distance = current_distance
+    best_distance_error = abs(current_distance - target_distance)
 
-    # Estimate maximum possible elongation (rough heuristic: 2x current distance is usually max)
-    max_reasonable_distance = current_distance * 2.5
-    max_target_distance = current_distance + (max_iterations * step_size)
-    max_target_distance = min(max_target_distance, max_reasonable_distance)
+    # Check if the initial molecule is reasonably oriented
+    initial_positions = mol_atoms.get_positions()
+    initial_axis_vec = direction
+    initial_is_straight = is_molecule_straight(initial_positions, nh3_indices[0], nh3_indices[1], initial_axis_vec, mol_atoms)
+
+    # If initial molecule is straight, keep it as candidate
+    if initial_is_straight:
+        best_distance_error = abs(current_distance - target_distance)
+    else:
+        # Initial molecule is not straight, mark it as invalid to force improvement
+        best_distance_error = float('inf')
+
+    # Adaptive step size: start large, get smaller near target
+    current_step = max(1.0, min(step_size * 4, target_distance - current_distance))  # Start with large steps
+    min_step = 0.05  # Minimum step size for fine tuning
 
     consecutive_failures = 0
-    max_consecutive_failures = 5  # Allow some tolerance for solver instability
-    no_progress_count = 0
-    max_no_progress = 10  # Stop if no improvement for 10 iterations
+    max_consecutive_failures = 5
 
-    # More aggressive elongation: try larger steps when possible
-    for iteration in range(max_iterations):
-        # Early exit if we've exceeded reasonable maximum
-        if target_distance >= max_target_distance:
+    # Elongation loop: try to reach the target distance
+    current_target_dist = current_distance
+    iteration = 0
+
+    while iteration < max_iterations and current_step >= min_step:
+        # Adapt step size based on distance to target
+        dist_to_target = abs(current_target_dist - target_distance)
+
+        if dist_to_target < 2.0:  # Close to target, use small steps
+            current_step = max(min_step, current_step * 0.5)
+        elif consecutive_failures > 0:  # Having trouble, reduce step size
+            current_step = max(min_step, current_step * 0.5)
+        elif dist_to_target > 5.0:  # Far from target, can use larger steps
+            current_step = min(2.0, current_step * 1.2)
+
+        # Determine next target distance
+        if current_target_dist < target_distance:
+            next_target_dist = min(target_distance, current_target_dist + current_step)
+        else:
+            # We're past target, reduce towards target
+            next_target_dist = max(target_distance, current_target_dist - current_step)
+
+        # Skip if we're not making progress
+        if abs(next_target_dist - current_target_dist) < min_step * 0.5:
             break
-        target_distance += step_size
+
+        current_target_dist = next_target_dist
 
         # Target position for second NH3+ along the axis
-        target_pos = n1_pos + direction * target_distance
+        target_pos = n1_pos + direction * current_target_dist
 
-        # Use kinematic solver with optimized settings for maximum elongation
+        # Use kinematic solver
         solver = KinematicChainSolver(mol_atoms.copy())
+        solver_max_iter = 100 if current_step > 0.2 else 150  # More iterations for small steps
 
-        # Use fewer iterations for speed - increase only if needed
-        solver_max_iter = 100 if step_size > 0.1 else 150  # Fewer iterations for larger steps
-        
         elongated = solver.solve(
-            anchor_idx=nh3_indices[0],  # Fix first NH3+ nitrogen
-            mover_idx=nh3_indices[1],   # Move second NH3+ nitrogen
-            anchor_pos=n1_pos,          # Keep first NH3+ at original position
-            target_pos=target_pos,      # Move second NH3+ to target
-            tolerance=0.2,              # Looser tolerance for max elongation
-            max_iter=solver_max_iter    # Adaptive iterations based on step size
+            anchor_idx=nh3_indices[0],
+            mover_idx=nh3_indices[1],
+            anchor_pos=n1_pos,
+            target_pos=target_pos,
+            tolerance=0.1,  # Tighter tolerance for target-directed elongation
+            max_iter=solver_max_iter
         )
 
-        # Check if solver succeeded (mover is close to target)
+        # Check result
         final_positions = elongated.get_positions()
         final_distance = np.linalg.norm(final_positions[nh3_indices[1]] - final_positions[nh3_indices[0]])
-        distance_error = abs(final_distance - target_distance)
+        distance_error = abs(final_distance - current_target_dist)
 
-        # More lenient success criteria for maximum elongation
-        if distance_error < 0.5:  # Increased tolerance for max elongation
-            # Check if we made progress
-            if final_distance > best_distance + 0.01:  # At least 0.01 Å improvement
-                best_atoms = elongated
-                best_distance = final_distance
-                no_progress_count = 0
+        iteration += 1
+
+        if distance_error < 0.3:  # Distance success (within tolerance)
+            # Also check if molecule is reasonably straight
+            axis_vec = (final_positions[nh3_indices[1]] - final_positions[nh3_indices[0]]) / final_distance
+            if is_molecule_straight(final_positions, nh3_indices[0], nh3_indices[1], axis_vec, mol_atoms):
+                # Update best result if this is closer to target
+                target_error = abs(final_distance - target_distance)
+                if target_error < best_distance_error:
+                    best_atoms = elongated
+                    best_distance = final_distance
+                    best_distance_error = target_error
+
+                consecutive_failures = 0
             else:
-                no_progress_count += 1
-            
-            consecutive_failures = 0  # Reset failure counter on success
-
-            # Adaptive step size: if we're succeeding easily, try larger steps
-            if distance_error < 0.1 and step_size < 1.0:
-                step_size = min(step_size * 1.2, 1.0)  # Cap at 1.0 Å
+                # Molecule is folded, treat as failure to encourage longer distances
+                consecutive_failures += 1
         else:
             consecutive_failures += 1
-            no_progress_count += 1
 
-        # Early stopping: no progress for too long
-        if no_progress_count >= max_no_progress:
-            break
-
-        # Stop if we've had too many consecutive failures
+        # Stop if too many consecutive failures
         if consecutive_failures >= max_consecutive_failures:
             break
 
-    # Final optimization: try one more time with the best configuration found
-    # This helps recover from local minima (but skip if we didn't improve much)
-    if best_distance > current_distance + 0.1:  # Only if we made significant progress
-        final_target_pos = n1_pos + direction * best_distance
+    # Final refinement: try to get even closer to target with smaller tolerance
+    if best_distance_error > 0.1 and best_distance > current_distance + 0.1:
+        final_target_pos = n1_pos + direction * (target_distance if target_distance > best_distance else best_distance)
         final_solver = KinematicChainSolver(best_atoms.copy())
         final_attempt = final_solver.solve(
             anchor_idx=nh3_indices[0],
             mover_idx=nh3_indices[1],
             anchor_pos=n1_pos,
             target_pos=final_target_pos,
-            tolerance=0.05,  # Stricter tolerance for final optimization
-            max_iter=150  # Reduced from 300 for speed
+            tolerance=0.05,  # Very tight tolerance for final refinement
+            max_iter=200
         )
 
         final_positions = final_attempt.get_positions()
         final_distance = np.linalg.norm(final_positions[nh3_indices[1]] - final_positions[nh3_indices[0]])
-        if final_distance > best_distance:
+        final_error = abs(final_distance - target_distance)
+
+        # Check if final attempt is both close to target and straight
+        axis_vec = (final_positions[nh3_indices[1]] - final_positions[nh3_indices[0]]) / final_distance
+        if final_error < best_distance_error and is_molecule_straight(final_positions, nh3_indices[0], nh3_indices[1], axis_vec, mol_atoms):
             best_atoms = final_attempt
             best_distance = final_distance
+            best_distance_error = final_error
+
+    # Wrap atoms back into the unit cell before returning
+    if hasattr(best_atoms, 'wrap'):
+        best_atoms.wrap()
 
     return best_atoms
 
 
-def elongate_molecule(
-    molecule: str | Atoms | List[str | Atoms], 
-    step_size: float = 0.5, 
-    max_iterations: int = 100
-) -> Atoms | List[Atoms]:
-    """
-    Elongate a molecule or batch of molecules by maximizing the distance between terminal NH3+ groups.
-
-    Uses kinematic constraints to find the maximum achievable distance between
-    terminal NH3+ nitrogen atoms while respecting bond rigidity and connectivity.
-
-    Parameters
-    ----------
-    molecule : str | Atoms | List[str | Atoms]
-        Input molecule(s) as SMILES string(s), ASE Atoms object(s), or a list of either
-    step_size : float, default 0.5
-        Distance increment (Å) for each elongation attempt
-    max_iterations : int, default 100
-        Maximum number of elongation steps to attempt (increased for more aggressive elongation)
-
-    Returns
-    -------
-    Atoms | List[Atoms]
-        Elongated molecule(s) at maximum achievable N-N distance.
-        Returns a single Atoms object if input is a single molecule,
-        or a list of Atoms objects if input is a list.
-
-    Notes
-    -----
-    The function identifies terminal NH3+ groups and iteratively increases the target
-    distance along the N-N axis, using the kinematic solver to find the maximum
-    distance that can be achieved without violating bond constraints.
-
-    If a molecule has fewer than 2 NH3+ groups, returns the input molecule unchanged.
-    
-    When processing a batch, each molecule is elongated independently.
-    """
+def elongate_molecule(molecule: str | Atoms | List[str | Atoms],
+                     step_size: float = 0.5, max_iterations: int = 100,
+                     target_distance: Optional[float] = None) -> Atoms | List[Atoms]:
+    """Elongate N-N distance towards target distance using kinematic constraints."""
     # Handle batch processing
     if isinstance(molecule, list):
-        return [_elongate_single_molecule(mol, step_size=step_size, max_iterations=max_iterations) 
+        return [_elongate_single_molecule(mol, step_size=step_size, max_iterations=max_iterations,
+                                         target_distance=target_distance)
                 for mol in molecule]
-    
+
     # Handle single molecule
-    return _elongate_single_molecule(molecule, step_size=step_size, max_iterations=max_iterations)
+    return _elongate_single_molecule(molecule, step_size=step_size, max_iterations=max_iterations,
+                                    target_distance=target_distance)
 
 
-def check_segment_intersection_2d(p1, p2, q1, q2):
+def find_optimal_spacer_vectors_global(starts: List[np.ndarray], targets: List[np.ndarray],
+                                       cell: np.ndarray, spacer_radius: float = 2.0,
+                                       obstacles: List[Tuple[np.ndarray, float]] = [],
+                                       attachment_tolerance: float = 3.0) -> List[np.ndarray]:
     """
-    Returns True if line segment p1-p2 intersects q1-q2 in 2D (ignoring Z).
+    Return deterministic PBC-aware vectors between starts and targets.
+    
+    Uses fractional coordinates to deterministically select the correct periodic cell
+    for each target point. Parameters spacer_radius, obstacles, and attachment_tolerance
+    are kept for API compatibility but are not used.
     """
-    # 2D cross product helper
-    def ccw(A, B, C):
-        return (C[1]-A[1]) * (B[0]-A[0]) > (B[1]-A[1]) * (C[0]-A[0])
-
-    # Standard segment intersection test
-    return (ccw(p1, q1, q2) != ccw(p2, q1, q2)) and (ccw(p1, p2, q1) != ccw(p1, p2, q2))
-
-def find_optimal_spacer_vectors_global(
-    starts: List[np.ndarray], 
-    targets: List[np.ndarray], 
-    cell: np.ndarray,
-    spacer_radius: float = 2.0,         # Radius of the spacer "cylinder"
-    obstacles: List[Tuple[np.ndarray, float]] = [], # List of (position, radius) for ions/atoms
-    attachment_tolerance: float = 3.0  # Exclude obstacles within this distance of start/end points
-) -> List[np.ndarray]:
-    """
-    Finds optimal vectors minimizing length while avoiding 3D volumetric collisions.
+    vectors = []
+    for start, target in zip(starts, targets):
+        # Use deterministic vector selection based on fractional coordinates
+        vec = _find_directional_xy_pbc_vector(start, target, cell)
+        vectors.append(vec)
     
-    Models:
-    - Spacers: Cylinders with `spacer_radius`
-    - Obstacles: Spheres with specific radii
-    
-    Parameters
-    ----------
-    starts, targets : List[np.ndarray]
-        Start and end points for spacers
-    cell : np.ndarray
-        Unit cell
-    spacer_radius : float
-        Radius of the spacer molecule (approx 2.0 Å for alkyl chains)
-    obstacles : List[Tuple[np.ndarray, float]]
-        Static atoms/ions to avoid. Format: (position_array, radius_float)
-    """
-    cell = np.array(cell)
-    inv_cell = np.linalg.inv(cell)
-    n_spacers = len(starts)
-    
-    # Filter obstacles: exclude those too close to attachment points
-    # (spacers attach to these points, so nearby atoms are expected)
-    filtered_obstacles = []
-    attachment_tol_sq = attachment_tolerance ** 2
-    
-    for (obs_pos, obs_rad) in obstacles:
-        obs_pos = np.array(obs_pos)
-        too_close = False
-        
-        # Check distance to all start and end points
-        for start in starts:
-            dist_sq_to_start = np.sum(find_shortest_pbc_vector(obs_pos, start, cell)**2)
-            if dist_sq_to_start < attachment_tol_sq:
-                too_close = True
-                break
-        
-        if not too_close:
-            for target in targets:
-                dist_sq_to_target = np.sum(find_shortest_pbc_vector(obs_pos, target, cell)**2)
-                if dist_sq_to_target < attachment_tol_sq:
-                    too_close = True
-                    break
-        
-        if not too_close:
-            filtered_obstacles.append((obs_pos, obs_rad))
-    
-    obstacles = filtered_obstacles
-    
-    # 1. Generate Candidates (Top 5 shortest vectors per spacer)
-    candidates = []
-    shifts = np.array(list(itertools.product([-1, 0, 1], repeat=3)))
-    
-    for i in range(n_spacers):
-        p1 = starts[i]
-        p2 = targets[i]
-        raw_diff = p2 - p1
-        
-        diff_frac = raw_diff @ inv_cell
-        diff_frac_wrapped = diff_frac - np.round(diff_frac)
-        
-        cand_frac = diff_frac_wrapped + shifts
-        cand_cart = cand_frac @ cell
-        dists = np.linalg.norm(cand_cart, axis=1)
-        
-        # Sort and take top 10 (increased from 5 for better collision avoidance)
-        sorted_idx = np.argsort(dists)
-        best_indices = sorted_idx[:10]
-        candidates.append([cand_cart[j] for j in best_indices])
+    return vectors
 
-    # 2. Combinatorial Search with Volumetric Checks
-    best_combination = None
-    best_collision_free = None
-    min_total_cost = float('inf')
-    min_collision_free_cost = float('inf')
-    
-    # Pre-calculate squared radii for faster checks
-    spacer_diam_sq = (2 * spacer_radius) ** 2
-        
-    for vector_set in itertools.product(*candidates):
-        lengths_sq = [np.sum(v**2) for v in vector_set]  # Squared lengths (avoid sqrt)
-        total_len = sum(np.sqrt(l) for l in lengths_sq)  # Only sqrt when needed for total
-        collisions = 0
-        
-        # --- Check A: Spacer vs Spacer (Cylinder vs Cylinder) ---
-        for i in range(n_spacers):
-            p1_start = starts[i]
-            p1_end = p1_start + vector_set[i]
-            
-            for j in range(i + 1, n_spacers):
-                p2_start = starts[j]
-                p2_end = p2_start + vector_set[j]
-                
-                # Fast 3D segment-segment distance check
-                dist_sq = _dist_sq_segment_segment(p1_start, p1_end, p2_start, p2_end)
-        
-                # Check if distance is less than sum of radii squared
-                if dist_sq < spacer_diam_sq:
-                    collisions += 1
-        
-        # --- Check B: Spacer vs Obstacle (Cylinder vs Sphere) ---
-        if obstacles:
-            # Build KD-tree for spatial indexing (only once per function call)
-            obs_positions = np.array([obs[0] for obs in obstacles])
-            obs_radii = np.array([obs[1] for obs in obstacles])
-            obs_tree = cKDTree(obs_positions)
-
-            # Maximum search radius: spacer length + spacer radius + max obstacle radius
-            max_search_radius = (np.max([np.linalg.norm(v) for v in vector_set]) +
-                               spacer_radius + np.max(obs_radii) + 2.0)  # Extra buffer
-
-        for i in range(n_spacers):
-                p_start = starts[i]
-                p_end = p_start + vector_set[i]
-
-                # Find obstacles within search radius of both endpoints
-                nearby_start = obs_tree.query_ball_point(p_start, max_search_radius)
-                nearby_end = obs_tree.query_ball_point(p_end, max_search_radius)
-
-                # Combine and deduplicate nearby obstacle indices
-                nearby_obs_indices = set(nearby_start + nearby_end)
-
-                # Check collisions only with nearby obstacles
-                for obs_idx in nearby_obs_indices:
-                    obs_pos = obs_positions[obs_idx]
-                    obs_rad = obs_radii[obs_idx]
-                    min_dist_sq = (spacer_radius + obs_rad) ** 2
-
-                    # Point-Segment distance check (PBC-aware)
-                    dist_sq = _dist_sq_point_segment(obs_pos, p_start, p_end, cell=cell)
-
-                    if dist_sq < min_dist_sq:
-                        collisions += 1
-        
-        # Cost Function
-        # Huge penalty for collisions to force finding a clean path
-        penalty_weight = 100000.0  # Increased penalty
-        current_cost = total_len + (collisions * penalty_weight)
-        
-        # Track best collision-free solution separately
-        if collisions == 0:
-            if total_len < min_collision_free_cost:
-                min_collision_free_cost = total_len
-                best_collision_free = vector_set
-        
-        # Track best overall solution (may have collisions)
-        if current_cost < min_total_cost:
-            min_total_cost = current_cost
-            best_combination = vector_set
-
-    # Prefer collision-free solution, but accept best overall if no collision-free exists
-    # (This minimizes collisions even when perfect avoidance isn't possible)
-    if best_collision_free is not None:
-        return list(best_collision_free)
-    elif best_combination is not None:
-        # Return best solution (minimal collisions) without warning
-        # This is expected behavior when obstacles are unavoidable
-        return list(best_combination)
-    else:
-        # Fallback: return shortest vectors (shouldn't happen, but safety check)
-        return [candidates[i][0] for i in range(n_spacers)]
-
-def _dist_sq_point_segment(p: np.ndarray, s1: np.ndarray, s2: np.ndarray, cell: Optional[np.ndarray] = None) -> float:
-    """
-    Returns squared distance from point p to segment s1-s2.
-    If cell is provided, checks PBC-aware distance (checks nearest periodic image).
-    """
-    if cell is not None:
-        # PBC-aware: find shortest distance considering periodic images
-        # Get PBC-aware vector from p to s1
-        vec_to_s1 = find_shortest_pbc_vector(p, s1, cell)
-        # Get PBC-aware vector from s1 to s2 (segment direction)
-        vec_s1_to_s2 = find_shortest_pbc_vector(s1, s2, cell)
-        
-        # If segment is degenerate, return distance to s1
-        seg_len_sq = np.sum(vec_s1_to_s2**2)
-        if seg_len_sq < 1e-12:
-            return np.sum(vec_to_s1**2)
-        
-        # Project p onto the segment using PBC-aware vectors
-        t = np.dot(vec_to_s1, vec_s1_to_s2) / seg_len_sq
-        t = np.clip(t, 0.0, 1.0)
-        
-        # Closest point on segment (in PBC-aware space)
-        closest_on_segment = s1 + t * vec_s1_to_s2
-        
-        # Get PBC-aware distance from p to closest point
-        vec_to_closest = find_shortest_pbc_vector(p, closest_on_segment, cell)
-        return np.sum(vec_to_closest**2)
-    
-    # Non-PBC version
-    s2_s1 = s2 - s1
-    if np.allclose(s2_s1, 0):
-        return np.sum((p - s1)**2)
-    
-    t = np.dot(p - s1, s2_s1) / np.dot(s2_s1, s2_s1)
-    t = np.clip(t, 0.0, 1.0)
-    projection = s1 + t * s2_s1
-    return np.sum((p - projection)**2)
 
 def _get_uc_neighbor_offsets(cell: np.ndarray) -> np.ndarray:
     """Get 27 unit cell neighbor offsets for PBC calculations."""
@@ -1103,9 +702,7 @@ def _get_uc_neighbor_offsets(cell: np.ndarray) -> np.ndarray:
 
 
 def detect_bonds_pbc(atoms: Atoms, cell: Optional[np.ndarray] = None) -> List[Tuple[int, int]]:
-    """
-    Detect bonds using covalent radii with PBC awareness (improved version).
-    """
+    """Detect bonds using covalent radii with PBC awareness."""
     elements = atoms.get_chemical_symbols()
     positions = atoms.get_positions()
 
@@ -1143,402 +740,3 @@ def detect_bonds_pbc(atoms: Atoms, cell: Optional[np.ndarray] = None) -> List[Tu
                 bonds.append((idx1, idx2))
 
     return bonds
-
-
-def apply_torque_overlap_avoidance(
-    molecule: Atoms,
-    existing_molecules: Union[List[Atoms], Atoms],
-    n1_index: int,
-    n2_index: int,
-    cell: Optional[np.ndarray] = None,
-    max_iterations: int = 10,
-    torque_strength: float = 0.1,
-    min_distance: float = 2.5,
-    convergence_tol: float = 0.1
-) -> Atoms:
-    """
-    Apply torque-based rotation around N-N axis to avoid overlaps.
-
-    This implements a cheap force field approach that rotates molecules around their
-    N-N axis to minimize overlaps with existing molecules.
-
-    Parameters
-    ----------
-    molecule : Atoms
-        The molecule to rotate (already placed in structure)
-    existing_molecules : List[Atoms] or Atoms
-        List of already-placed molecules OR full structure to avoid overlaps with.
-        If Atoms object, all atoms in it will be checked for overlaps.
-    n1_index, n2_index : int
-        Indices of terminal N atoms defining the rotation axis
-    cell : np.ndarray, optional
-        Unit cell for PBC-aware distance calculations
-    max_iterations : int, default 10
-        Maximum rotation attempts
-    torque_strength : float, default 0.1
-        Strength of torque (radians per iteration)
-    min_distance : float, default 2.5
-        Minimum allowed distance between atoms (Å)
-    convergence_tol : float, default 0.1
-        Overlap reduction threshold for convergence
-
-    Returns
-    -------
-    Atoms
-        Molecule rotated to minimize overlaps
-    """
-    # Handle both list of molecules and single structure
-    if isinstance(existing_molecules, Atoms):
-        # Convert structure to list of atoms (each atom as a single-atom "molecule")
-        # This allows checking against all atoms in the structure
-        structure = existing_molecules
-        if len(structure) == 0:
-            return molecule
-        
-        # Create list of single-atom "molecules" for compatibility
-        # Only include heavy atoms (exclude H) for efficiency
-        existing_molecules_list = []
-        symbols = structure.get_chemical_symbols()
-        positions = structure.get_positions()
-        for i in range(len(structure)):
-            if symbols[i] != 'H':  # Skip hydrogen for efficiency
-                single_atom = Atoms(symbols=[symbols[i]], 
-                                   positions=[positions[i]])  # positions[i] is shape (3,), wrapping gives (1, 3)
-                existing_molecules_list.append(single_atom)
-        existing_molecules = existing_molecules_list
-    
-    if len(existing_molecules) == 0:
-        return molecule
-
-    # Get N-N axis (rotation axis)
-    positions = molecule.get_positions()
-    n1_pos = positions[n1_index]
-    n2_pos = positions[n2_index]
-    axis_direction = n2_pos - n1_pos
-    axis_length = np.linalg.norm(axis_direction)
-
-    if axis_length < 1e-6:
-        return molecule  # Degenerate axis
-
-    axis_direction = axis_direction / axis_length
-    pivot_point = (n1_pos + n2_pos) / 2.0  # Midpoint of N-N bond
-
-    # Initial overlap check
-    net_force, initial_overlap = calculate_overlap_forces(molecule, existing_molecules, min_distance, cell)
-
-    # Even if no overlap detected, try a small rotation to optimize position
-    # Use a more sensitive threshold for detection
-    if initial_overlap == 0:
-        # Check with a slightly larger threshold to detect near-overlaps
-        _, near_overlap = calculate_overlap_forces(molecule, existing_molecules, min_distance + 0.5, cell)
-        if near_overlap == 0:
-            # No overlaps at all, but still try a small exploratory rotation
-            # Use force magnitude to determine rotation direction
-            force_magnitude = np.linalg.norm(net_force)
-            if force_magnitude < 1e-6:
-                return molecule  # Truly no forces, no rotation needed
-            # Small exploratory rotation
-            initial_overlap = 0.01  # Small value to trigger rotation
-        else:
-            initial_overlap = near_overlap * 0.1  # Scale down but still rotate
-
-    best_molecule = molecule.copy()
-    best_overlap = initial_overlap
-    total_rotation = 0.0
-
-    # Try rotations in both directions
-    for direction in [1, -1]:  # Clockwise and counterclockwise
-        current_molecule = molecule.copy()
-        current_overlap = initial_overlap
-        consecutive_worse = 0
-        max_consecutive_worse = 3
-
-        for iteration in range(max_iterations):
-            # Calculate overlap forces
-            net_force, overlap_energy = calculate_overlap_forces(
-                current_molecule, existing_molecules, min_distance, cell
-            )
-
-            # Check convergence
-            overlap_reduction = initial_overlap - overlap_energy
-            if overlap_energy < best_overlap:
-                best_overlap = overlap_energy
-                best_molecule = current_molecule.copy()
-                consecutive_worse = 0
-            else:
-                consecutive_worse += 1
-
-            # Stop if converged or too many consecutive worse steps
-            if overlap_reduction > convergence_tol or consecutive_worse >= max_consecutive_worse:
-                break
-
-            # Calculate torque from forces
-            torque = force_to_torque(net_force, pivot_point, axis_direction, current_molecule.get_positions())
-            
-            # Ensure we have a non-zero rotation
-            if abs(torque) < 1e-6:
-                # If torque is zero, use force direction to determine rotation
-                force_magnitude = np.linalg.norm(net_force)
-                if force_magnitude > 1e-6:
-                    # Use a small default rotation based on force direction
-                    torque = 0.1 * force_magnitude
-                else:
-                    break  # No force, no rotation
-
-            # Apply rotation with minimum step size to ensure movement
-            rotation_angle = direction * torque_strength * max(abs(torque), 0.05)  # Minimum 0.05 rad rotation
-            current_molecule = rotate_around_axis(current_molecule, pivot_point, axis_direction, rotation_angle)
-            total_rotation += rotation_angle
-
-            # Prevent excessive rotation (max 90 degrees total)
-            if abs(total_rotation) > np.pi/2:
-                break
-
-    return best_molecule
-
-
-def calculate_overlap_forces(
-    molecule: Atoms,
-    existing_molecules: List[Atoms],
-    min_distance: float = 2.5,
-    cell: Optional[np.ndarray] = None
-) -> Tuple[np.ndarray, float]:
-    """
-    Calculate net repulsion force and total overlap energy.
-
-    This computes a simple repulsion force model where atoms closer than
-    min_distance repel each other.
-
-    Parameters
-    ----------
-    molecule : Atoms
-        The molecule to check for overlaps
-    existing_molecules : List[Atoms]
-        List of molecules to check against
-    min_distance : float
-        Minimum allowed distance between atoms
-    cell : np.ndarray, optional
-        Unit cell for PBC-aware calculations
-
-    Returns
-    -------
-    Tuple[np.ndarray, float]
-        (net_force_vector, total_overlap_energy)
-    """
-    mol_positions = molecule.get_positions()
-    mol_symbols = molecule.get_chemical_symbols()
-
-    net_force = np.zeros(3)
-    total_overlap_energy = 0.0
-    force_constant = 1.0
-
-    # Only consider heavy atoms (exclude H) for performance and relevance
-    heavy_atom_mask = np.array([s != 'H' for s in mol_symbols])
-    mol_positions = mol_positions[heavy_atom_mask]
-
-    if len(mol_positions) == 0:
-        return net_force, total_overlap_energy
-
-    for existing_mol in existing_molecules:
-        existing_positions = existing_mol.get_positions()
-        existing_symbols = existing_mol.get_chemical_symbols()
-
-        # Only consider heavy atoms in existing molecules too
-        existing_heavy_mask = np.array([s != 'H' for s in existing_symbols])
-        existing_positions = existing_positions[existing_heavy_mask]
-
-        if len(existing_positions) == 0:
-            continue
-
-        # Calculate all pairwise distances (PBC-aware)
-        for mol_pos in mol_positions:
-            min_dist = float('inf')
-            closest_existing_pos = None
-
-            # Find closest existing atom (check all 27 unit cell images if PBC)
-            for existing_pos in existing_positions:
-                if cell is not None:
-                    # PBC-aware distance
-                    dist_vec = find_shortest_pbc_vector(mol_pos, existing_pos, cell)
-                    dist = np.linalg.norm(dist_vec)
-                else:
-                    # Simple distance
-                    dist = np.linalg.norm(mol_pos - existing_pos)
-
-                if dist < min_dist:
-                    min_dist = dist
-                    closest_existing_pos = existing_pos
-
-            # Calculate repulsion force if too close
-            if min_dist < min_distance and closest_existing_pos is not None:
-                overlap = min_distance - min_dist
-                energy_contribution = force_constant * overlap**2
-
-                # Force direction: from existing atom to molecule atom
-                if cell is not None:
-                    force_direction = find_shortest_pbc_vector(closest_existing_pos, mol_pos, cell)
-                else:
-                    force_direction = mol_pos - closest_existing_pos
-
-                force_magnitude = np.linalg.norm(force_direction)
-                if force_magnitude > 1e-6:
-                    force_direction = force_direction / force_magnitude
-                    force_vector = force_constant * overlap * force_direction
-
-                    net_force += force_vector
-                    total_overlap_energy += energy_contribution
-
-    return net_force, total_overlap_energy
-
-
-def force_to_torque(
-    force: np.ndarray,
-    pivot_point: np.ndarray,
-    axis_direction: np.ndarray,
-    atom_positions: np.ndarray
-) -> float:
-    """
-    Convert net force to torque magnitude around axis.
-
-    Calculates the torque by projecting the force onto the plane perpendicular
-    to the axis and computing the effective lever arm.
-
-    Parameters
-    ----------
-    force : np.ndarray
-        Net force vector applied to the molecule
-    pivot_point : np.ndarray
-        Point around which to calculate torque (midpoint of N-N bond)
-    axis_direction : np.ndarray
-        Direction of rotation axis (N-N bond direction)
-    atom_positions : np.ndarray
-        Positions of all atoms in the molecule
-
-    Returns
-    -------
-    float
-        Torque magnitude (positive = one direction, negative = other)
-    """
-    # Project force onto plane perpendicular to axis
-    force_parallel = np.dot(force, axis_direction) * axis_direction
-    force_perpendicular = force - force_parallel
-    
-    # Use center of mass as effective point of force application
-    com = np.mean(atom_positions, axis=0)
-    lever_arm = com - pivot_point
-    
-    # Project lever arm onto plane perpendicular to axis
-    lever_parallel = np.dot(lever_arm, axis_direction) * axis_direction
-    lever_perpendicular = lever_arm - lever_parallel
-    
-    # Torque = r_perp × F_perp (projected onto axis)
-    torque_vector = np.cross(lever_perpendicular, force_perpendicular)
-    torque_magnitude = np.dot(torque_vector, axis_direction)
-    
-    return torque_magnitude
-
-
-def rotate_around_axis(
-    molecule: Atoms,
-    pivot_point: np.ndarray,
-    axis_direction: np.ndarray,
-    angle: float
-) -> Atoms:
-    """
-    Rotate molecule around axis by given angle.
-
-    Uses Rodrigues' rotation formula for efficient rotation around arbitrary axis.
-
-    Parameters
-    ----------
-    molecule : Atoms
-        Molecule to rotate
-    pivot_point : np.ndarray
-        Point to rotate around
-    axis_direction : np.ndarray
-        Rotation axis direction (should be normalized)
-    angle : float
-        Rotation angle in radians
-
-    Returns
-    -------
-    Atoms
-        Rotated molecule
-    """
-    rotated_molecule = molecule.copy()
-    positions = rotated_molecule.get_positions()
-
-    # Translate so pivot point is at origin
-    positions_centered = positions - pivot_point
-
-    # Rodrigues' rotation formula
-    # R = cosθI + (1-cosθ)kk^T + sinθK
-    # where K = [[0,-k_z,k_y], [k_z,0,-k_x], [-k_y,k_x,0]]
-
-    cos_theta = np.cos(angle)
-    sin_theta = np.sin(angle)
-    k = axis_direction
-
-    # Cross product matrix K
-    K = np.array([
-        [0, -k[2], k[1]],
-        [k[2], 0, -k[0]],
-        [-k[1], k[0], 0]
-    ])
-
-    # Rodrigues' formula
-    R = (cos_theta * np.eye(3) +
-         (1 - cos_theta) * np.outer(k, k) +
-         sin_theta * K)
-
-    # Apply rotation
-    positions_rotated = positions_centered @ R.T
-
-    # Translate back
-    rotated_molecule.set_positions(positions_rotated + pivot_point)
-
-    return rotated_molecule
-
-
-def _dist_sq_segment_segment(p1: np.ndarray, p2: np.ndarray, q1: np.ndarray, q2: np.ndarray) -> float:
-    """
-    Returns squared minimum distance between two line segments p1-p2 and q1-q2.
-    Implementation based on "Real-Time Collision Detection" (Ericson).
-    """
-    d1 = p2 - p1
-    d2 = q2 - q1
-    r = p1 - q1
-    a = np.dot(d1, d1)
-    e = np.dot(d2, d2)
-    f = np.dot(d2, r)
-    
-    # Check if segments degenerate into points
-    if a <= 1e-8 and e <= 1e-8:
-        return np.dot(r, r)
-    if a <= 1e-8:
-        return _dist_sq_point_segment(p1, q1, q2)
-    if e <= 1e-8:
-        return _dist_sq_point_segment(q1, p1, p2)
-    
-    c = np.dot(d1, r)
-    b = np.dot(d1, d2)
-    denom = a * e - b * b
-    
-    # Parallel lines case
-    if denom != 0.0:
-        s = np.clip((b * f - c * e) / denom, 0.0, 1.0)
-    else:
-        s = 0.0
-        
-    # Compute point on L1 closest to L2, then clamp t
-    t = (b * s + f) / e
-    if t < 0.0:
-        t = 0.0
-        s = np.clip(-c / a, 0.0, 1.0)
-    elif t > 1.0:
-        t = 1.0
-        s = np.clip((b - c) / a, 0.0, 1.0)
-        
-    p_closest = p1 + s * d1
-    q_closest = q1 + t * d2
-    return np.sum((p_closest - q_closest)**2)

@@ -4,6 +4,27 @@ Template loader rewritten to emit stacked floors with cartesian coordinates.
 The builder outputs numbered floors keyed as strings ("1", "2", ...) so callers
 can grab floors directly (schema["1"], schema["2"], ...). Each floor stores
 cartesian coordinates and the layer name is preserved separately.
+
+S# Site Direction Determination:
+--------------------------------
+S# (spacer) sites use fractional coordinates to determine connection directions
+across periodic boundaries. The system calculates vectors between matching S# 
+sites in adjacent layers using quadrant-based periodic boundary conditions.
+
+How it works:
+1. S# sites are defined in template JSON with fractional coordinates (x_frac, y_frac)
+2. When pairing S# sites between layers (e.g., L1 S1 with L2 S1), the system:
+   - Converts both positions to fractional coordinates
+   - Determines which periodic cell each site is in using floor() of fractional coords
+   - Calculates the vector accounting for periodic cell offsets
+   
+Example from salts.json:
+- L1 S1: (0.652, 0.578) -> fractional (0.652, 0.578) -> cell (0, 0) [center]
+- L2 S1: (1.111, 0.303) -> fractional (1.111, 0.303) -> cell (1, 0) [right]
+- Result: Vector points from L1 S1 to L2 S1 in the (1,0) periodic cell (diagonal right)
+
+This allows templates to specify spacer connections that span unit cell boundaries,
+creating complex packing patterns and diagonal connections as needed.
 """
 
 import json
@@ -64,6 +85,23 @@ def build_floor_schema(
     Floors are keyed as strings ("1", "2", ...) and contain entries
     [site_label, x_cart, y_cart, z_cart]. Layer names (L1, L2, M1, M2, etc.)
     are stored in floor_names for reference.
+    
+    S# Site Pairing:
+    ----------------
+    S# sites (S1, S2, S3, S4, etc.) are paired between adjacent layers based on
+    matching labels. The direction vector between paired S# sites is determined by
+    their fractional coordinates using periodic boundary conditions.
+    
+    Example (salts template, L1->L2):
+    - L1 S1 at frac (0.652, 0.578) -> cell (0,0)
+    - L2 S1 at frac (1.111, 0.303) -> cell (1,0) 
+    - Vector: points to periodic cell (1,0), creating diagonal connection
+    
+    - L1 S3 at frac (0.34, 0.752) -> cell (0,0)
+    - L2 S3 at frac (0.812, 1.076) -> cell (0,1)
+    - Vector: points to periodic cell (0,1), creating vertical-up connection
+    
+    See module docstring for detailed explanation of quadrant-based vector calculation.
     """
     data = _load_template_json(template_name)
     angles = tuple(data.get("angles", [90.0, 90.0, 90.0]))
@@ -237,6 +275,25 @@ def _compute_layer_heights(
 
     Any consecutive layers that both contain spacer sites (S#) use the
     spacer span (sharp_spacer_nn_distance or 2*BX_dist). All other gaps use BX_dist.
+    
+    Note on S# Site Directions:
+    ----------------------------
+    The fractional coordinates (x_frac, y_frac) of S# sites in the template JSON
+    determine the direction of the spacer vector through periodic boundary conditions.
+    
+    The system uses quadrant-based vector calculation:
+    - Fractional coordinates are converted to determine which periodic cell the site is in
+    - The integer part of fractional coordinates (via floor()) determines the cell offset
+    - This creates directional vectors that span across unit cell boundaries
+    
+    Example (from salts.json):
+    - L1 S1 at (0.652, 0.578): within center cell (0,0) -> no offset
+    - L2 S1 at (1.111, 0.303): X > 1.0 -> cell offset (1,0) -> vector points right
+    - L2 S3 at (0.812, 1.076): Y > 1.0 -> cell offset (0,1) -> vector points up
+    - L2 S2 at (1.296, 0.511): X > 1.0 -> cell offset (1,0) -> vector points right
+    
+    This allows S# sites to connect layers across periodic boundaries, creating
+    diagonal and cross-boundary spacer connections as specified by the template geometry.
     """
     if not layer_names:
         return [], 0.0
@@ -256,7 +313,13 @@ def _compute_layer_heights(
         cumulative += gap
         z_positions.append(cumulative)
 
-    terminal_gap = BX_dist
+    # Use specified terminal gap if provided, otherwise use BX_dist
+    terminal_gap_idx = len(layer_names) - 1
+    if interlayer_distances is not None and terminal_gap_idx in interlayer_distances:
+        terminal_gap = interlayer_distances[terminal_gap_idx]
+    else:
+        terminal_gap = BX_dist
+
     total_height = cumulative + terminal_gap
     return z_positions, total_height
 
