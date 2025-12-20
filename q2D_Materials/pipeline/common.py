@@ -408,7 +408,7 @@ def _parse_layer_sequence_with_distances(seq: str) -> Tuple[List[str], Optional[
         floor_labels.append(label)
         if dist_str:
             try:
-                distances[i - 1] = float(dist_str)
+                distances[i] = float(dist_str)
             except ValueError:
                 # Skip invalid numeric values
                 continue

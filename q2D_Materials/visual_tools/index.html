@@ -208,7 +208,19 @@
                             <div class="segment-opt" :class="{active: inputType==='X'}" @click="inputType='X'">X (Red)</div>
                             <div class="segment-opt" :class="{active: inputType==='Spacer'}" @click="inputType='Spacer'">Spacer</div>
                         </div>
-                        <div style="display:flex; gap:10px; align-items:center; background:rgba(0,0,0,0.2); padding:8px; border-radius:6px;">
+                        <div style="display:flex; gap:10px; align-items:center; background:rgba(0,0,0,0.2); padding:8px; border-radius:6px; flex-wrap: wrap;">
+                            <div style="display:flex; gap:5px; align-items:center;">
+                                <span style="font-size:0.8em; color:var(--cyan);">Grid:</span>
+                                <button @click="gridSize = 1; drawGrid()" :style="{fontSize:'0.8em', padding:'4px 8px', minWidth:'45px', background: gridSize === 1 ? 'var(--button-primary)' : 'var(--comment)'}">
+                                    1x1
+                                </button>
+                                <button @click="gridSize = 2; drawGrid()" :style="{fontSize:'0.8em', padding:'4px 8px', minWidth:'45px', background: gridSize === 2 ? 'var(--button-primary)' : 'var(--comment)'}">
+                                    2x2
+                                </button>
+                                <button @click="gridSize = 3; drawGrid()" :style="{fontSize:'0.8em', padding:'4px 8px', minWidth:'45px', background: gridSize === 3 ? 'var(--button-primary)' : 'var(--comment)'}">
+                                    3x3
+                                </button>
+                            </div>
                             <div v-if="inputType === 'Spacer'" style="display:flex; align-items:center; gap:5px;">
                                 <span style="font-size:0.8em; color:var(--orange);">#</span>
                                 <input type="number" v-model.number="spacerIdx" min="1" style="width:50px;">
@@ -227,7 +239,14 @@
                             </button>
                         </div>
                     </div>
-                    <canvas ref="gridCanvas" width="600" height="600" @mousemove="handleMouseMove" @click="handleClick"></canvas>
+                    <canvas ref="gridCanvas" width="600" height="600" 
+                            @mousemove="handleMouseMove" 
+                            @click="handleClick"
+                            @wheel.prevent="handleWheel"
+                            @mousedown="handleMouseDown"
+                            @mouseup="handleMouseUp"
+                            @mouseleave="handleMouseUp"
+                            style="cursor: grab;"></canvas>
                     <div class="atom-list" style="width:100%; max-width:600px;">
                         <div v-for="(atom, idx) in currentAtoms" 
                              :key="`atom-${idx}-${atom[0]}-${atom[1]}-${atom[2]}`" 
@@ -309,6 +328,14 @@ createApp({
         const elevation = ref(30); // Elevation (vertical angle: 0=below, 90=side, 180=above)
         const isSpinning = ref(false);
         let spinInterval = null;
+        
+        // Grid expansion, pan, and zoom state
+        const gridSize = ref(1); // 1 = 1x1, 2 = 2x2, 3 = 3x3
+        const panX = ref(0); // Pan offset in fractional coordinates
+        const panY = ref(0); // Pan offset in fractional coordinates
+        const zoomLevel = ref(1.0); // Zoom level (1.0 = normal)
+        const isDragging = ref(false);
+        const lastMousePos = ref({x: 0, y: 0});
 
         const currentAtoms = computed(() => layers.value[currentLayer.value] || []);
         
@@ -487,7 +514,7 @@ createApp({
             return '#ffb86c';
         };
 
-        // --- DRAWING LOGIC WITH CUSTOM STEPS ---
+        // --- UPDATED DRAWING LOGIC (Fixed Scale) ---
         const drawGrid = () => {
             if(!gridCanvas.value) return;
             const ctx = gridCanvas.value.getContext('2d');
@@ -503,68 +530,143 @@ createApp({
             }
             
             const gamma_rad = lattice.value.gamma * Math.PI / 180;
+            // Vector components
             const v1 = [lattice.value.a, 0];
             const v2 = [lattice.value.b * Math.cos(gamma_rad), lattice.value.b * Math.sin(gamma_rad)];
             
-            const pad = 40;
-            const max_x = Math.max(v1[0], v2[0], v1[0]+v2[0]);
-            const max_y = Math.max(v1[1], v2[1], v1[1]+v2[1]);
-            const min_x = Math.min(0, v1[0], v2[0]);
-            const min_y = Math.min(0, v1[1], v2[1]);
-            const span = Math.max(max_x-min_x, max_y-min_y);
-            const s = (w - 2*pad) / (span || 1);
+            // 1. CALCULATE STATIC SCALE
+            // We calculate scale based on the "Grid Size" setting (1, 2, or 3)
+            // This ensures the grid doesn't resize when you pan.
+            // gridSize=1: Show 1 cell (0,0 to 1,1) - lines at u=0,1 and v=0,1
+            // gridSize=2: Show 4 cells (0,0 to 2,2) - lines at u=0,1,2 and v=0,1,2
+            // gridSize=3: Show 9 cells (-1,-1 to 2,2) - lines at u=-1,0,1,2 and v=-1,0,1,2
+            let uMin, uMax, vMin, vMax, uLineEnd, vLineEnd;
+            if (gridSize.value === 1) {
+                uMin = 0; uMax = 0; // Only one cell, so uMax is same as uMin
+                vMin = 0; vMax = 0;
+                uLineEnd = 1; // Draw lines from 0 to 1
+                vLineEnd = 1;
+            } else if (gridSize.value === 2) {
+                uMin = 0; uMax = 1; // Two cells in each direction
+                vMin = 0; vMax = 1;
+                uLineEnd = 2; // Draw lines from 0 to 2
+                vLineEnd = 2;
+            } else { // gridSize === 3
+                uMin = -1; uMax = 1; // Three cells in each direction
+                vMin = -1; vMax = 1;
+                uLineEnd = 2; // Draw lines from -1 to 2
+                vLineEnd = 2;
+            }
             
+            // Calculate physical dimensions of the requested grid range
+            const max_x = Math.max(Math.abs(v1[0] * uMin), Math.abs(v1[0] * uLineEnd)) + 
+                          Math.max(Math.abs(v2[0] * vMin), Math.abs(v2[0] * vLineEnd));
+            const max_y = Math.max(Math.abs(v1[1] * uMin), Math.abs(v1[1] * uLineEnd)) + 
+                          Math.max(Math.abs(v2[1] * vMin), Math.abs(v2[1] * vLineEnd));
+            const span = Math.max(max_x, max_y);
+            
+            // 's' is pixels per Angstrom
+            const s = (Math.min(w, h) - 80) / (span || 1) * zoomLevel.value;
+            
+            const centerX = w / 2;
+            const centerY = h / 2;
+
+            // Coordinate Transformation Function
             const toPx = (u, v) => {
+                // Cartesian of point
                 const cx = u*v1[0] + v*v2[0];
                 const cy = u*v1[1] + v*v2[1];
-                return [pad + (cx-min_x)*s, h - (pad + (cy-min_y)*s)];
+                
+                // Cartesian of Pan Offset (panX/Y are in Fractional Coords)
+                const px = panX.value*v1[0] + panY.value*v2[0];
+                const py = panX.value*v1[1] + panY.value*v2[1];
+
+                return [
+                    centerX + (cx - px) * s, 
+                    centerY - (cy - py) * s
+                ];
             };
 
-            // 1. Cartesian Grid (Uses step_x and step_y)
+            // 2. HELPER GRID (The fine mesh)
             if(gridOptions.value.cartesian) {
-                ctx.strokeStyle = '#44475a'; ctx.lineWidth = 1;
+                ctx.lineWidth = 0.5;
+                ctx.strokeStyle = 'rgba(68, 71, 90, 0.5)'; // Very faint
                 
-                // Vertical lines (Steps of U)
                 const sx = gridOptions.value.step_x || 0.2;
-                for(let i=-1.0; i<=2.0; i+=sx) {
-                    let p1 = toPx(i, -1), p2 = toPx(i, 2);
-                    ctx.beginPath(); ctx.moveTo(p1[0], p1[1]); ctx.lineTo(p2[0], p2[1]); ctx.stroke();
-                }
-                
-                // Horizontal lines (Steps of V)
                 const sy = gridOptions.value.step_y || 0.2;
-                for(let i=-1.0; i<=2.0; i+=sy) {
-                    let p3 = toPx(-1, i), p4 = toPx(2, i);
-                    ctx.beginPath(); ctx.moveTo(p3[0], p3[1]); ctx.lineTo(p4[0], p4[1]); ctx.stroke();
+
+                // Vertical lines (constant u) - extend to cover full grid
+                for(let u = uMin; u <= uLineEnd; u += sx) {
+                    // optimization: don't draw if u is integer (will be drawn by unit cell loop)
+                    if(Math.abs(u % 1) < 0.01) continue; 
+                    let p1 = toPx(u, vMin), p2 = toPx(u, vLineEnd);
+                    ctx.beginPath(); ctx.moveTo(p1[0], p1[1]); ctx.lineTo(p2[0], p2[1]); ctx.stroke();
                 }
-            }
-
-            // 2. Unit Cell
-            ctx.strokeStyle = '#bd93f9'; ctx.lineWidth = 2;
-            const c = [toPx(0,0), toPx(1,0), toPx(1,1), toPx(0,1)];
-            ctx.beginPath(); ctx.moveTo(c[0][0], c[0][1]);
-            c.slice(1).forEach(p => ctx.lineTo(p[0], p[1]));
-            ctx.closePath(); ctx.stroke();
-
-            // 3. Diagonals (Uses step_diag)
-            if(gridOptions.value.diagonal) {
-                ctx.strokeStyle = '#6272a4'; ctx.lineWidth = 1;
-                const sd = gridOptions.value.step_diag || 0.2;
                 
-                // Draw diagonals u + v = k
-                for(let k=-2.0; k<=4.0; k+=sd) {
-                    // Line where u+v=k -> v = k-u. From u=-1 to u=2
-                    let p1 = toPx(-1, k - (-1)), p2 = toPx(2, k - 2);
-                    ctx.beginPath(); ctx.moveTo(p1[0], p1[1]); ctx.lineTo(p2[0], p2[1]); ctx.stroke();
-                }
-                // Draw anti-diagonals u - v = k
-                for(let k=-2.0; k<=4.0; k+=sd) {
-                    let p1 = toPx(-1, -1 - k), p2 = toPx(2, 2 - k);
+                // Horizontal lines (constant v) - extend to cover full grid
+                for(let v = vMin; v <= vLineEnd; v += sy) {
+                    if(Math.abs(v % 1) < 0.01) continue;
+                    let p1 = toPx(uMin, v), p2 = toPx(uLineEnd, v);
                     ctx.beginPath(); ctx.moveTo(p1[0], p1[1]); ctx.lineTo(p2[0], p2[1]); ctx.stroke();
                 }
             }
 
-            // 4. Draw selected other layer with transparency (if enabled)
+            // 3. COORDINATE SYSTEM (The Unit Cells)
+            // We draw these thicker and distinct
+            ctx.lineWidth = 1.5;
+            ctx.strokeStyle = '#6272a4'; // Dracula Comment color (Grey-Purple)
+            
+            // Draw grid lines for integer coordinates
+            // For 1x1: need lines at u=0,1 and v=0,1 (2 lines each = 1 cell)
+            // For 2x2: need lines at u=0,1,2 and v=0,1,2 (3 lines each = 4 cells)
+            // For 3x3: need lines at u=-1,0,1,2 and v=-1,0,1,2 (4 lines each = 9 cells)
+            for(let i = uMin; i <= uLineEnd; i++) {
+                // Vertical (Line of constant U)
+                let v_start = toPx(i, vMin);
+                let v_end = toPx(i, vLineEnd);
+                ctx.beginPath(); ctx.moveTo(v_start[0], v_start[1]); ctx.lineTo(v_end[0], v_end[1]); ctx.stroke();
+            }
+            
+            for(let i = vMin; i <= vLineEnd; i++) {
+                // Horizontal (Line of constant V)
+                let h_start = toPx(uMin, i);
+                let h_end = toPx(uLineEnd, i);
+                ctx.beginPath(); ctx.moveTo(h_start[0], h_start[1]); ctx.lineTo(h_end[0], h_end[1]); ctx.stroke();
+            }
+
+            // 4. THE CENTRAL UNIT CELL (0,0 to 1,1)
+            // Highlight this specifically so the user knows where the "Main" cell is
+            ctx.lineWidth = 3;
+            ctx.strokeStyle = '#bd93f9'; // Dracula Purple
+            const p00 = toPx(0,0);
+            const p10 = toPx(1,0);
+            const p11 = toPx(1,1);
+            const p01 = toPx(0,1);
+            
+            ctx.beginPath();
+            ctx.moveTo(p00[0], p00[1]);
+            ctx.lineTo(p10[0], p10[1]);
+            ctx.lineTo(p11[0], p11[1]);
+            ctx.lineTo(p01[0], p01[1]);
+            ctx.closePath();
+            ctx.stroke();
+
+            // 5. DIAGONALS (Optional)
+            if(gridOptions.value.diagonal) {
+                ctx.strokeStyle = 'rgba(98, 114, 164, 0.3)'; ctx.lineWidth = 0.5;
+                const sd = gridOptions.value.step_diag || 0.2;
+                // Diagonal drawing bounded by uMin/uLineEnd/vMin/vLineEnd
+                const diagMin = uMin + vMin;
+                const diagMax = uLineEnd + vLineEnd;
+                for(let k = diagMin; k <= diagMax; k += sd) {
+                     // u + v = k
+                     let p1 = toPx(uMin, k - uMin);
+                     let p2 = toPx(uLineEnd, k - uLineEnd);
+                    ctx.beginPath(); ctx.moveTo(p1[0], p1[1]); ctx.lineTo(p2[0], p2[1]); ctx.stroke();
+                }
+            }
+
+            // 6. Draw selected other layer with transparency (if enabled)
             if(showOtherLayers.value && selectedOverlayLayer.value && selectedOverlayLayer.value !== currentLayer.value) {
                 const otherAtoms = layers.value[selectedOverlayLayer.value] || [];
                 otherAtoms.forEach((a) => {
@@ -624,9 +726,13 @@ createApp({
                 ctx.globalAlpha = 1.0; // Reset alpha
             }
 
-            // 5. Atoms & Ghost (with different shapes: A=Circle, B=Square, X=X, Spacer=Triangle)
+            // 7. Atoms & Ghost (with different shapes: A=Circle, B=Square, X=X, Spacer=Triangle)
             currentAtoms.value.forEach((a, idx) => {
                 const [cx, cy] = toPx(a[1], a[2]);
+                
+                // Only draw if within reasonable view (optimization)
+                if(cx < -50 || cx > w+50 || cy < -50 || cy > h+50) return;
+                
                 ctx.fillStyle = getColor(a[0]);
                 // Highlight selected atom with a ring
                 const isSelected = selectedAtomIndex.value === idx;
@@ -694,7 +800,7 @@ createApp({
                     ctx.setLineDash([]);
                 }
             });
-            // Ghost preview (circle, 5px bigger)
+            // Ghost preview (circle, 5px bigger) - uses same toPx function so it accounts for pan/zoom
             const [gx, gy] = toPx(inputU.value, inputV.value);
             ctx.strokeStyle = 'white';
             ctx.lineWidth = 1.5;
@@ -726,32 +832,73 @@ createApp({
         };
 
         // --- Init JSmol & Listeners ---
+        // --- UPDATED CLICK HANDLER ---
         const handleClick = (e) => {
+            if (isDragging.value) {
+                isDragging.value = false;
+                gridCanvas.value.style.cursor = 'grab';
+                return;
+            }
+            
             const rect = gridCanvas.value.getBoundingClientRect();
             const x = e.clientX - rect.left, y = e.clientY - rect.top;
+            const w = rect.width, h = rect.height;
+            const centerX = w / 2, centerY = h / 2;
             
-            const gamma = lattice.value.gamma * Math.PI/180;
+            // Recalculate Scale 's' exactly as in drawGrid
+            const gamma_rad = lattice.value.gamma * Math.PI / 180;
             const v1 = [lattice.value.a, 0];
-            const v2 = [lattice.value.b * Math.cos(gamma), lattice.value.b * Math.sin(gamma)];
+            const v2 = [lattice.value.b * Math.cos(gamma_rad), lattice.value.b * Math.sin(gamma_rad)];
             
-            const pad = 40, w = rect.width, h = rect.height;
-            const max_x = Math.max(v1[0], v2[0], v1[0]+v2[0]);
-            const max_y = Math.max(v1[1], v2[1], v1[1]+v2[1]);
-            const min_x = Math.min(0, v1[0], v2[0]);
-            const min_y = Math.min(0, v1[1], v2[1]);
-            const s = (w - 2*pad) / (Math.max(max_x-min_x, max_y-min_y) || 1);
+            let uMin, uMax, vMin, vMax, uLineEnd, vLineEnd;
+            if (gridSize.value === 1) {
+                uMin = 0; uMax = 0;
+                vMin = 0; vMax = 0;
+                uLineEnd = 1;
+                vLineEnd = 1;
+            } else if (gridSize.value === 2) {
+                uMin = 0; uMax = 1;
+                vMin = 0; vMax = 1;
+                uLineEnd = 2;
+                vLineEnd = 2;
+            } else { // gridSize === 3
+                uMin = -1; uMax = 1;
+                vMin = -1; vMax = 1;
+                uLineEnd = 2;
+                vLineEnd = 2;
+            }
+            
+            const max_x = Math.max(Math.abs(v1[0] * uMin), Math.abs(v1[0] * uLineEnd)) + 
+                          Math.max(Math.abs(v2[0] * vMin), Math.abs(v2[0] * vLineEnd));
+            const max_y = Math.max(Math.abs(v1[1] * uMin), Math.abs(v1[1] * uLineEnd)) + 
+                          Math.max(Math.abs(v2[1] * vMin), Math.abs(v2[1] * vLineEnd));
+            const span = Math.max(max_x, max_y);
+            const s = (Math.min(w, h) - 80) / (span || 1) * zoomLevel.value;
 
-            const cx = min_x + (x - pad) / s;
-            const cy = min_y + (h - pad - y) / s;
+            // Inverse math
+            // screen = center + (cart - panCart) * s
+            // cart - panCart = (screen - center) / s
+            // cart = (screen - center) / s + panCart
 
+            const panX_cart = panX.value*v1[0] + panY.value*v2[0];
+            const panY_cart = panX.value*v1[1] + panY.value*v2[1];
+
+            const dx = (x - centerX) / s;
+            const dy = (centerY - y) / s; // Note Y flip
+
+            const cx = dx + panX_cart;
+            const cy = dy + panY_cart;
+
+            // Solve for u, v
             const det = v1[0]*v2[1] - v1[1]*v2[0];
             if(Math.abs(det) > 1e-9) {
                 const u = (cx*v2[1] - cy*v2[0])/det;
                 const v = (cy*v1[0] - cx*v1[1])/det;
-                const u_val = parseFloat(u.toFixed(3));
-                const v_val = parseFloat(v.toFixed(3));
                 
-                // If an atom is selected, update its position; otherwise update input fields
+                // Round to 3 decimals
+                const u_val = Math.round(u * 1000) / 1000;
+                const v_val = Math.round(v * 1000) / 1000;
+
                 if (selectedAtomIndex.value !== null && selectedAtomIndex.value >= 0) {
                     updateAtomPosition(selectedAtomIndex.value, u_val, v_val);
                     inputU.value = u_val;
@@ -764,9 +911,93 @@ createApp({
             }
         };
 
-        const handleMouseMove = (e) => {}; // Placeholder
+        // Removed cycleGridSize - now using direct button clicks
+        
+        const handleWheel = (e) => {
+            e.preventDefault();
+            const delta = e.deltaY > 0 ? 0.9 : 1.1; // Zoom out or in
+            zoomLevel.value = Math.max(0.5, Math.min(3.0, zoomLevel.value * delta));
+            drawGrid();
+        };
+        
+        const handleMouseDown = (e) => {
+            if (e.button === 0) { // Left mouse button
+                isDragging.value = true;
+                lastMousePos.value = {x: e.clientX, y: e.clientY};
+                if (gridCanvas.value) {
+                    gridCanvas.value.style.cursor = 'grabbing';
+                }
+            }
+        };
+        
+        const handleMouseUp = () => {
+            isDragging.value = false;
+            if (gridCanvas.value) {
+                gridCanvas.value.style.cursor = 'grab';
+            }
+        };
+        
+        // --- UPDATED MOUSE MOVE (PANNING) ---
+        const handleMouseMove = (e) => {
+            if (isDragging.value) {
+                const dx_px = e.clientX - lastMousePos.value.x;
+                const dy_px = e.clientY - lastMousePos.value.y;
+                
+                // We need 's' to convert pixel delta to coordinate delta
+                const w = gridCanvas.value.width, h = gridCanvas.value.height;
+                const gamma_rad = lattice.value.gamma * Math.PI / 180;
+                const v1 = [lattice.value.a, 0];
+                const v2 = [lattice.value.b * Math.cos(gamma_rad), lattice.value.b * Math.sin(gamma_rad)];
+                
+                let uMin, uMax, vMin, vMax, uLineEnd, vLineEnd;
+                if (gridSize.value === 1) {
+                    uMin = 0; uMax = 0;
+                    vMin = 0; vMax = 0;
+                    uLineEnd = 1;
+                    vLineEnd = 1;
+                } else if (gridSize.value === 2) {
+                    uMin = 0; uMax = 1;
+                    vMin = 0; vMax = 1;
+                    uLineEnd = 2;
+                    vLineEnd = 2;
+                } else { // gridSize === 3
+                    uMin = -1; uMax = 1;
+                    vMin = -1; vMax = 1;
+                    uLineEnd = 2;
+                    vLineEnd = 2;
+                }
+                
+            const max_x = Math.max(Math.abs(v1[0] * uMin), Math.abs(v1[0] * uLineEnd)) + 
+                          Math.max(Math.abs(v2[0] * vMin), Math.abs(v2[0] * vLineEnd));
+            const max_y = Math.max(Math.abs(v1[1] * uMin), Math.abs(v1[1] * uLineEnd)) + 
+                          Math.max(Math.abs(v2[1] * vMin), Math.abs(v2[1] * vLineEnd));
+            const span = Math.max(max_x, max_y);
+                const s = (Math.min(w, h) - 80) / (span || 1) * zoomLevel.value;
 
-        watch([inputU, inputV, inputType, showOtherLayers, showTraceImage, selectedOverlayLayer], drawGrid);
+                // Move logic
+                // Pixels / s = Angstroms
+                // We need to convert Angstrom delta to fractional (u, v) delta
+                
+                // Simplified Inverse Jacobian for Pan
+                const det = v1[0]*v2[1] - v1[1]*v2[0];
+                
+                // dx_px corresponds to +X, dy_px corresponds to +Y (but screen Y is inverted)
+                // Actually in canvas drag: Mouse Down moves view Up -> Pan decreases
+                const d_angstrom_x = -dx_px / s; 
+                const d_angstrom_y = dy_px / s; // Y is inverted on screen
+
+                const du = (d_angstrom_x * v2[1] - d_angstrom_y * v2[0]) / det;
+                const dv = (d_angstrom_y * v1[0] - d_angstrom_x * v1[1]) / det;
+
+                panX.value += du;
+                panY.value += dv;
+
+                lastMousePos.value = {x: e.clientX, y: e.clientY};
+                drawGrid();
+            }
+        };
+
+        watch([inputU, inputV, inputType, showOtherLayers, showTraceImage, selectedOverlayLayer, gridSize, zoomLevel, panX, panY], drawGrid);
         watch([layers, currentLayer], () => {
             // Redraw grid when layers change
             drawGrid();
@@ -789,7 +1020,8 @@ createApp({
             exportProject, handleImport, handleClick, handleMouseMove, getColor,
             rotation, elevation, snapshotUrl, isSpinning, startSpin, stopSpin,
             selectedAtomIndex, showOtherLayers, traceImage, showTraceImage,
-            handleTraceImageUpload, clearTraceImage, selectedOverlayLayer, onOverlayLayerChange
+            handleTraceImageUpload, clearTraceImage, selectedOverlayLayer, onOverlayLayerChange,
+            gridSize, handleWheel, handleMouseDown, handleMouseUp, zoomLevel
         };
     }
 }).mount('#app');

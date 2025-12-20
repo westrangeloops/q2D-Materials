@@ -1,4 +1,3 @@
-import pandas as pd
 import sys
 from pathlib import Path
 import numpy as np
@@ -17,6 +16,7 @@ molecules_list = ['CC(C)(CC[NH3+])C(C)(C)CC[NH3+]', '[NH3+]CCCCCC[NH3+]', 'CC(C)
 
 q2d = q2D_creator()
 
+molecules_list = molecules_list
 # For each molecule in the list, create a structure and write it to a file.
 for molecule in molecules_list:
     for halogen in ['Cl', 'Br', 'I']:
@@ -37,11 +37,11 @@ for molecule in molecules_list:
         # So the square we need is h^2 = A^2 + B^2, but A = B, so h^2 = 2A^2, so A = h/sqrt(2)
         denominator = 1
         if "CC(C)" in molecule:
-            denominator = 0.2
+            denominator = 0.5
         if "C1C" in molecule or "C1=C" in molecule:   
             denominator = 1.5
         else:
-            denominator = 2.5
+            denominator = 2.0
 
         A = (h / np.sqrt(2)) + (molecule_diameter / denominator)
         print(f"A: {A} Å")

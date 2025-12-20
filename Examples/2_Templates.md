@@ -1,6 +1,6 @@
 ![q2D-Materials Logo](../Logos/logo.png)
 
-# 2. Creating Custom Templates (short & practical)
+# 2. Creating Custom Templates
 
 You only need two patterns to master templates: a cubic stack (clear layers, easy visuals) and a Jagodzinski stack (compact strings for many variants). Goal: stay brief, keep the story visual, and explain why we care—fast stacking experiments without rewriting geometry.
 
@@ -32,7 +32,7 @@ Required: `name`, `named_layers`, `layer_sequence`, `lattice_multipliers`; optio
 - Frame 3: repeat L1+L2 to grow the block. Export these three VASP files and animate; that’s the stacking picture.
 
 Rendered frames (isometric): each comes from the same template with only `layer_sequence` changing—frame 1 uses just `["L1"]`, frame 2 stacks `["L1","L2"]`, frame 3 extends to `["L1","L2","L1"]`.  
-![L1](./images/L1.png) ![L1-L2](./images/L1-L2.png) ![L1-L2-L1](./images/L1-L2-L1.png)
+![L1](./images/creator-L1.png) ![L1-L2](./images/creator-L1-L2.png) ![L1-L2-L1](./images/creator-L1-L2-L1.png)
 
 Template (minimal):
 ```json
@@ -141,3 +141,34 @@ The same `cubic.json` that drives the simple L1/L2 stacks also carries two extra
 - XY expansion duplicates each `S1` into `S2`, `S3`, … so every image cell has a unique label. The populate logic then cycles through the `sharp_spacer` list (or reuses the single entry) while preserving which ground/sky positions belong together.
 
 Net effect: you never hard-code spacer coordinates in Python. Defining `S#` rows inside `cubic.json` is enough for Ruddlesden–Popper and Dion–Jacobson flows to know where to anchor spacers, how to orient double NH₃ molecules, and how to offset mono spacers on each side of the slab.
+
+### Quadrant-based S# vector calculation (salts template)
+
+The **salts template** demonstrates how fractional coordinates determine spacer connection directions across periodic boundaries. This is crucial for templates where S# sites need to connect layers diagonally or across unit cell edges.
+
+**How it works:**
+1. S# sites are defined with fractional coordinates `(x_frac, y_frac)` in the template JSON
+2. When pairing S# sites between layers (e.g., L1 S1 with L2 S1), the system:
+   - Converts both positions to fractional coordinates
+   - Determines which periodic cell each site is in using `floor()` of fractional coords
+   - Calculates the vector accounting for periodic cell offsets
+
+**Example from `salts.json`:**
+- **L1 S1** at `(0.652, 0.578)`: fractional `(0.652, 0.578)` → cell `(0, 0)` [center]
+- **L2 S1** at `(1.111, 0.303)`: fractional `(1.111, 0.303)` → cell `(1, 0)` [right]
+- **Result**: Vector points from L1 S1 to L2 S1 in the `(1,0)` periodic cell (diagonal right)
+
+- **L1 S3** at `(0.34, 0.752)`: fractional `(0.34, 0.752)` → cell `(0, 0)` [center]
+- **L2 S3** at `(0.812, 1.076)`: fractional `(0.812, 1.076)` → cell `(0, 1)` [up]
+- **Result**: Vector points to periodic cell `(0,1)`, creating vertical-up connection
+
+**Visualization:**
+![S# Site Vectors](./images/salts_site_vectors.png)
+
+The visualization shows:
+- **Circles**: L1 S# positions (ground anchors)
+- **Squares**: L2 S# positions (sky anchors)
+- **Arrows**: Direction vectors calculated using quadrant-based PBC logic
+- **Dashed grid**: Unit cell boundaries showing periodic images
+
+This allows templates to specify spacer connections that span unit cell boundaries, creating complex packing patterns and diagonal connections as needed. The system automatically handles periodic wrapping, so you can place S# sites at any fractional coordinate and the correct connection vector will be calculated.

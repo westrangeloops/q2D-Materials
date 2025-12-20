@@ -2,7 +2,7 @@
   description = "q2D-Materials: Template-driven quasi-2D perovskite structure generator";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.05";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
   };
 
@@ -10,7 +10,7 @@
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = import nixpkgs { inherit system; };
-        python = pkgs.python311;
+        python = pkgs.python312;
         pythonPackages = python.pkgs;
       in {
         devShells.default = pkgs.mkShell {

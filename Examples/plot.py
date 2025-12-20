@@ -214,3 +214,195 @@ write(IMAGES / "twist-mono2.png", twist_mono2, rotation=rotation_top, show_unit_
 
 twisted = q2d.twist(monolayers=[twist_mono1, twist_mono2], twist_angles=[(3, 1)], interlayer_distances=[8.0], vacuum=12.0)
 write(IMAGES / "twist-bilayer.png", twisted, rotation=rotation_iso, show_unit_cell=2)
+
+# Salts template: Visualize S# site vectors showing quadrant-based direction calculation
+if MATPLOTLIB_AVAILABLE:
+    from q2D_Materials.builders.optimizers import _find_directional_xy_pbc_vector
+    import numpy as np
+    
+    # Create a salts structure to extract S# positions
+    salts_structure = q2d.create_structure(
+        template="salts",
+        X_ions="I",
+        sharp_spacer="[NH3+]CCC[NH3+]",
+        lattice_multipliers=[4.0, 4.0],
+        layer_sequence="L1-L2",
+        structure_type="bulk",
+        optimizer="Off",
+        vacuum=0.0,
+    )
+    
+    # Extract S# site positions from the structure
+    # We need to get positions from the floor schema before population
+    from q2D_Materials.builders.templates import build_floor_schema, flatten_floor_schema
+    from q2D_Materials.pipeline.common import build_cell_positions
+    
+    # Build the floor schema to get S# positions
+    schema = build_floor_schema(
+        template_name="salts",
+        BX_dist=3.0,
+        layer_sequence="L1-L2",
+        lattice_multipliers=[4.0, 4.0],
+    )
+    
+    positions_by_site, site_labels = flatten_floor_schema(schema)
+    cell = schema.cell
+    
+    # Get S# positions from L1 and L2
+    s1_l1_positions = []
+    s1_l2_positions = []
+    s2_l1_positions = []
+    s2_l2_positions = []
+    s3_l1_positions = []
+    s3_l2_positions = []
+    s4_l1_positions = []
+    s4_l2_positions = []
+    
+    # Extract positions from floors (L1 is floor 1, L2 is floor 2)
+    for floor_key, entries in schema.floors.items():
+        floor_name = schema.floor_names[floor_key]
+        for site, x, y, z in entries:
+            if site == "S1":
+                if floor_name == "L1":
+                    s1_l1_positions.append(np.array([x, y, z]))
+                elif floor_name == "L2":
+                    s1_l2_positions.append(np.array([x, y, z]))
+            elif site == "S2":
+                if floor_name == "L1":
+                    s2_l1_positions.append(np.array([x, y, z]))
+                elif floor_name == "L2":
+                    s2_l2_positions.append(np.array([x, y, z]))
+            elif site == "S3":
+                if floor_name == "L1":
+                    s3_l1_positions.append(np.array([x, y, z]))
+                elif floor_name == "L2":
+                    s3_l2_positions.append(np.array([x, y, z]))
+            elif site == "S4":
+                if floor_name == "L1":
+                    s4_l1_positions.append(np.array([x, y, z]))
+                elif floor_name == "L2":
+                    s4_l2_positions.append(np.array([x, y, z]))
+    
+    # Collect all positions to calculate bounding box for zooming
+    all_positions = []
+    all_vectors = []
+    
+    # Color map for different S# labels
+    colors = {'S1': 'red', 'S2': 'blue', 'S3': 'green', 'S4': 'orange'}
+    
+    # Plot S# positions and vectors
+    s_pairs = [
+        ('S1', s1_l1_positions, s1_l2_positions),
+        ('S2', s2_l1_positions, s2_l2_positions),
+        ('S3', s3_l1_positions, s3_l2_positions),
+        ('S4', s4_l1_positions, s4_l2_positions),
+    ]
+    
+    # First pass: collect all positions and vectors to determine bounds
+    for label, l1_positions, l2_positions in s_pairs:
+        for pos in l1_positions:
+            all_positions.append(pos[:2])
+        for i, l2_pos in enumerate(l2_positions):
+            if i < len(l1_positions):
+                l1_pos = l1_positions[i]
+                vector = _find_directional_xy_pbc_vector(l1_pos, l2_pos, cell)
+                all_positions.append(l2_pos[:2])
+                all_positions.append((l1_pos[:2] + vector[:2]))
+                all_vectors.append((l1_pos, vector))
+    
+    # Calculate bounding box with padding
+    all_positions = np.array(all_positions)
+    x_min, x_max = all_positions[:, 0].min(), all_positions[:, 0].max()
+    y_min, y_max = all_positions[:, 1].min(), all_positions[:, 1].max()
+    
+    # Add 15% padding
+    x_range = x_max - x_min
+    y_range = y_max - y_min
+    x_pad = x_range * 0.15
+    y_pad = y_range * 0.15
+    
+    # Create visualization with better space usage
+    fig, ax = plt.subplots(figsize=(14, 12))
+    
+    # Plot unit cell boundaries (only show relevant cells)
+    a_vec = cell[0]
+    b_vec = cell[1]
+    cell_corners = np.array([
+        [0, 0],
+        [a_vec[0], a_vec[1]],
+        [a_vec[0] + b_vec[0], a_vec[1] + b_vec[1]],
+        [b_vec[0], b_vec[1]],
+        [0, 0]
+    ])
+    
+    # Draw unit cells only in the visible region
+    for i in range(-1, 3):
+        for j in range(-1, 3):
+            offset = i * a_vec[:2] + j * b_vec[:2]
+            shifted_corners = cell_corners + offset
+            ax.plot(shifted_corners[:, 0], shifted_corners[:, 1], 'k--', alpha=0.2, linewidth=0.5)
+    
+    # Second pass: plot positions and vectors
+    for label, l1_positions, l2_positions in s_pairs:
+        color = colors[label]
+        
+        # Plot L1 positions
+        for idx, pos in enumerate(l1_positions):
+            ax.scatter(pos[0], pos[1], c=color, s=150, marker='o', 
+                      edgecolors='black', linewidths=2, label=f'{label} L1' if idx == 0 else '', zorder=3)
+            ax.text(pos[0] + 0.4, pos[1] + 0.4, f'{label}\nL1', 
+                   fontsize=10, ha='left', va='bottom', color=color, weight='bold', zorder=4)
+        
+        # Plot L2 positions and draw vectors
+        for i, l2_pos in enumerate(l2_positions):
+            if i < len(l1_positions):
+                l1_pos = l1_positions[i]
+                
+                # Calculate vector using the same function used in populate
+                vector = _find_directional_xy_pbc_vector(l1_pos, l2_pos, cell)
+                
+                # Plot L2 position
+                ax.scatter(l2_pos[0], l2_pos[1], c=color, s=150, marker='s', 
+                          edgecolors='black', linewidths=2, label=f'{label} L2' if i == 0 else '', zorder=3)
+                ax.text(l2_pos[0] + 0.4, l2_pos[1] + 0.4, f'{label}\nL2', 
+                       fontsize=10, ha='left', va='bottom', color=color, weight='bold', zorder=4)
+                
+                # Draw arrow showing vector direction - same color as label, thicker
+                arrow_length = np.linalg.norm(vector[:2])
+                head_width = max(0.8, arrow_length * 0.08)
+                head_length = max(0.6, arrow_length * 0.1)
+                
+                ax.arrow(l1_pos[0], l1_pos[1], vector[0], vector[1],
+                        head_width=head_width, head_length=head_length, 
+                        fc=color, ec=color,  # Same color for fill and edge
+                        linewidth=4, alpha=0.9, length_includes_head=True, zorder=2)
+    
+    # Set zoomed limits
+    ax.set_xlim(x_min - x_pad, x_max + x_pad)
+    ax.set_ylim(y_min - y_pad, y_max + y_pad)
+    
+    ax.set_xlabel('X (Å)', fontsize=14, weight='bold')
+    ax.set_ylabel('Y (Å)', fontsize=14, weight='bold')
+    ax.set_title('S# Site Vectors: Quadrant-Based Direction Calculation\n(salts template, L1→L2 connections)', 
+                fontsize=16, weight='bold', pad=20)
+    ax.grid(True, alpha=0.3, linewidth=0.8)
+    ax.set_aspect('equal')
+    ax.legend(loc='upper right', fontsize=11, framealpha=0.9)
+    
+    # Add explanation text
+    explanation = (
+        "Vectors are calculated using fractional coordinates:\n"
+        "• L1 S# sites are in the center cell (0,0)\n"
+        "• L2 S# sites with frac X>1 or Y>1 are in adjacent cells\n"
+        "• Arrows show the periodic boundary-aware connection vectors"
+    )
+    ax.text(0.02, 0.98, explanation, transform=ax.transAxes,
+           fontsize=9, verticalalignment='top', 
+           bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
+    
+    fig.tight_layout()
+    fig.savefig(IMAGES / "salts_site_vectors.png", dpi=300, bbox_inches="tight")
+    plt.close(fig)
+    print("✓ Created salts_site_vectors.png showing S# site direction vectors")
+else:
+    print("Matplotlib not available; skipping S# vectors visualization")
