@@ -10,6 +10,7 @@ Structure-specific logic (DJ, RP, monolayer) lives in slab.py.
 from __future__ import annotations
 
 from typing import Optional, Tuple, List, Set, Dict
+from dataclasses import dataclass
 
 import numpy as np
 from ase import Atoms
@@ -19,6 +20,39 @@ from .optimizers import place_spacer_with_optimizer
 # Constants for site role tracking
 SITE_ROLE_KEY = "site_role"
 SITE_SPACER = "spacer"
+
+
+@dataclass
+class SpacerMolecule:
+    """Encapsulates spacer molecule with pre-computed NH3+ attachment points."""
+    atoms: Atoms
+    charge: int  # +1 or +2
+    n_indices: List[int]  # All nitrogen indices
+    nh3_indices: List[int]  # NH3+ nitrogen indices
+
+    @classmethod
+    def from_atoms(cls, atoms: Atoms, charge: Optional[int] = None) -> "SpacerMolecule":
+        n_indices, nh3_indices = _find_terminal_nitrogens(atoms)
+        if charge is None:
+            charge = len(nh3_indices)  # Infer from NH3+ count
+        return cls(atoms=atoms.copy(), charge=charge, n_indices=n_indices, nh3_indices=nh3_indices)
+
+    @property
+    def is_double(self) -> bool:
+        return len(self.nh3_indices) >= 2
+
+    @property
+    def primary_nh3_index(self) -> Optional[int]:
+        return self.nh3_indices[0] if self.nh3_indices else None
+
+    @property
+    def secondary_nh3_index(self) -> Optional[int]:
+        return self.nh3_indices[1] if len(self.nh3_indices) >= 2 else None
+
+    def get_nh3_position(self, index: int = 0) -> Optional[np.ndarray]:
+        if index < len(self.nh3_indices):
+            return self.atoms.get_positions()[self.nh3_indices[index]]
+        return None
 
 
 def prepare_spacer(
