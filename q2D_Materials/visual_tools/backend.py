@@ -9,6 +9,8 @@ from pathlib import Path
 import numpy as np
 import json
 import io
+import uuid
+from typing import Dict, Any
 
 # Matplotlib setup - MUST be before pyplot import
 import matplotlib
@@ -33,6 +35,9 @@ STATIC_DIR = BACKEND_DIR / "static"
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
+# Mount current directory for static files including SVG, CSS, etc.
+app.mount("/static", StaticFiles(directory=str(BACKEND_DIR)), name="visual_tools_static")
+
 # --- State Management (In-Memory) ---
 state = {
     "layers": {"L1": []},  # "L1": [ ["A", 0.5, 0.5], ... ]
@@ -48,6 +53,9 @@ state = {
     }
 }
 
+# --- Generated Structures Storage ---
+generated_structures = {}  # job_id -> {"vasp_content": str, "metadata": dict}
+
 # --- Helper Functions ---
 def get_lattice_vectors(a_mult, b_mult, gamma_deg):
     """Calculate 2D lattice vectors."""
@@ -58,6 +66,51 @@ def get_lattice_vectors(a_mult, b_mult, gamma_deg):
 
 def frac_to_cart(u, v, v1, v2):
     return u * v1 + v * v2
+
+# --- Structure Generation Helpers ---
+def convert_layer_stack_to_sequence(layer_stack: list, layer_sequence: str = "") -> str:
+    """Convert layer stack array to layer sequence string."""
+    if layer_sequence:
+        return layer_sequence
+
+    # If no custom sequence, use the stack order
+    return "-".join(layer_stack)
+
+def build_ion_arrays_from_mapping(layers: dict, layer_stack: list, ion_mapping: dict) -> tuple:
+    """Build A, B, X ion arrays from per-layer mapping."""
+    A_ions = []
+    B_ions = []
+    X_ions = []
+    spacer_dict = {}
+
+    for layer_name in layer_stack:
+        if layer_name not in layers or layer_name not in ion_mapping:
+            continue
+
+        layer_mapping = ion_mapping[layer_name]
+
+        # Get ion counts for this layer
+        a_count = sum(1 for atom in layers[layer_name] if atom[0] == 'A')
+        b_count = sum(1 for atom in layers[layer_name] if atom[0] == 'B')
+        x_count = sum(1 for atom in layers[layer_name] if atom[0] == 'X')
+
+        # Build ion arrays
+        if layer_mapping.get('A'):
+            A_ions.extend([layer_mapping['A']] * a_count)
+        if layer_mapping.get('B'):
+            B_ions.extend([layer_mapping['B']] * b_count)
+        if layer_mapping.get('X'):
+            X_ions.extend([layer_mapping['X']] * x_count)
+
+        # Handle spacers
+        for atom in layers[layer_name]:
+            code = atom[0]
+            if code.startswith('S') and code in layer_mapping:
+                if code not in spacer_dict:
+                    spacer_dict[code] = []
+                spacer_dict[code].append(layer_mapping[code])
+
+    return A_ions, B_ions, X_ions, spacer_dict
 
 # --- Data Models ---
 class AtomModel(BaseModel):
@@ -95,6 +148,30 @@ async def read_root():
         return FileResponse(HTML_FILE)
     else:
         return {"message": "Frontend HTML file not found. Please ensure index.html is in the same directory as backend.py"}
+
+@app.get("/layer_arquitect.html")
+async def serve_layer_architect():
+    """Serve the Layer Architect module HTML file."""
+    layer_architect_file = BACKEND_DIR / "layer_arquitect.html"
+    if layer_architect_file.exists():
+        return FileResponse(layer_architect_file)
+    else:
+        return JSONResponse(
+            status_code=404,
+            content={"detail": "Layer Architect module not found"}
+        )
+
+@app.get("/structure_generator.html")
+async def serve_structure_generator():
+    """Serve the Structure Generator module HTML file."""
+    structure_generator_file = BACKEND_DIR / "structure_generator.html"
+    if structure_generator_file.exists():
+        return FileResponse(structure_generator_file)
+    else:
+        return JSONResponse(
+            status_code=404,
+            content={"detail": "Structure Generator module not found"}
+        )
 
 @app.get("/state")
 def get_state():
@@ -367,6 +444,118 @@ async def import_structure(file: UploadFile = File(...)):
             status_code=400,
             content={"status": "error", "message": str(e)}
         )
+
+# --- Structure Generation Endpoints ---
+
+class StructureGenerateRequest(BaseModel):
+    layers: Dict[str, list]
+    layer_stack: list
+    lattice: Dict[str, float]
+    ion_mapping: Dict[str, Dict[str, str]]
+    config: Dict[str, Any]
+
+@app.post("/structure/generate")
+def generate_structure(request: StructureGenerateRequest):
+    """Generate a structure from layer definitions and ion mapping."""
+    try:
+        # Convert layer stack to sequence
+        layer_sequence = convert_layer_stack_to_sequence(
+            request.layer_stack,
+            request.config.get('layer_sequence', '')
+        )
+
+        # Build ion arrays from per-layer mapping
+        A_ions, B_ions, X_ions, spacer_dict = build_ion_arrays_from_mapping(
+            request.layers, request.layer_stack, request.ion_mapping
+        )
+
+        # Prepare sharp_spacer list
+        sharp_spacer = []
+        for spacer_list in spacer_dict.values():
+            sharp_spacer.extend(spacer_list)
+
+        # Import q2D_creator (lazy import to avoid circular dependencies)
+        from q2D_Materials.core.creator import q2D_creator
+
+        # Create the structure
+        creator = q2D_creator()
+        structure = creator.create_structure(
+            A_ions=A_ions if A_ions else None,
+            B_ions=B_ions if B_ions else None,
+            X_ions=X_ions if X_ions else None,
+            xy_expansion=tuple(request.config.get('xy_expansion', [1, 1])),
+            template=request.config.get('template', 'cubic'),
+            structure_type=request.config.get('structure_type', 'bulk'),
+            vacuum=request.config.get('vacuum', 15.0),
+            layer_sequence=layer_sequence,
+            sharp_spacer=sharp_spacer if sharp_spacer else None,
+            penetration=request.config.get('penetration', 0.0),
+            attachment_end=request.config.get('attachment_end') or None,
+            optimizer=request.config.get('optimizer', 'KS'),
+            thickness=request.config.get('thickness', 1),
+            glazer_angles=request.config.get('glazer_angles'),
+            glazer_pattern=request.config.get('glazer_pattern'),
+            lattice_multipliers=[request.lattice['a'], request.lattice['b']]
+        )
+
+        # Convert to VASP string
+        from io import StringIO
+        vasp_buffer = StringIO()
+        structure.write(vasp_buffer, format='vasp', sort=True)
+        vasp_content = vasp_buffer.getvalue()
+
+        # Generate job ID and store
+        job_id = str(uuid.uuid4())
+        generated_structures[job_id] = {
+            "vasp_content": vasp_content,
+            "metadata": {
+                "atom_count": len(structure),
+                "layer_count": len(request.layer_stack),
+                "template": request.config.get('template', 'cubic'),
+                "structure_type": request.config.get('structure_type', 'bulk'),
+                "xy_expansion": request.config.get('xy_expansion', [1, 1]),
+                "timestamp": str(np.datetime64('now'))
+            }
+        }
+
+        return {
+            "status": "success",
+            "job_id": job_id,
+            "atom_count": len(structure),
+            "message": f"Structure generated with {len(structure)} atoms"
+        }
+
+    except Exception as e:
+        import traceback
+        print(f"Structure generation failed: {e}")
+        print(traceback.format_exc())
+        return JSONResponse(
+            status_code=400,
+            content={
+                "status": "error",
+                "message": str(e)
+            }
+        )
+
+@app.get("/structure/download/{job_id}")
+def download_structure(job_id: str):
+    """Download generated structure as VASP file."""
+    if job_id not in generated_structures:
+        return JSONResponse(
+            status_code=404,
+            content={"detail": "Structure not found"}
+        )
+
+    structure_data = generated_structures[job_id]
+    vasp_content = structure_data["vasp_content"]
+
+    return Response(
+        content=vasp_content,
+        media_type="chemical/x-vasp",
+        headers={
+            "Content-Disposition": f"attachment; filename=structure_{job_id}.vasp"
+        }
+    )
 
 @app.get("/render/3d")
 def render_3d_view(angle: float = 45.0, elev: float = 30.0, spacing: float = 3.0):

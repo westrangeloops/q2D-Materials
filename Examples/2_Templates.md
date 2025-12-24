@@ -138,7 +138,7 @@ The same `cubic.json` that drives the simple L1/L2 stacks also carries two extra
 
 - When your `layer_sequence` inserts **two consecutive layers that both include `S#` (M1→RP1, RP1→M1, etc.)** the population step treats the first as the **ground** and the next as the **sky**. Because both layers reuse the same label (`S1`) the code can align the same anchor pair no matter how many times the sequence repeats.
 - `RP1` sits between perovskite slabs (`RP2` is the spacer-only bridge), so `layer_sequence="RP"` expands to `L2-M1-RP1-RP2-RP1-M1`. That means every RP block automatically creates two S# pairs (M1↔RP1) for the organic/atomic spacer to occupy.
-- XY expansion duplicates each `S1` into `S2`, `S3`, … so every image cell has a unique label. The populate logic then cycles through the `sharp_spacer` list (or reuses the single entry) while preserving which ground/sky positions belong together.
+- XY expansion duplicates each `S1` into `S2`, `S3`, … so every image cell has a unique label. The populate logic then cycles through the `spacer` list (or reuses the single entry) while preserving which ground/sky positions belong together.
 
 Net effect: you never hard-code spacer coordinates in Python. Defining `S#` rows inside `cubic.json` is enough for Ruddlesden–Popper and Dion–Jacobson flows to know where to anchor spacers, how to orient double NH₃ molecules, and how to offset mono spacers on each side of the slab.
 

@@ -42,7 +42,7 @@ A = h / np.sqrt(2)  # Square cell side length
 atoms = q2d.create_structure(
     template="salts",              # or "maybe_salt" for custom templates
     X_ions="I",                   # Only X-site needed (no B-site)
-    sharp_spacer=elongated_molecule,
+    spacer=elongated_molecule,
     lattice_multipliers=[A/3, A/3],  # Scale to match spacer geometry
     layer_sequence=f"L1-({molecule_diameter})-L2",  # Explicit spacing
     structure_type="monolayer",
@@ -149,7 +149,7 @@ for molecule in molecules_list:
         atoms = q2d.create_structure(
             template="salts",                    # Salt template (X-sites + S# anchors)
             X_ions=halogen,                      # Halide: Cl, Br, or I
-            sharp_spacer=elongated_molecule,      # Pre-elongated molecule
+            spacer=elongated_molecule,      # Pre-elongated molecule
             lattice_multipliers=[A/3, A/3],       # Scale template to match calculated size
             #                                      # Template base is 3, so divide by 3
             layer_sequence=f"L1-({molecule_diameter})-L2",  # Explicit spacing = diameter
@@ -268,7 +268,7 @@ elongated = elongate_molecule("[NH3+]CCCC[NH3+]", step_size=0.5, max_iterations=
 atoms = q2d.create_structure(
     template="salts",
     X_ions="I",
-    sharp_spacer=elongated,
+    spacer=elongated,
     optimizer="Off",  # Already optimized
     ...
 )
@@ -277,7 +277,7 @@ atoms = q2d.create_structure(
 atoms = q2d.create_structure(
     template="salts",
     X_ions="I",
-    sharp_spacer="[NH3+]CCCC[NH3+]",  # Raw SMILES
+    spacer="[NH3+]CCCC[NH3+]",  # Raw SMILES
     optimizer="KS",  # Will elongate automatically
     ...
 )

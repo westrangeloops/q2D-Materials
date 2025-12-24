@@ -32,13 +32,20 @@ dj = q2d.create_structure(
     layer_sequence="DJ",
     thickness=2,
     A_ions="MA", B_ions="Pb", X_ions="I",
-    sharp_spacer="[NH3+]CCCC[NH3+]",
+    spacer="[NH3+]CCCC[NH3+]",
     glazer_angles=[0, 0, 3],
     glazer_pattern=["0", "0", "+"],
 )
 ```
 
 ### Visual cue (cubic storyboard)
+
+**Atomic A-site (Cs):**
+
+![L1-Cs](./images/creator-L1-Cs.png) ![L1-L2-Cs](./images/creator-L1-L2-Cs.png) ![L1-L2-L1-Cs](./images/creator-L1-L2-L1-Cs.png)
+
+**Molecular A-site (MA):**
+
 ![L1](./images/creator-L1.png) ![L1-L2](./images/creator-L1-L2.png) ![L1-L2-L1](./images/creator-L1-L2-L1.png)
 
 ### Pattern mixing in one line

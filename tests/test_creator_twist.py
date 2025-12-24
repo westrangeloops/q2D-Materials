@@ -25,7 +25,7 @@ def main():
     m1 = q2d.create_structure(
         A_ions=["Cs", "MA", "FA", "MA", "MA", "FA", "Cs", "MA"],
         B_ions=["Pb", "Sn", "Pb", "Pb", "Sn", "Pb", "Pb", "Sn"],
-        spacer=["CN1C=NC2=C1C(=O)N(C(=O)N2C)CC[NH3+]", "CCCC[NH3+]"],
+        passivator=["CN1C=NC2=C1C(=O)N(C(=O)N2C)CC[NH3+]", "CCCC[NH3+]"],
         X_ions=["Br"] * 12 + ["I"] * 12,
         xy_expansion=(2, 2),
         template="reduced",
@@ -50,7 +50,7 @@ def main():
         template="cubic",
         structure_type="monolayer",
         vacuum=vacuum,
-        spacer="Cs",
+        passivator="Cs",
     )
     write("m2_mixedA_cubic.vasp", m2, format="vasp", sort=True)
     monolayers.append(m2)
@@ -66,7 +66,7 @@ def main():
         template="reduced",
         structure_type="monolayer",
         vacuum=vacuum,
-        spacer="CCCC[NH3+]",
+        passivator="CCCC[NH3+]",
         glazer_angles=[0, 2, 2],
         glazer_pattern=["0", "+", "+"],
         thickness=2,

@@ -36,6 +36,17 @@ jago_base = dict(structure_type="bulk", A_ions="MA", B_ions="Pb", X_ions="I", xy
 dj_base = dict(structure_type="bulk", A_ions="MA", B_ions="Pb", X_ions="I", xy_expansion=(1, 1), template="cubic")
 
 # Creator / Templates (cubic)
+# Atomic A-site (Cs)
+creator_L1_Cs = q2d.create_structure(**(cubic_base | {"A_ions": "Cs"}), layer_sequence=["L1"])
+write(IMAGES / "creator-L1-Cs.png", creator_L1_Cs, rotation=rotation_iso, show_unit_cell=2)
+
+creator_L1_L2_Cs = q2d.create_structure(**(cubic_base | {"A_ions": "Cs"}), layer_sequence=["L1", "L2"])
+write(IMAGES / "creator-L1-L2-Cs.png", creator_L1_L2_Cs, rotation=rotation_iso, show_unit_cell=2)
+
+creator_L1_L2_L1_Cs = q2d.create_structure(**(cubic_base | {"A_ions": "Cs"}), layer_sequence=["L1", "L2", "L1"])
+write(IMAGES / "creator-L1-L2-L1-Cs.png", creator_L1_L2_L1_Cs, rotation=rotation_iso, show_unit_cell=2)
+
+# Molecular A-site (MA)
 creator_L1 = q2d.create_structure(**cubic_base, layer_sequence=["L1"])
 write(IMAGES / "creator-L1.png", creator_L1, rotation=rotation_iso, show_unit_cell=2)
 
@@ -74,7 +85,7 @@ dj = q2d.create_structure(
     **dj_base,
     layer_sequence="DJ",
     thickness=2,
-    sharp_spacer="[NH3+]CCCC[NH3+]",
+    spacer="[NH3+]CCCC[NH3+]",
     glazer_angles=[0, 0, 3],
     glazer_pattern=["0", "0", "+"],
 )
@@ -85,7 +96,7 @@ dj_atomic = q2d.create_structure(
     **(dj_base | {"xy_expansion": (2, 2)}),
     layer_sequence="DJ",
     thickness=3,
-    sharp_spacer="Cs",
+    spacer="Cs",
     glazer_angles=[3, 2, 6],
     glazer_pattern=["+", "-", "-"],
 )
@@ -101,7 +112,7 @@ rp_base = q2d.create_structure(
     A_ions="MA",
     B_ions="Pb",
     X_ions="I",
-    sharp_spacer="[NH3+]CCCC[NH3+]",
+    spacer="[NH3+]CCCC[NH3+]",
     glazer_angles=[0, 0, 5],
     glazer_pattern=["0", "0", "+"],
 )
@@ -116,7 +127,7 @@ rp_glazer = q2d.create_structure(
     A_ions="MA",
     B_ions="Pb",
     X_ions="I",
-    sharp_spacer=["[NH3+]CCCCCCC", "[NH3+]CCCC[NH3+]"],
+    spacer=["[NH3+]CCCCCCC", "[NH3+]CCCC[NH3+]"],
     glazer_angles=[0, 2, 12],
     glazer_pattern=["0", "+", "+"],
     penetration=[-0.3, 0.3],
@@ -132,7 +143,7 @@ rp_atomic = q2d.create_structure(
     A_ions="MA",
     B_ions="Pb",
     X_ions="I",
-    sharp_spacer="Cs",
+    spacer="Cs",
     glazer_angles=[3, 2, 6],
     glazer_pattern=["+", "-", "-"],
     penetration=0.2,
@@ -167,7 +178,7 @@ if MATPLOTLIB_AVAILABLE:
         A_ions="MA",
         B_ions="Pb",
         X_ions="I",
-        sharp_spacer="[NH3+]CCCC[NH3+]",
+        spacer="[NH3+]CCCC[NH3+]",
         glazer_angles=[0, 0, 3],
         glazer_pattern=["0", "0", "+"],
     )
@@ -186,7 +197,7 @@ if MATPLOTLIB_AVAILABLE:
         A_ions="MA",
         B_ions="Pb",
         X_ions="I",
-        sharp_spacer=["C=CCC=CCC[NH3+]", "[NH3+]CCCC[NH3+]"],
+        spacer=["C=CCC=CCC[NH3+]", "[NH3+]CCCC[NH3+]"],
         glazer_angles=[2, 4, 8],
         glazer_pattern=["0", "+", "+"],
         penetration=0.2,
@@ -224,7 +235,7 @@ if MATPLOTLIB_AVAILABLE:
     salts_structure = q2d.create_structure(
         template="salts",
         X_ions="I",
-        sharp_spacer="[NH3+]CCC[NH3+]",
+        spacer="[NH3+]CCC[NH3+]",
         lattice_multipliers=[4.0, 4.0],
         layer_sequence="L1-L2",
         structure_type="bulk",

@@ -40,7 +40,7 @@ faulted = q2d.create_structure(
     structure_type="bulk",
     A_ions="MA", B_ions="Pb", X_ions="I",
     layer_sequence="L1-L2-L1-M1-M1-L1-L2",  # M1 creates a fault
-    sharp_spacer="[NH3+]CCCC[NH3+]",  # Spacer at fault
+    spacer="[NH3+]CCCC[NH3+]",  # Spacer at fault
 )
 ```
 
@@ -69,7 +69,7 @@ alternating = q2d.create_structure(
     structure_type="bulk",
     A_ions="MA", B_ions="Pb", X_ions="I",
     layer_sequence="L1-L2-M1-M1-L1-L2-M1-M1",  # Spacer layers every 2 perovskite units
-    sharp_spacer="[NH3+]CCCC[NH3+]",
+    spacer="[NH3+]CCCC[NH3+]",
     thickness=2,
 )
 ```
@@ -98,7 +98,7 @@ sandwich = q2d.create_structure(
     structure_type="monolayer",
     A_ions="MA", B_ions="Pb", X_ions="I",
     layer_sequence="M1-M1-L1-L2-L1-L2-L1-M1-M1",  # Spacers on top and bottom
-    sharp_spacer="[NH3+]CCCC[NH3+]",
+    spacer="[NH3+]CCCC[NH3+]",
     vacuum=15.0,
     thickness=1,
 )
@@ -114,7 +114,7 @@ superlattice = q2d.create_structure(
     structure_type="bulk",
     A_ions="MA", B_ions="Pb", X_ions="I",
     layer_sequence="L1-L2-L1-L2-M1-M1-L1-L2-L1-L2-M1-M1",  # 2×2 superlattice
-    sharp_spacer="[NH3+]CCCC[NH3+]",
+    spacer="[NH3+]CCCC[NH3+]",
     xy_expansion=(2, 2),  # Match superlattice periodicity
 )
 ```
@@ -192,7 +192,7 @@ tilted_arch = q2d.create_structure(
     structure_type="bulk",
     A_ions="MA", B_ions="Pb", X_ions="I",
     layer_sequence="L1-L2-M1-M1-L1-L2",
-    sharp_spacer="[NH3+]CCCC[NH3+]",
+    spacer="[NH3+]CCCC[NH3+]",
     glazer_angles=[0, 0, 5],
     glazer_pattern=["0", "0", "+"],
 )
@@ -206,7 +206,7 @@ penetrated_arch = q2d.create_structure(
     structure_type="monolayer",
     A_ions="MA", B_ions="Pb", X_ions="I",
     layer_sequence="M1-M1-L1-L2-L1",
-    sharp_spacer="[NH3+]CCCC[NH3+]",
+    spacer="[NH3+]CCCC[NH3+]",
     penetration=0.3,  # Shift spacer anchors
     vacuum=15.0,
 )
@@ -243,7 +243,7 @@ pattern_arch = q2d.create_structure(
        template="cubic",
        A_ions="MA", B_ions="Pb", X_ions="I",
        layer_sequence="L1-L2-M1-M1-L1-L2",
-       sharp_spacer="[NH3+]CCCC[NH3+]",
+       spacer="[NH3+]CCCC[NH3+]",
    )
    ```
 
@@ -253,7 +253,7 @@ pattern_arch = q2d.create_structure(
        template="cubic",
        A_ions="MA", B_ions="Pb", X_ions="I",
        layer_sequence="L1-(2.5)-L2-(3.0)-M1-(3.5)-M1",
-       sharp_spacer="[NH3+]CCCC[NH3+]",
+       spacer="[NH3+]CCCC[NH3+]",
    )
    ```
 

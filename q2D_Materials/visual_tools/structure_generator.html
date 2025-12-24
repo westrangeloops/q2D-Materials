@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Structure Generator - q2D Materials</title>
+    <link rel="stylesheet" href="http://localhost:8000/static/theme.css">
+    
+    <script>
+    // Apply theme immediately before anything else loads
+    (function() {
+        const currentTheme = localStorage.getItem('theme');
+        if (currentTheme === 'dark') {
+            document.documentElement.setAttribute('data-theme', 'dark');
+        } else if (currentTheme === 'light') {
+            document.documentElement.removeAttribute('data-theme');
+        }
+    })();
+    </script>
+    
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+
+    <style>
+        /* --- Structure Generator Specific Styles --- */
+        #app { display: flex; width: 100%; height: 100%; gap: 0; }
+
+        .sidebar {
+            width: 380px;
+            background: var(--bg-panel);
+            border-right: 1px solid rgba(255,255,255,0.05);
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            padding: 25px;
+            gap: 20px;
+            flex-shrink: 0;
+            z-index: 10;
+            box-shadow: 5px 0 20px rgba(0,0,0,0.1);
+        }
+
+        .main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 25px;
+            overflow: hidden;
+            position: relative;
+            background: var(--gradient-main);
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-shrink: 0;
+            padding: 0 5px;
+        }
+
+        .panel {
+            min-height: 0;
+            max-height: 100%;
+        }
+
+        /* Custom section styles */
+        .section {
+            background: var(--bg-input);
+            border-radius: var(--radius-md);
+            padding: 20px;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .section-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--fg-primary);
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .layer-item {
+            background: var(--bg-panel);
+            border-radius: var(--radius-md);
+            padding: 15px;
+            margin-bottom: 10px;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .layer-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .layer-name {
+            font-weight: 700;
+            color: var(--accent);
+            font-size: 1.05rem;
+        }
+
+        .layer-atoms {
+            font-size: 0.85rem;
+            color: var(--fg-secondary);
+        }
+
+        .ion-mapping {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 10px;
+        }
+
+        .ion-input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .ion-label {
+            font-size: 0.8rem;
+            color: var(--fg-secondary);
+            font-weight: 500;
+        }
+
+        input[type="text"], input[type="number"], select {
+            width: 100%;
+        }
+
+        .config-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+
+        .config-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .config-label {
+            font-size: 0.85rem;
+            color: var(--fg-secondary);
+            font-weight: 500;
+        }
+
+        .advanced-toggle {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px;
+            background: var(--bg-input);
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .advanced-toggle:hover {
+            background: var(--bg-hover);
+        }
+
+        .toggle-icon {
+            font-size: 1.2rem;
+            transition: transform 0.2s;
+        }
+
+        .advanced-options {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+
+        .advanced-options.open {
+            max-height: 1000px;
+        }
+
+        /* Button styles inherited from theme.css */
+
+        .status-message {
+            padding: 12px 16px;
+            border-radius: var(--radius-md);
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .status-success {
+            background: rgba(73, 173, 182, 0.15);
+            border: 1px solid rgba(73, 173, 182, 0.5);
+            color: var(--success);
+            font-weight: 600;
+        }
+
+        .status-error {
+            background: rgba(143, 38, 171, 0.15);
+            border: 1px solid rgba(143, 38, 171, 0.5);
+            color: var(--danger);
+            font-weight: 600;
+        }
+
+        .status-info {
+            background: rgba(245, 177, 2, 0.15);
+            border: 1px solid rgba(245, 177, 2, 0.5);
+            color: var(--warning);
+            font-weight: 600;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid var(--bg-input);
+            border-radius: 50%;
+            border-top-color: var(--accent);
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .auto-load-indicator {
+            background: rgba(0, 139, 139, 0.15);
+            border: 1px solid rgba(0, 139, 139, 0.5);
+            color: var(--accent);
+            padding: 8px 12px;
+            border-radius: var(--radius-md);
+            font-size: 0.85rem;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-weight: 600;
+        }
+
+        .back-button {
+            background: var(--accent);
+            color: white;
+            padding: 8px 16px;
+            border-radius: var(--radius-pill);
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s;
+            cursor: pointer;
+            text-decoration: none;
+        }
+
+        .back-button:hover {
+            background: var(--accent-hover);
+            transform: translateX(-2px);
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="sidebar">
+            <div @click="goToIndex" style="display:flex; align-items:center; gap:10px; margin-bottom: 20px; cursor:pointer; padding:10px; border-radius:var(--radius-md); transition:all 0.2s; background:transparent;" 
+                 @mouseover="$event.currentTarget.style.background='rgba(131, 211, 220, 0.1)'; $event.currentTarget.style.transform='translateX(-2px)'" 
+                 @mouseout="$event.currentTarget.style.background='transparent'; $event.currentTarget.style.transform='translateX(0)'">
+                <object type="image/svg+xml" data="http://localhost:8000/static/logo_q2D_materials.svg" width="200" height="60" style="pointer-events: none;"></object>
+            </div>
+            
+            <div class="section">
+                <div class="section-title">
+                    📥 Import Layers
+                </div>
+
+                <div v-if="loadedFromArchitect" class="auto-load-indicator">
+                    ✓ Loaded from Layer Architect
+                </div>
+
+                <button @click="refreshFromArchitect" :disabled="loading" class="primary" style="width: 100%; margin: 10px 0;">
+                    <span v-if="loading" class="loading"></span>
+                    {{ loading ? 'Loading...' : 'Refresh from Layer Architect' }}
+                </button>
+
+                <div style="text-align: center; color: var(--fg-secondary); font-size: 0.85rem; margin: 10px 0;">
+                    — OR —
+                </div>
+
+                <input type="file" @change="handleFileImport" accept=".json" style="width: 100%; margin-bottom: 10px;">
+                <div style="font-size: 0.8rem; color: var(--fg-secondary);">
+                    Upload a Layer Architect JSON export file
+                </div>
+            </div>
+
+            <div class="section" v-if="layerStack.length > 0">
+                <div class="section-title">
+                    🔗 Layer Stack
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+                    <div v-for="(layerName, index) in layerStack" :key="index"
+                         style="background: var(--bg-input); padding: 8px 12px; border-radius: var(--radius-md); font-size: 0.9rem; color: var(--accent); font-weight: 600;">
+                        {{ index + 1 }}. {{ layerName }} ({{ getLayerAtomCount(layerName) }} atoms)
+                    </div>
+                </div>
+            </div>
+
+            <div class="section" v-if="lattice">
+                <div class="section-title">
+                    📐 Lattice Parameters
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 0.9rem;">
+                    <div>a: {{ lattice.a.toFixed(2) }} Å</div>
+                    <div>b: {{ lattice.b.toFixed(2) }} Å</div>
+                    <div>α: {{ lattice.alpha.toFixed(1) }}°</div>
+                    <div>β: {{ lattice.beta.toFixed(1) }}°</div>
+                    <div>γ: {{ lattice.gamma.toFixed(1) }}°</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="main">
+            <div class="header">
+                <div style="display: flex; align-items: center; gap: 15px;">
+                    <h2 style="margin: 0; color: var(--fg-primary);">Structure Generator</h2>
+                </div>
+            </div>
+
+            <div style="flex: 1; display: flex; flex-direction: column; gap: 20px; overflow-y: auto;">
+                <!-- Ion Mapping Section -->
+                <div class="panel" v-if="layerStack.length > 0">
+                    <div class="panel-header">
+                        🧬 Ion Mapping (Per Layer)
+                    </div>
+                    <div class="panel-content">
+                        <div v-for="layerName in Object.keys(layers)" :key="layerName" class="layer-item">
+                            <div class="layer-header">
+                                <div class="layer-name">{{ layerName }}</div>
+                                <div class="layer-atoms">{{ layers[layerName].length }} atoms</div>
+                            </div>
+
+                            <div class="ion-mapping">
+                                <!-- A-site -->
+                                <div class="ion-input-group">
+                                    <label class="ion-label">A-site</label>
+                                    <select v-model="ionMapping[layerName].A">
+                                        <option value="">None</option>
+                                        <option value="Cs">Cs</option>
+                                        <option value="MA">MA</option>
+                                        <option value="FA">FA</option>
+                                        <option value="Rb">Rb</option>
+                                        <option value="K">K</option>
+                                    </select>
+                                </div>
+
+                                <!-- B-site -->
+                                <div class="ion-input-group">
+                                    <label class="ion-label">B-site</label>
+                                    <select v-model="ionMapping[layerName].B">
+                                        <option value="">None</option>
+                                        <option value="Pb">Pb</option>
+                                        <option value="Sn">Sn</option>
+                                        <option value="Ge">Ge</option>
+                                        <option value="Ti">Ti</option>
+                                        <option value="Zr">Zr</option>
+                                        <option value="Hf">Hf</option>
+                                    </select>
+                                </div>
+
+                                <!-- X-site -->
+                                <div class="ion-input-group">
+                                    <label class="ion-label">X-site</label>
+                                    <select v-model="ionMapping[layerName].X">
+                                        <option value="">None</option>
+                                        <option value="I">I</option>
+                                        <option value="Br">Br</option>
+                                        <option value="Cl">Cl</option>
+                                        <option value="F">F</option>
+                                    </select>
+                                </div>
+
+                                <!-- Spacers (dynamic) -->
+                                <div v-for="spacerCode in getSpacerCodes(layerName)" :key="spacerCode" class="ion-input-group">
+                                    <label class="ion-label">{{ spacerCode }}</label>
+                                    <input type="text" v-model="ionMapping[layerName][spacerCode]"
+                                           :placeholder="spacerCode === 'S1' ? 'CCCC[NH3+]' : 'Cs or SMILES'">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Configuration Section -->
+                <div class="panel" v-if="layerStack.length > 0">
+                    <div class="panel-header">
+                        ⚙️ Configuration
+                    </div>
+                    <div class="panel-content">
+                        <!-- Basic Parameters -->
+                        <div class="config-grid">
+                            <div class="config-group">
+                                <label class="config-label">Template</label>
+                                <select v-model="config.template">
+                                    <option value="cubic">Cubic</option>
+                                    <option value="reduced">Reduced</option>
+                                    <option value="hexagonal">Hexagonal</option>
+                                    <option value="jagodzinsky">Jagodzinsky</option>
+                                    <option value="salts">Salts</option>
+                                </select>
+                            </div>
+
+                            <div class="config-group">
+                                <label class="config-label">Structure Type</label>
+                                <select v-model="config.structure_type">
+                                    <option value="bulk">Bulk</option>
+                                    <option value="monolayer">Monolayer</option>
+                                </select>
+                            </div>
+
+                            <div class="config-group">
+                                <label class="config-label">X Expansion</label>
+                                <input type="number" v-model.number="config.xy_expansion[0]" min="1" max="10">
+                            </div>
+
+                            <div class="config-group">
+                                <label class="config-label">Y Expansion</label>
+                                <input type="number" v-model.number="config.xy_expansion[1]" min="1" max="10">
+                            </div>
+
+                            <div class="config-group" v-if="config.structure_type === 'monolayer'">
+                                <label class="config-label">Vacuum (Å)</label>
+                                <input type="number" v-model.number="config.vacuum" min="5" max="50" step="0.1">
+                            </div>
+                        </div>
+
+                        <!-- Advanced Options Toggle -->
+                        <div class="advanced-toggle" @click="showAdvanced = !showAdvanced">
+                            <span class="toggle-icon">{{ showAdvanced ? '▼' : '▶' }}</span>
+                            <span>Advanced Options</span>
+                        </div>
+
+                        <!-- Advanced Options -->
+                        <div class="advanced-options" :class="{ open: showAdvanced }">
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-top: 15px;">
+                                <div class="config-group">
+                                    <label class="config-label">Glazer Angles [a, b, c]</label>
+                                    <div style="display: flex; gap: 5px;">
+                                        <input type="number" v-model.number="config.glazer_angles[0]" step="0.1">
+                                        <input type="number" v-model.number="config.glazer_angles[1]" step="0.1">
+                                        <input type="number" v-model.number="config.glazer_angles[2]" step="0.1">
+                                    </div>
+                                </div>
+
+                                <div class="config-group">
+                                    <label class="config-label">Glazer Pattern</label>
+                                    <div style="display: flex; gap: 5px;">
+                                        <select v-model="config.glazer_pattern[0]">
+                                            <option value="0">0</option>
+                                            <option value="+">+</option>
+                                            <option value="-">-</option>
+                                        </select>
+                                        <select v-model="config.glazer_pattern[1]">
+                                            <option value="0">0</option>
+                                            <option value="+">+</option>
+                                            <option value="-">-</option>
+                                        </select>
+                                        <select v-model="config.glazer_pattern[2]">
+                                            <option value="0">0</option>
+                                            <option value="+">+</option>
+                                            <option value="-">-</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div class="config-group">
+                                    <label class="config-label">Thickness</label>
+                                    <input type="number" v-model.number="config.thickness" min="1" max="10">
+                                </div>
+
+                                <div class="config-group">
+                                    <label class="config-label">Penetration</label>
+                                    <input type="number" v-model.number="config.penetration" step="0.1">
+                                </div>
+
+                                <div class="config-group">
+                                    <label class="config-label">Attachment End</label>
+                                    <select v-model="config.attachment_end">
+                                        <option value="">None</option>
+                                        <option value="bottom">Bottom</option>
+                                        <option value="top">Top</option>
+                                        <option value="both">Both</option>
+                                    </select>
+                                </div>
+
+                                <div class="config-group">
+                                    <label class="config-label">Optimizer</label>
+                                    <select v-model="config.optimizer">
+                                        <option value="KS">KS</option>
+                                        <option value="UFF">UFF</option>
+                                        <option value="Off">Off</option>
+                                    </select>
+                                </div>
+
+                                <div class="config-group" style="grid-column: 1 / -1;">
+                                    <label class="config-label">Custom Layer Sequence</label>
+                                    <input type="text" v-model="config.layer_sequence"
+                                           placeholder="e.g., L1-(1.5)-L2-(2.0)-L1 (leave empty for auto)">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Generation Section -->
+                <div class="panel" v-if="layerStack.length > 0">
+                    <div class="panel-header">
+                        🚀 Generate & Download
+                    </div>
+                    <div class="panel-content">
+                        <div style="display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
+                            <button @click="generateStructure" :disabled="generating" class="primary" style="flex: 1; min-width: 200px;">
+                                <span v-if="generating" class="loading"></span>
+                                {{ generating ? 'Generating...' : 'Generate Structure' }}
+                            </button>
+
+                            <button @click="downloadStructure" :disabled="!generatedJobId" class="success" style="flex: 1; min-width: 200px;">
+                                📥 Download VASP
+                            </button>
+                        </div>
+
+                        <!-- Status Messages -->
+                        <div v-if="statusMessage" class="status-message"
+                             :class="{'status-success': statusType === 'success', 'status-error': statusType === 'error', 'status-info': statusType === 'info'}">
+                            {{ statusMessage }}
+                        </div>
+
+                        <!-- Results Info -->
+                        <div v-if="generatedStructureInfo" style="margin-top: 15px; padding: 15px; background: var(--bg-input); border-radius: var(--radius-md);">
+                            <div style="font-weight: 600; margin-bottom: 10px;">Generated Structure:</div>
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; font-size: 0.9rem;">
+                                <div>Atoms: {{ generatedStructureInfo.atom_count }}</div>
+                                <div>Layers: {{ generatedStructureInfo.layer_count }}</div>
+                                <div>Template: {{ generatedStructureInfo.template }}</div>
+                                <div>Type: {{ generatedStructureInfo.structure_type }}</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Empty State -->
+                <div v-if="layerStack.length === 0" class="panel">
+                    <div class="panel-content" style="text-align: center; padding: 60px 20px;">
+                        <div style="font-size: 3rem; margin-bottom: 20px;">🧬</div>
+                        <h3 style="color: var(--fg-primary); margin-bottom: 10px;">No Layers Loaded</h3>
+                        <p style="color: var(--fg-secondary); margin-bottom: 20px;">
+                            Import layers from Layer Architect or upload a JSON export file to get started.
+                        </p>
+                        <button @click="refreshFromArchitect" class="primary">
+                            Load from Layer Architect
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, onMounted } = Vue;
+
+        createApp({
+            setup() {
+                const API = 'http://localhost:8000';
+
+                // Data
+                const layers = ref({});
+                const layerStack = ref([]);
+                const lattice = ref(null);
+                const loadedFromArchitect = ref(false);
+                const loading = ref(false);
+                const generating = ref(false);
+
+                // Ion mapping per layer
+                const ionMapping = ref({});
+
+                // Configuration
+                const config = ref({
+                    template: 'cubic',
+                    structure_type: 'bulk',
+                    xy_expansion: [2, 2],
+                    vacuum: 15.0,
+                    glazer_angles: [0, 0, 0],
+                    glazer_pattern: ['0', '0', '0'],
+                    thickness: 1,
+                    penetration: 0.0,
+                    attachment_end: '',
+                    optimizer: 'KS',
+                    layer_sequence: ''
+                });
+
+                const showAdvanced = ref(false);
+
+                // Generation
+                const generatedJobId = ref(null);
+                const generatedStructureInfo = ref(null);
+                const statusMessage = ref('');
+                const statusType = ref('');
+
+                // Methods
+                const loadFromArchitect = async () => {
+                    try {
+                        loading.value = true;
+                        const response = await axios.get(`${API}/state`);
+                        layers.value = response.data.layers || {};
+                        layerStack.value = response.data.layer_stack || [];
+                        lattice.value = response.data.lattice || null;
+
+                        // Initialize ion mapping
+                        ionMapping.value = {};
+                        for (const layerName of Object.keys(layers.value)) {
+                            ionMapping.value[layerName] = {
+                                A: layerName.includes('L1') ? 'MA' : 'Cs',  // Default based on layer
+                                B: 'Pb',
+                                X: 'I'
+                            };
+
+                            // Add spacer mappings
+                            const spacerCodes = getSpacerCodes(layerName);
+                            for (const code of spacerCodes) {
+                                ionMapping.value[layerName][code] = code === 'S1' ? 'CCCC[NH3+]' : '';
+                            }
+                        }
+
+                        loadedFromArchitect.value = true;
+                        statusMessage.value = 'Layers loaded from Layer Architect';
+                        statusType.value = 'success';
+                    } catch (error) {
+                        console.error('Failed to load from Layer Architect:', error);
+                        statusMessage.value = 'Failed to load from Layer Architect. Make sure the backend is running.';
+                        statusType.value = 'error';
+                    } finally {
+                        loading.value = false;
+                    }
+                };
+
+                const refreshFromArchitect = () => {
+                    loadFromArchitect();
+                };
+
+                const handleFileImport = (event) => {
+                    const file = event.target.files[0];
+                    if (!file) return;
+
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        try {
+                            const data = JSON.parse(e.target.result);
+                            layers.value = data.named_layers || data.layers || {};
+                            layerStack.value = data.layer_stack || [];
+                            lattice.value = data.lattice_multipliers ?
+                                {a: data.lattice_multipliers[0], b: data.lattice_multipliers[1],
+                                 alpha: data.angles[0], beta: data.angles[1], gamma: data.angles[2]} : null;
+
+                            // Initialize ion mapping
+                            ionMapping.value = {};
+                            for (const layerName of Object.keys(layers.value)) {
+                                ionMapping.value[layerName] = {A: '', B: '', X: ''};
+                            }
+
+                            loadedFromArchitect.value = false;
+                            statusMessage.value = 'Layers imported from JSON file';
+                            statusType.value = 'success';
+                        } catch (error) {
+                            statusMessage.value = 'Invalid JSON file';
+                            statusType.value = 'error';
+                        }
+                    };
+                    reader.readAsText(file);
+                };
+
+                const getLayerAtomCount = (layerName) => {
+                    return layers.value[layerName] ? layers.value[layerName].length : 0;
+                };
+
+                const getSpacerCodes = (layerName) => {
+                    if (!layers.value[layerName]) return [];
+                    const codes = new Set();
+                    for (const atom of layers.value[layerName]) {
+                        const code = atom[0];
+                        if (code.startsWith('S')) {
+                            codes.add(code);
+                        }
+                    }
+                    return Array.from(codes).sort();
+                };
+
+                const generateStructure = async () => {
+                    try {
+                        generating.value = true;
+                        statusMessage.value = 'Generating structure...';
+                        statusType.value = 'info';
+
+                        const requestData = {
+                            layers: layers.value,
+                            layer_stack: layerStack.value,
+                            lattice: lattice.value,
+                            ion_mapping: ionMapping.value,
+                            config: config.value
+                        };
+
+                        const response = await axios.post(`${API}/structure/generate`, requestData);
+
+                        if (response.data.status === 'success') {
+                            generatedJobId.value = response.data.job_id;
+                            generatedStructureInfo.value = {
+                                atom_count: response.data.atom_count,
+                                layer_count: layerStack.value.length,
+                                template: config.value.template,
+                                structure_type: config.value.structure_type
+                            };
+                            statusMessage.value = `Structure generated successfully! ${response.data.atom_count} atoms created.`;
+                            statusType.value = 'success';
+                        } else {
+                            throw new Error(response.data.message || 'Generation failed');
+                        }
+                    } catch (error) {
+                        console.error('Generation failed:', error);
+                        statusMessage.value = `Generation failed: ${error.response?.data?.message || error.message}`;
+                        statusType.value = 'error';
+                    } finally {
+                        generating.value = false;
+                    }
+                };
+
+                const downloadStructure = async () => {
+                    if (!generatedJobId.value) return;
+
+                    try {
+                        const response = await axios.get(`${API}/structure/download/${generatedJobId.value}`, {
+                            responseType: 'blob'
+                        });
+
+                        const url = window.URL.createObjectURL(new Blob([response.data]));
+                        const link = document.createElement('a');
+                        link.href = url;
+                        link.setAttribute('download', `structure_${generatedJobId.value}.vasp`);
+                        document.body.appendChild(link);
+                        link.click();
+                        link.remove();
+                        window.URL.revokeObjectURL(url);
+
+                        statusMessage.value = 'VASP file downloaded successfully!';
+                        statusType.value = 'success';
+                    } catch (error) {
+                        statusMessage.value = 'Download failed';
+                        statusType.value = 'error';
+                    }
+                };
+
+                // Auto-load on mount
+                onMounted(() => {
+                    loadFromArchitect();
+                });
+
+                const goToIndex = () => {
+                    window.location.href = '/';
+                };
+
+                return {
+                    layers, layerStack, lattice, loadedFromArchitect, loading,
+                    ionMapping, config, showAdvanced,
+                    generating, generatedJobId, generatedStructureInfo,
+                    statusMessage, statusType,
+                    loadFromArchitect, refreshFromArchitect, handleFileImport,
+                    getLayerAtomCount, getSpacerCodes,
+                    generateStructure, downloadStructure, goToIndex
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>

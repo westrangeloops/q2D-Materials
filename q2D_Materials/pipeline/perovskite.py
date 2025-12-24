@@ -5,7 +5,7 @@ This module wires templates -> base cell builder -> population to produce
 ASE Atoms objects. Currently only bulk is implemented here.
 """
 
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Dict
 
 import numpy as np
 from ase import Atoms
@@ -27,7 +27,7 @@ def create_bulk_perovskite(
     X: str | List[str] | Atoms | None,
     xy_expansion: Tuple[int, int] = (1, 1),
     BX_dist: float = None,
-    template: str = "cubic",
+    template: str | Dict = "cubic",
     glazer_angles: Optional[List[float]] = None,
     glazer_pattern: Optional[List[str]] = None,
     jahn_teller_dist: float = 1.0,
@@ -36,6 +36,7 @@ def create_bulk_perovskite(
     sharp_spacer: Optional[List[str | Atoms]] = None,
     lattice_multipliers: Optional[List[float]] = None,
     optimizer: str = "KS",
+    spacer_orientation: Optional[List[str]] = None,
 ) -> Atoms:
     """
     Build a bulk perovskite (or related) structure using a geometry template.
@@ -106,6 +107,7 @@ def create_bulk_perovskite(
         site_labels=site_labels,
         optimizer=optimizer,
         BX_dist=BX_dist,
+        spacer_orientation=spacer_orientation,
     )
     
     return atoms
@@ -116,23 +118,24 @@ def create_monolayer_perovskite(
     X: str | List[str] | Atoms | None,
     xy_expansion: Tuple[int, int] = (1, 1),
     BX_dist: float = None,
-    template: str = "cubic",
+    template: str | Dict = "cubic",
     glazer_angles: Optional[List[float]] = None,
     glazer_pattern: Optional[List[str]] = None,
     jahn_teller_dist: float = 1.0,
     thickness: int = 1,
     vacuum: float = 10.0,
     layer_sequence: Optional[List[str] | str] = None,
-    spacer: str | List[str] | Atoms = None,
+    passivator: str | List[str] | Atoms = None,
     penetration: float = 0.0,
     attachment_end: Optional[str] = None,
     sharp_spacer: Optional[List[str | Atoms]] = None,
     lattice_multipliers: Optional[List[float]] = None,
     optimizer: str = "KS",
+    spacer_orientation: Optional[List[str]] = None,
 ) -> Atoms:
     """
     Build a monolayer perovskite (or related) structure using a geometry template.
-    Replace the X of terminal positions with the X of the spacer.
+    Replace the X of terminal positions with the X of the passivator.
     Applies XY expansion within the layer plane.
 
     B and X can be omitted for templates that do not define B-sites (e.g. salts);
@@ -172,7 +175,7 @@ def create_monolayer_perovskite(
         layer_sequence=layer_sequence,
         xy_expansion=xy_expansion,
         penetration=penetration,
-        spacer_provided=spacer is not None,
+        spacer_provided=passivator is not None,
         attachment_end=attachment_end,
         glazer_angles=glazer_angles,
         glazer_pattern=glazer_pattern,
@@ -186,23 +189,23 @@ def create_monolayer_perovskite(
     lattice_vec_sizes = np.linalg.norm(unit_cell_matrix, axis=1)
     floors_cart = cell_data.get("floors_cart")
 
-    # Normalize spacer (Ap_ions) - spacers can be SMILES strings or abbreviations
+    # Normalize passivator (Ap_ions) - passivators can be SMILES strings or abbreviations
     # "HOLE" string in lists or as single value creates holes (unpopulated Ap positions)
     Ap_ions = None
-    if spacer is not None:
-        if isinstance(spacer, list):
+    if passivator is not None:
+        if isinstance(passivator, list):
             Ap_ions = []
-            for s in spacer:
+            for s in passivator:
                 if isinstance(s, str) and s.upper() == "HOLE":
                     Ap_ions.append("HOLE")  # Keep "HOLE" to create unpopulated positions
                 else:
                     Ap_ions.append(normalize_spacer(s))
         else:
-            # Check if single spacer value is "HOLE"
-            if isinstance(spacer, str) and spacer.upper() == "HOLE":
+            # Check if single passivator value is "HOLE"
+            if isinstance(passivator, str) and passivator.upper() == "HOLE":
                 Ap_ions = "HOLE"
             else:
-                Ap_ions = normalize_spacer(spacer)
+                Ap_ions = normalize_spacer(passivator)
 
     atoms = populate_positions(
         positions,
@@ -217,7 +220,11 @@ def create_monolayer_perovskite(
         site_labels=site_labels,
         optimizer=optimizer,
         BX_dist=BX_dist,
+        spacer_orientation=spacer_orientation,
     )
+
+    if len(atoms) == 0:
+        return atoms
 
     # Always align bottom at Z=0, then add vacuum above if needed
     z_min = atoms.positions[:, 2].min()

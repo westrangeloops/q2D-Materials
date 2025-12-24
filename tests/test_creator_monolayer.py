@@ -95,7 +95,7 @@ def main():
     super_mix_reduced = q2d.create_structure(
         A_ions=["Cs", "MA", "FA", "MA", "MA", "FA", "Cs", "MA"],
         B_ions=["Pb", "Sn", "Pb", "Pb", "Sn", "Pb", "Pb", "Sn"],
-        spacer=["CN1C=NC2=C1C(=O)N(C(=O)N2C)CC[NH3+]", "CCCC[NH3+]"],
+        passivator=["CN1C=NC2=C1C(=O)N(C(=O)N2C)CC[NH3+]", "CCCC[NH3+]"],
         X_ions=["Br"] * 12 + ["I"] * 12,
         xy_expansion=(2, 2),
         template="reduced",
@@ -153,7 +153,7 @@ def main():
             glazer_angles=angles,
             glazer_pattern=pattern,
             structure_type="monolayer",
-            spacer=spacer,
+            passivator=spacer,
             attachment_end=attachment_end,
             penetration=penetration,
             vacuum=vacuum,

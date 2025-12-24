@@ -28,7 +28,7 @@ def main():
                         structure_type="bulk",
                         xy_expansion=(sc[0], sc[1]),
                         thickness=thickness,
-                        sharp_spacer=spacer,
+                        spacer=spacer,
                         penetration=penetration,
                         glazer_angles=angles,
                         glazer_pattern=pattern,

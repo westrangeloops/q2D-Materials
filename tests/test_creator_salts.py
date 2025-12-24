@@ -49,7 +49,7 @@ for molecule in molecules_list:
         atoms = q2d.create_structure(
             template="salts",
             X_ions=halogen,
-            sharp_spacer=elongated_molecule,
+            spacer=elongated_molecule,
             lattice_multipliers=[A/3, A/3],
             layer_sequence=f"L1-({molecule_diameter})-L2-(0.0)",
             structure_type="bulk",

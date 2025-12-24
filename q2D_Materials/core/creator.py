@@ -6,7 +6,7 @@ from ..pipeline import (
 from .structure import q2DStructure
 import numpy as np
 from math import gcd
-from typing import List, Tuple, Optional, Union
+from typing import List, Tuple, Optional, Union, Dict
 
 
 class q2D_creator:
@@ -22,7 +22,7 @@ class q2D_creator:
         X_ions=None,
         xy_expansion=(1, 1),
         BX_dist=None,
-        template="cubic",
+        template: str | Dict = "cubic",
         glazer_angles=None,
         glazer_pattern=None,
         structure_type="bulk",
@@ -30,12 +30,13 @@ class q2D_creator:
         jahn_teller_dist=1.0,
         vacuum: float = 10.0,
         layer_sequence=None,
-        spacer=None,
+        passivator=None,
         penetration: float = 0.0,
-        sharp_spacer=None,
+        spacer=None,
         attachment_end: str | None = None,
         lattice_multipliers: Optional[List[float]] = None,
         optimizer: str = "KS",
+        spacer_orientation: Optional[List[str]] = None,
     ):
         """
         Create a q2DStructure for a given inorganic template.
@@ -44,7 +45,7 @@ class q2D_creator:
         -----
         - For standard perovskites, provide A_ions, B_ions and X_ions.
         - For salt / spacer-only templates (e.g. ``template="salts"``) B_ions
-          can be omitted; X_ions and sharp_spacer are typically sufficient.
+          can be omitted; X_ions and spacer are typically sufficient.
         - Glazer tilting requires both B and X networks. If either B or X
           is effectively absent, Glazer parameters are ignored.
         - Lattice multipliers can be overridden per call via `lattice_multipliers`
@@ -53,8 +54,11 @@ class q2D_creator:
           `layer_sequence="L1-(1.5)-L3-M2-(3.2)-M1"`, where numbers in parentheses
           are absolute distances in Å between consecutive floors. Gaps without
           explicit distances use BX-based spacing.
-        - Optimizer selects the method for placing sharp spacers: "Off" (pure geometry),
+        - Optimizer selects the method for placing spacers: "Off" (pure geometry),
           "KS" (Kinematic Solver, default), or "UFF" (UFF force field optimization).
+        - Spacer orientation controls the plane alignment of spacers: "A" (normal to BC,
+          parallel to A vector) or "B" (normal to AC, parallel to B vector). Can be a single
+          value or list that cycles through orientations.
         """
         # Determine effective BX distance:
         # - If B and X are provided, use ionic radii data.
@@ -68,9 +72,9 @@ class q2D_creator:
             else:
                 BX_dist = 3.0
 
-        # Normalize sharp_spacer: convert single value to list
-        if sharp_spacer is not None and not isinstance(sharp_spacer, list):
-            sharp_spacer = [sharp_spacer]
+        # Normalize spacer: convert single value to list
+        if spacer is not None and not isinstance(spacer, list):
+            spacer = [spacer]
 
         if structure_type.lower() == "bulk":
             atoms = create_bulk_perovskite(
@@ -85,9 +89,10 @@ class q2D_creator:
                 jahn_teller_dist=jahn_teller_dist,
                 thickness=thickness,
                 layer_sequence=layer_sequence,
-                sharp_spacer=sharp_spacer,
+                sharp_spacer=spacer,
                 lattice_multipliers=lattice_multipliers,
                 optimizer=optimizer,
+                spacer_orientation=spacer_orientation,
             )
         elif structure_type.lower() == "monolayer":
             atoms = create_monolayer_perovskite(
@@ -103,12 +108,13 @@ class q2D_creator:
                 jahn_teller_dist=jahn_teller_dist,
                 vacuum=vacuum,
                 layer_sequence=layer_sequence,
-                spacer=spacer,
+                passivator=passivator,
                 penetration=penetration,
-                sharp_spacer=sharp_spacer,
+                sharp_spacer=spacer,
                 attachment_end=attachment_end,
                 lattice_multipliers=lattice_multipliers,
                 optimizer=optimizer,
+                spacer_orientation=spacer_orientation,
             )
         else:
             raise ValueError(f"structure_type must be 'bulk' or 'monolayer', got '{structure_type}'")
@@ -121,7 +127,7 @@ class q2D_creator:
             B_ions=B_ions,
             X_ions=X_ions,
             xy_expansion=xy_expansion,
-            sharp_spacer=sharp_spacer,
+            sharp_spacer=spacer,
         )
 
 

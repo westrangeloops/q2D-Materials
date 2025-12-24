@@ -1,0 +1,277 @@
+/* q2D Materials - Centralized Theme System */
+
+:root {
+    /* Light Theme (Default) */
+    --bg-app: #F7F6F9;
+    --bg-panel: #DEE1E3;
+    --bg-input: #C2CECE;
+    --bg-hover: #C4D4D6;
+    --fg-primary: #000000;
+    --fg-secondary: #49ADB6;
+    --accent: #83D3DC;
+    --accent-hover: #CBE7E9;
+    --accent-glow: rgba(131, 211, 220, 0.3);
+    --success: #49ADB6;
+    --danger: #8F26AB;
+    --warning: #F5B102;
+    
+    /* Atom Colors - Consistent across all themes */
+    --atom-a: #F5B102;
+    --atom-b: #C3D1D1;
+    --atom-x: #8F26AB;
+    --atom-spacer: #039FE5;
+    
+    /* UI Constants */
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 20px;
+    --radius-pill: 999px;
+    --shadow-panel: 0 10px 30px rgba(0,0,0,0.1);
+    
+    /* Gradients */
+    --gradient-bg: linear-gradient(135deg, #F7F6F9 0%, #CBE7E9 100%);
+    --gradient-main: linear-gradient(135deg, #F7F6F9 0%, #C4D4D6 100%);
+    
+    /* Canvas/Workspace */
+    --bg-canvas: #C4D4D6;
+}
+
+/* Dark Theme */
+[data-theme="dark"] {
+    --bg-app: #121216;
+    --bg-panel: #1c1c24;
+    --bg-input: #262630;
+    --bg-hover: #2f2f3d;
+    --fg-primary: #ECEFF4;
+    --fg-secondary: #9499A6;
+    --accent: #83D3DC;
+    --accent-hover: #CBE7E9;
+    --accent-glow: rgba(131, 211, 220, 0.3);
+    --success: #49ADB6;
+    --danger: #8F26AB;
+    --warning: #F5B102;
+    
+    /* Atom colors remain the same */
+    --atom-a: #F5B102;
+    --atom-b: #C3D1D1;
+    --atom-x: #8F26AB;
+    --atom-spacer: #039FE5;
+    
+    --shadow-panel: 0 10px 30px rgba(0,0,0,0.3);
+    
+    /* Dark gradients */
+    --gradient-bg: radial-gradient(circle at top right, #1f1f29 0%, #121216 40%);
+    --gradient-main: radial-gradient(circle at top right, #1f1f29 0%, #121216 40%);
+    
+    /* Canvas/Workspace */
+    --bg-canvas: #1c1c24;
+}
+
+/* Base Styles */
+* {
+    box-sizing: border-box;
+    outline: none;
+}
+
+body {
+    background-color: var(--bg-app);
+    color: var(--fg-primary);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    margin: 0;
+    height: 100vh;
+    display: flex;
+    overflow: hidden;
+    font-size: 14px;
+    -webkit-font-smoothing: antialiased;
+    background: var(--gradient-bg);
+    transition: background 0.3s ease, color 0.3s ease;
+}
+
+/* Scrollbar Styles */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--bg-input);
+    border-radius: var(--radius-pill);
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--fg-secondary);
+}
+
+/* Common Button Styles */
+button {
+    background: var(--bg-input);
+    color: var(--fg-primary);
+    border: none;
+    padding: 8px 16px;
+    border-radius: var(--radius-pill);
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.85rem;
+    transition: all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+button:hover:not(:disabled) {
+    transform: translateY(-1px);
+    background: var(--bg-hover);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
+
+button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+button.primary {
+    background: var(--accent);
+    color: white;
+    box-shadow: 0 4px 15px var(--accent-glow);
+}
+
+button.primary:hover:not(:disabled) {
+    background: var(--accent-hover);
+}
+
+button.danger {
+    background: rgba(143, 38, 171, 0.15);
+    color: var(--danger);
+}
+
+button.danger:hover:not(:disabled) {
+    background: var(--danger);
+    color: white;
+}
+
+button.success {
+    background: var(--success);
+    color: white;
+}
+
+button.full-width {
+    width: 100%;
+    border-radius: var(--radius-md);
+    padding: 10px;
+}
+
+/* Input Styles */
+input[type="number"],
+input[type="text"],
+select {
+    background: var(--bg-input);
+    border: 1px solid transparent;
+    color: var(--fg-primary);
+    padding: 10px 14px;
+    border-radius: var(--radius-md);
+    font-family: monospace;
+    font-size: 0.9rem;
+    transition: all 0.2s;
+}
+
+input[type="number"]:focus,
+input[type="text"]:focus,
+select:focus {
+    background: var(--bg-hover);
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+/* Toggle Switch */
+.toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 40px;
+    height: 22px;
+}
+
+.toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: var(--bg-input);
+    transition: .4s;
+    border-radius: 34px;
+}
+
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 16px;
+    width: 16px;
+    left: 3px;
+    bottom: 3px;
+    background-color: var(--fg-secondary);
+    transition: .4s;
+    border-radius: 50%;
+}
+
+input:checked + .slider {
+    background-color: var(--accent);
+}
+
+input:checked + .slider:before {
+    transform: translateX(18px);
+    background-color: white;
+}
+
+/* Panel Styles */
+.panel {
+    background: var(--bg-panel);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-panel);
+    border: 1px solid rgba(255,255,255,0.03);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    transition: transform 0.2s;
+}
+
+.panel-header {
+    padding: 15px 20px;
+    background: rgba(255,255,255,0.02);
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    color: var(--fg-secondary);
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+[data-theme="dark"] .panel-header {
+    background: rgba(255,255,255,0.01);
+}
+
+.panel-content {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    min-height: 0;
+}
+

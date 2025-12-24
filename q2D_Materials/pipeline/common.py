@@ -24,12 +24,22 @@ from q2D_Materials.utils.A_sites import (
 from q2D_Materials.builders.molecule_builder import smiles_to_ase_atoms
 
 
-def get_template(template_name: str) -> str:
-    """Return a template name, validating it exists (based on available JSONs)."""
+def get_template(template_name: str | Dict) -> str | Dict:
+    """
+    Return a template name, validating it exists (based on available JSONs),
+    or return the template data directly if a dict/JSON string is provided.
+    """
+    if isinstance(template_name, dict):
+        return template_name
+        
+    # Check if input is a valid JSON string
+    if isinstance(template_name, str) and template_name.strip().startswith("{"):
+        return template_name
+        
     name = template_name.lower()
     valid = available_templates()
     if name not in valid:
-        raise ValueError(f"template must be one of {valid}")
+        raise ValueError(f"template must be one of {valid} or a valid JSON/dict")
     return name
 
 
@@ -247,7 +257,7 @@ def calculate_max_sharp_spacer_span(
 
 
 def build_cell_positions(
-    template_name: str,
+    template_name: str | Dict,
     BX_dist: float,
     jahn_teller_dist: float,
     layer_sequence: Optional[List[str] | str] = None,
@@ -344,6 +354,7 @@ def populate_positions(
     site_labels=None,
     optimizer: str = "KS",
     BX_dist=None,
+    spacer_orientation: Optional[List[str]] = None,
 ) -> Atoms:
     """Populate ions using the population toolchain."""
     positions_np = {site: np.asarray(coords, dtype=float) for site, coords in positions.items()}
@@ -359,6 +370,7 @@ def populate_positions(
         site_labels=site_labels,
         optimizer=optimizer,
         BX_dist=BX_dist,
+        spacer_orientation=spacer_orientation,
     )
 
 
