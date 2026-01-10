@@ -1,22 +1,17 @@
-"""
-q2DStructure wrapper class for perovskite structures.
-
-This module provides a q2DStructure class that wraps ase.Atoms to preserve
-creation metadata while maintaining full ASE compatibility.
-"""
+"""q2DStructure wrapper class for perovskite structures."""
 
 from ase import Atoms
 import numpy as np
+from typing import Optional, List, Union, Dict, Tuple
 
 
 class q2DStructure(Atoms):
     """
     Wrapper class for ASE Atoms that preserves perovskite creation metadata.
-    
-    This class inherits from ase.Atoms to ensure full compatibility with ASE
-    functions like ase.io.write(). It stores metadata about how the structure
-    was created (structure type, composition, BX distance, etc.).
-    
+
+    Inherits from ase.Atoms for full ASE compatibility while storing creation
+    metadata (structure type, composition, BX distance, etc.).
+
     Attributes
     ----------
     structure_type : str, optional
@@ -32,15 +27,25 @@ class q2DStructure(Atoms):
     xy_expansion : tuple, optional
         XY expansion factors used in creation
     spacer : str, Atoms, or list, optional
-        Spacer(s) used for 2D structures (can be molecule or atomic cation)
+        Spacer(s) used for 2D structures
     """
-    
-    def __init__(self, atoms, structure_type=None, BX_dist=None,
-                 A_ions=None, B_ions=None, X_ions=None, xy_expansion=None,
-                 spacer=None, spacer_molecule=None, **metadata):
+
+    def __init__(
+        self,
+        atoms: Atoms,
+        structure_type: Optional[str] = None,
+        BX_dist: Optional[float] = None,
+        A_ions: Optional[Union[str, List[str]]] = None,
+        B_ions: Optional[Union[str, List[str]]] = None,
+        X_ions: Optional[Union[str, List[str]]] = None,
+        xy_expansion: Optional[Tuple[int, int]] = None,
+        spacer: Optional[Union[str, List[str]]] = None,
+        spacer_molecule: Optional[Union[str, List[str]]] = None,
+        **metadata: Dict,
+    ) -> None:
         """
         Initialize q2DStructure with Atoms and metadata.
-        
+
         Parameters
         ----------
         atoms : ase.Atoms
@@ -58,80 +63,75 @@ class q2DStructure(Atoms):
         xy_expansion : tuple, optional
             XY expansion factors used in creation
         spacer : str, Atoms, or list, optional
-            Spacer(s) used for 2D structures (can be molecule or atomic cation)
+            Spacer(s) used for 2D structures
+        spacer_molecule : str, Atoms, or list, optional
+            Alias for spacer (backward compatibility)
         **metadata : dict
             Additional metadata to store
         """
         if not isinstance(atoms, Atoms):
             raise TypeError(f"atoms must be an ase.Atoms object, got {type(atoms)}")
-        
-        # Initialize as Atoms by copying all attributes
-        # This makes q2DStructure a proper Atoms object
+
         super().__init__(
             symbols=atoms.get_chemical_symbols(),
             positions=atoms.get_positions(),
             cell=atoms.cell,
-            pbc=atoms.pbc
+            pbc=atoms.pbc,
         )
-        
-        # Copy any additional arrays and info
-        if hasattr(atoms, 'arrays'):
+
+        if hasattr(atoms, "arrays"):
             for key, value in atoms.arrays.items():
-                if key not in ['numbers', 'positions']:  # Already set
+                if key not in ["numbers", "positions"]:
                     self.arrays[key] = value.copy()
-        
-        if hasattr(atoms, 'info'):
+
+        if hasattr(atoms, "info"):
             self.info.update(atoms.info)
-        
-        # Store metadata
+
         self.structure_type = structure_type
         self.BX_dist = BX_dist
         self.A_ions = A_ions
         self.B_ions = B_ions
         self.X_ions = X_ions
         self.xy_expansion = xy_expansion
-        # Support both 'spacer' and 'spacer_molecule' for backward compatibility
         self.spacer = spacer if spacer is not None else spacer_molecule
-        self.spacer_molecule = self.spacer  # Keep for backward compatibility
-        
-        # Store any additional metadata
+        self.spacer_molecule = self.spacer
+
         self._metadata = metadata
         for key, value in metadata.items():
             setattr(self, key, value)
-    
+
     @property
-    def atoms(self):
+    def atoms(self) -> Atoms:
         """
-        Access underlying ASE Atoms object (returns self since we inherit from Atoms).
-        
+        Access underlying ASE Atoms object.
+
         Returns
         -------
         ase.Atoms
             This q2DStructure object (which is an Atoms object)
         """
         return self
-    
-    def __getitem__(self, key):
+
+    def __getitem__(self, key: Union[int, slice, np.ndarray]) -> Union["q2DStructure", "Atom"]:
         """
         Slicing returns new q2DStructure with sliced atoms.
-        
+
         Parameters
         ----------
         key : int, slice, or array
             Index or slice to apply to atoms
-            
+
         Returns
         -------
         q2DStructure or Atom
             New q2DStructure instance with sliced atoms (preserving metadata),
             or single Atom if key is an integer
         """
-        # Handle boolean array indexing (like the test case)
+        from ase import Atom
+
         if isinstance(key, np.ndarray) and key.dtype == bool:
-            # Boolean indexing - create new Atoms with selected atoms
             indices = np.where(key)[0]
             if len(indices) == 0:
-                # Empty selection - return empty q2DStructure
                 empty_atoms = Atoms()
                 return q2DStructure(
                     empty_atoms,
@@ -143,24 +143,21 @@ class q2DStructure(Atoms):
                     xy_expansion=self.xy_expansion,
                     spacer=self.spacer,
                     spacer_molecule=self.spacer_molecule,
-                    **self._metadata
+                    **self._metadata,
                 )
-            # Create new Atoms with selected indices
             sliced_atoms = Atoms(
                 symbols=[self.get_chemical_symbols()[i] for i in indices],
                 positions=self.get_positions()[indices],
                 cell=self.cell,
-                pbc=self.pbc
+                pbc=self.pbc,
             )
-            # Copy arrays and info
-            if hasattr(self, 'arrays'):
+            if hasattr(self, "arrays"):
                 for arr_key, arr_value in self.arrays.items():
-                    if arr_key not in ['numbers', 'positions']:
+                    if arr_key not in ["numbers", "positions"]:
                         sliced_atoms.arrays[arr_key] = arr_value[indices]
-            if hasattr(self, 'info'):
+            if hasattr(self, "info"):
                 sliced_atoms.info.update(self.info)
-            
-            # Create new q2DStructure with sliced atoms, preserving all metadata
+
             return q2DStructure(
                 sliced_atoms,
                 structure_type=self.structure_type,
@@ -170,18 +167,14 @@ class q2DStructure(Atoms):
                 X_ions=self.X_ions,
                 xy_expansion=self.xy_expansion,
                 spacer_molecule=self.spacer_molecule,
-                **self._metadata
+                **self._metadata,
             )
-        
-        # For integer or slice indexing, use parent class but wrap result
+
         result = super().__getitem__(key)
-        
-        # If result is a single Atom (integer indexing), return as-is
-        from ase import Atom
+
         if isinstance(result, Atom):
             return result
-        
-        # If result is Atoms (slice indexing), wrap in q2DStructure
+
         if isinstance(result, Atoms):
             return q2DStructure(
                 result,
@@ -192,38 +185,35 @@ class q2DStructure(Atoms):
                 X_ions=self.X_ions,
                 xy_expansion=self.xy_expansion,
                 spacer_molecule=self.spacer_molecule,
-                **self._metadata
+                **self._metadata,
             )
-        
+
         return result
-    
-    def copy(self):
+
+    def copy(self) -> "q2DStructure":
         """
         Create a copy of this q2DStructure.
-        
+
         Returns
         -------
         q2DStructure
             A new q2DStructure instance with copied atoms and metadata
         """
-        # Create a new Atoms object from self
         atoms_copy = Atoms(
             symbols=self.get_chemical_symbols(),
             positions=self.get_positions(),
             cell=self.cell,
-            pbc=self.pbc
+            pbc=self.pbc,
         )
-        
-        # Copy arrays and info
-        if hasattr(self, 'arrays'):
+
+        if hasattr(self, "arrays"):
             for key, value in self.arrays.items():
-                if key not in ['numbers', 'positions']:
+                if key not in ["numbers", "positions"]:
                     atoms_copy.arrays[key] = value.copy()
-        
-        if hasattr(self, 'info'):
+
+        if hasattr(self, "info"):
             atoms_copy.info.update(self.info)
-        
-        # Create new q2DStructure with metadata
+
         return q2DStructure(
             atoms_copy,
             structure_type=self.structure_type,
@@ -233,16 +223,18 @@ class q2DStructure(Atoms):
             X_ions=self.X_ions,
             xy_expansion=self.xy_expansion,
             spacer_molecule=self.spacer_molecule,
-            **self._metadata
+            **self._metadata,
         )
-    
-    def interface(self, other_structure, vacuum=2.0, **kwargs):
+
+    def interface(
+        self,
+        other_structure: Union["q2DStructure", Atoms],
+        vacuum: float = 2.0,
+        **kwargs: Dict,
+    ) -> "q2DStructure":
         """
         Create an interface between this structure and another structure.
-        
-        This is a placeholder method that will be implemented later.
-        It returns a new q2DStructure with the interface created.
-        
+
         Parameters
         ----------
         other_structure : q2DStructure or ase.Atoms
@@ -250,13 +242,13 @@ class q2DStructure(Atoms):
         vacuum : float, optional
             Vacuum gap between structures in Angstroms (default: 2.0)
         **kwargs : dict
-            Additional parameters for interface creation (to be defined)
-            
+            Additional parameters for interface creation
+
         Returns
         -------
         q2DStructure
-            New q2DStructure with the interface (placeholder implementation)
-            
+            New q2DStructure with the interface
+
         Raises
         ------
         NotImplementedError
@@ -266,19 +258,22 @@ class q2DStructure(Atoms):
             "interface() method is not yet implemented. "
             "This will create an interface between two perovskite structures."
         )
-    
-    def twist(self, m, n, interlayer_distance=11.0, vacuum=12.0, other=None, **kwargs):
+
+    def twist(
+        self,
+        m: int,
+        n: int,
+        interlayer_distance: float = 11.0,
+        vacuum: float = 12.0,
+        other: Optional["q2DStructure"] = None,
+        **kwargs: Dict,
+    ) -> "q2DStructure":
         """
         Create a twisted bilayer structure from this monolayer.
-        
-        Based on the Quadratic Twisted Bilayer Generator by Gabriel Xavier Pereira:
-        Institute of Physics, University of São Paulo, São Paulo, SP, Brazil
-        Email: gxpereira@usp.br
-        
-        This method generates a twisted bilayer structure. If `other` is not provided,
-        creates a self-twisted bilayer (same monolayer twisted against itself).
-        The twist angle θ = arctan(2mn / (m² - n²)) creates a commensurate Moiré pattern.
-        
+
+        If `other` is not provided, creates a self-twisted bilayer. The twist angle
+        θ = arctan(2mn / (m² - n²)) creates a commensurate Moiré pattern.
+
         Parameters
         ----------
         m : int
@@ -286,19 +281,19 @@ class q2DStructure(Atoms):
         n : int
             Second integer parameter for twist angle calculation (n > 0)
         interlayer_distance : float, optional
-            Vertical distance between the two twisted layers in Angstroms (default: 11.0)
+            Vertical distance between layers in Angstroms (default: 11.0)
         vacuum : float, optional
-            Total vacuum space (split evenly above/below) in Angstroms (default: 12.0)
+            Total vacuum space split evenly above/below in Angstroms (default: 12.0)
         other : q2DStructure, optional
-            Second monolayer structure. If None, uses self (self-twist).
+            Second monolayer structure. If None, uses self (self-twist)
         **kwargs : dict
             Additional parameters (reserved for future use)
-            
+
         Returns
         -------
         q2DStructure
             New q2DStructure with the twisted bilayer
-            
+
         Raises
         ------
         ValueError
@@ -307,7 +302,6 @@ class q2DStructure(Atoms):
             If pymatgen is not available
         """
         from q2D_Materials.utils.twist_monolayer import create_twisted_bilayer
-        
-        # Use self for both layers if other is not specified (self-twist)
+
         mono2 = other if other is not None else self
         return create_twisted_bilayer(self, mono2, m, n, interlayer_distance, vacuum, **kwargs)

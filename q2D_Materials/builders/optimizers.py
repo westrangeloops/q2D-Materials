@@ -112,32 +112,7 @@ class KinematicChainSolver:
     def solve(self, anchor_idx: int, mover_idx: int, anchor_pos: np.ndarray,
               target_pos: np.ndarray, tolerance: float = 0.1, max_iter: int = 100,
               folding_weight: float = 0.0, backbone_path: Optional[List[int]] = None) -> Atoms:
-        """Align molecule: anchor_idx at anchor_pos, mover_idx near target_pos.
-        
-        Parameters
-        ----------
-        anchor_idx : int
-            Index of atom to anchor at anchor_pos
-        mover_idx : int
-            Index of atom to move toward target_pos
-        anchor_pos : np.ndarray
-            Position to anchor the anchor atom
-        target_pos : np.ndarray
-            Target position for mover atom
-        tolerance : float
-            Distance tolerance for convergence
-        max_iter : int
-            Maximum number of iterations
-        folding_weight : float, optional
-            Weight for folding penalty (0 = no penalty, higher = stronger anti-folding bias)
-        backbone_path : List[int], optional
-            Backbone atom indices for folding score calculation
-        
-        Returns
-        -------
-        Atoms
-            Optimized molecule
-        """
+        """Align molecule: anchor_idx at anchor_pos, mover_idx near target_pos."""
         # 1. Pre-translation: pin anchor to anchor_pos
         curr_pos = self.atoms.get_positions()
         shift = np.array(anchor_pos) - curr_pos[anchor_idx]
@@ -243,35 +218,7 @@ class KinematicChainSolver:
 
 
 def _find_directional_xy_pbc_vector(p1: np.ndarray, p2: np.ndarray, cell: np.ndarray) -> np.ndarray:
-    """
-    Find the vector from p1 to p2 deterministically based on fractional coordinates.
-    Z coordinate is kept fixed (no wrapping in Z direction).
-    
-    This function determines which periodic cell p2 is in based on its fractional
-    coordinates and selects the vector that points to that specific cell.
-    
-    Rules:
-    - X=0.N Y=0.N: within the center cell (0,0) -> shift (0,0)
-    - X=-0.N Y=0.N: cell to the left (-1,0) -> shift (-1,0)  
-    - X=1.N Y=0.N: cell to the right (1,0) -> shift (1,0)
-    - X=0.N Y=1.N: upper cell (0,1) -> shift (0,1)
-    - X=0.N Y=-0.N: lower cell (0,-1) -> shift (0,-1)
-    - Diagonals: X=-1.N Y=-1.N -> shift (-1,-1), X=1.N Y=1.N -> shift (1,1), etc.
-
-    Parameters
-    ----------
-    p1 : np.ndarray
-        Ground point [x, y, z]
-    p2 : np.ndarray
-        Sky point [x, y, z]
-    cell : np.ndarray
-        Unit cell matrix (3x3)
-
-    Returns
-    -------
-    np.ndarray
-        Vector from p1 to p2 pointing to the correct periodic cell
-    """
+    """Find the vector from p1 to p2 deterministically based on fractional coordinates."""
     p1 = np.asarray(p1, dtype=np.float64)
     p2 = np.asarray(p2, dtype=np.float64)
     cell = np.asarray(cell, dtype=np.float64)
@@ -439,30 +386,7 @@ def place_spacer_with_optimizer(molecule: Atoms, p1: np.ndarray, p2: np.ndarray,
                                 target_vector: Optional[np.ndarray] = None,
                                 existing_structure: Optional[Atoms] = None,
                                 collision_strategy: str = "off") -> Atoms:
-    """Place spacer between p1 and p2. Options: "Off" (geometric only), "KS" (elongate + KS, default).
-
-    Parameters
-    ----------
-    molecule : Atoms
-        Spacer molecule to place
-    p1, p2 : np.ndarray
-        Anchor points for terminal NH3+ groups
-    optimizer : str, default "KS"
-        Optimization method: "Off", "KS", or "UFF"
-    cell : np.ndarray, optional
-        Unit cell for PBC calculations
-    target_vector : np.ndarray, optional
-        Explicit vector from p1 to p2
-    existing_structure : Atoms, optional
-        Existing structure to check for collisions against
-    collision_strategy : str, default "off"
-        Collision resolution strategy: "rotate", "nudge", "optimize", "reject", "off"
-
-    Returns
-    -------
-    Atoms
-        Placed and collision-resolved spacer molecule
-    """
+    """Place spacer between p1 and p2. Options: "Off" (geometric only), "KS" (elongate + KS, default)."""
     optimizer = optimizer.upper()
     
     if optimizer == "OFF":
@@ -501,21 +425,7 @@ def place_spacer_with_optimizer(molecule: Atoms, p1: np.ndarray, p2: np.ndarray,
 
 
 def _get_torsion_angle(positions: np.ndarray, a: int, b: int, c: int, d: int) -> float:
-    """
-    Calculate the torsion (dihedral) angle for atoms a-b-c-d.
-    
-    Parameters
-    ----------
-    positions : np.ndarray
-        Atomic positions
-    a, b, c, d : int
-        Atom indices defining the torsion
-    
-    Returns
-    -------
-    float
-        Torsion angle in degrees (-180 to 180)
-    """
+    """Calculate the torsion (dihedral) angle for atoms a-b-c-d."""
     # Get positions
     p_a = positions[a]
     p_b = positions[b]

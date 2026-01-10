@@ -1,8 +1,4 @@
-"""
-Lightweight container and helpers for structure matrices.
-
-QBuilderOutput mirrors the minimal fields consumed by populate.populate_structure.
-"""
+"""Lightweight container and helpers for structure matrices."""
 
 from dataclasses import dataclass
 from typing import Dict
@@ -25,11 +21,7 @@ def calculate_lattice_vectors(BX_dist: float) -> np.ndarray:
 def build_structure_matrix(
     positions: Dict[str, np.ndarray], lattice_vector_sizes: np.ndarray
 ) -> QBuilderOutput:
-    """
-    Create a QBuilderOutput from positions and lattice vectors.
-
-    Positions are expected in cartesian coordinates.
-    """
+    """Create a QBuilderOutput from positions and lattice vectors."""
     cell_vectors = np.array(
         [
             [lattice_vector_sizes[0], 0.0, 0.0],

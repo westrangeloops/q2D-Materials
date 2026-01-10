@@ -25,6 +25,7 @@ from .characterization import (
     _calculate_partial_rdf,
     DEFAULT_TOLERANCE,
     DEFAULT_BOND_SELECTION_THRESHOLD,
+    CharacterizationQuery,
 )
 from ..core.structure import q2DStructure
 
@@ -68,11 +69,10 @@ class q2D_analyzer:
         self.experiment_name = None
         self.cell = None
 
-        # Analysis results - Graph-only approach
         self._graph: Optional[nx.Graph] = None
-        self._structure_type: Optional[str] = None  # Cached for performance
+        self._structure_type: Optional[str] = None
         self._analyzed: bool = False
-        
+
         if source is not None:
             self.load(source)
     
@@ -99,11 +99,9 @@ class q2D_analyzer:
             self.experiment_name = "atoms_input"
         else:
             raise TypeError(f"source must be str or Atoms, got {type(source)}")
-        
-        # Ensure PBC is enabled for crystal structures
+
         self.cell.pbc = True
 
-        # Reset analysis results
         self._analyzed = False
         self._graph = None
         self._structure_type = None
@@ -153,12 +151,10 @@ class q2D_analyzer:
         if non_metal_symbols is None:
             non_metal_symbols = ['C', 'O', 'N', 'H', 'F', 'Cl', 'Br', 'I']
 
-        # Extract atom data
         atom_positions = self.cell.get_positions()
         atom_symbols = self.cell.get_chemical_symbols()
         cell_matrix = np.array(self.cell.get_cell())
 
-        # Build the complete structural graph with all information
         self._graph = _graph_inorganic_ontology(
             atom_positions,
             atom_symbols,
@@ -170,10 +166,7 @@ class q2D_analyzer:
             non_metal_symbols=non_metal_symbols,
         )
 
-        # Classify molecules and store in graph nodes
         self._classify_molecules_in_graph(cell_matrix)
-
-        # Infer and cache structure type
         self._structure_type = self._infer_structure_type_from_graph()
 
         self._analyzed = True
@@ -194,7 +187,6 @@ class q2D_analyzer:
         atom_positions = self.cell.get_positions()
         atom_symbols = self.cell.get_chemical_symbols()
 
-        # Get atoms in octahedra
         atoms_in_octahedra = set()
         octahedra_info = []
         neighbor_indices = []
@@ -221,7 +213,6 @@ class q2D_analyzer:
                 })
                 neighbor_indices.append(terminal + interlayer + intralayer)
 
-        # Find molecular components
         molecules = _find_molecular_components(
             atom_positions,
             atom_symbols,
@@ -231,12 +222,10 @@ class q2D_analyzer:
             full_atoms=self.cell,
         )
 
-        # Build B-X network and identify slabs for classification
         shared_atoms = find_shared_atoms(neighbor_indices)
         bx_graph = _build_bx_network(octahedra_info, atom_positions, shared_atoms)
         slab_info = _identify_slabs_by_continuity(bx_graph, octahedra_info, atom_positions)
 
-        # Classify molecules by continuity
         spacers, a_sites = _classify_molecules_by_continuity(
             molecules,
             slab_info,
@@ -244,7 +233,6 @@ class q2D_analyzer:
             cell,
         )
 
-        # Store spacer classification in atom nodes
         for spacer in spacers:
             indices = spacer.info.get('original_indices', [])
             for idx in indices:
@@ -255,7 +243,6 @@ class q2D_analyzer:
                     self._graph.nodes[node_id]['spacer_indices'] = indices
                     self._graph.nodes[node_id]['spacer_type'] = spacer.info.get('spacer_type')
 
-        # Store A-site classification in atom nodes
         for a_site in a_sites:
             indices = a_site.info.get('original_indices', [])
             for idx in indices:
@@ -274,7 +261,6 @@ class q2D_analyzer:
 
         atom_positions = self.cell.get_positions()
 
-        # Extract octahedra info for structure typing
         octahedra_info = []
         neighbor_indices = []
         for node, data in self._graph.nodes(data=True):
@@ -285,12 +271,10 @@ class q2D_analyzer:
                 octahedra_info.append({'id': node})
                 neighbor_indices.append(terminal + interlayer + intralayer)
 
-        # Build network and slabs for typing
         shared_atoms = find_shared_atoms(neighbor_indices)
         bx_graph = _build_bx_network(octahedra_info, atom_positions, shared_atoms)
         slab_info = _identify_slabs_by_continuity(bx_graph, octahedra_info, atom_positions)
 
-        # Extract spacers directly from graph (don't use getter during analysis)
         spacers = []
         processed_indices = set()
         for node, data in self._graph.nodes(data=True):
@@ -317,9 +301,6 @@ class q2D_analyzer:
         )
 
 
-    # -------------------------------------------------------------------------
-    # Public API for accessing analysis results - Extract from graph on-demand
-    # -------------------------------------------------------------------------
 
     def get_graph(self) -> nx.Graph:
         """
@@ -392,7 +373,6 @@ class q2D_analyzer:
             if data.get('node_type') == 'layer':
                 layer_id = node.replace('layer_', '')
 
-                # Find octahedra in this layer
                 layer_octahedra = []
                 for neighbor in self._graph.neighbors(node):
                     if neighbor.startswith('octahedron_'):
@@ -433,11 +413,9 @@ class q2D_analyzer:
                 if atom_idx in processed_indices:
                     continue
 
-                # Get all indices for this spacer molecule
                 spacer_indices = data.get('spacer_indices', [atom_idx])
                 processed_indices.update(spacer_indices)
 
-                # Build Atoms object from original structure
                 spacer_atoms = Atoms(
                     symbols=[self.cell[i].symbol for i in spacer_indices],
                     positions=[self.cell[i].position for i in spacer_indices],
@@ -636,6 +614,36 @@ class q2D_analyzer:
         self._ensure_analyzed()
         return _calculate_partial_rdf(self, element_pairs, max_dist, npoints, mode, ss_norm)
 
+    def get_characterization(self) -> CharacterizationQuery:
+        """
+        Get a query builder for graph-based characterization analysis.
+        
+        Provides a unified interface for:
+        - Routing standard analyses (Glazer, RDF, B-X-B)
+        - Querying the graph structure
+        - Method chaining for complex queries
+        
+        Returns
+        -------
+        CharacterizationQuery
+            Query builder instance for characterization analysis
+        
+        Examples
+        --------
+        >>> # Standard analysis routing
+        >>> result = analyzer.get_characterization().glazer(tolerance=0.1).execute()
+        >>> result = analyzer.get_characterization().rdf([["Pb", "I"]]).execute()
+        >>> result = analyzer.get_characterization().bxb(include_bp=True).execute()
+        
+        >>> # Graph queries with method chaining
+        >>> result = (analyzer.get_characterization()
+        ...          .octahedra()
+        ...          .neighbors(edge_type='shares_atoms')
+        ...          .to_list())
+        """
+        self._ensure_analyzed()
+        return CharacterizationQuery(self)
+
     @property
     def structure_type(self) -> str:
         """
@@ -666,26 +674,26 @@ class q2D_analyzer:
             Structure with populated metadata from analysis
         """
         self._ensure_analyzed()
-        
-        # Extract B-site ions (central atoms of octahedra)
+
+        octahedra = self.get_octahedra()
         b_ions = list(set(
             oct['central_atom_symbol']
-            for oct in self._octahedra
+            for oct in octahedra
             if oct['central_atom_symbol'] is not None
         ))
-        
-        # Extract X-site ions (atoms in octahedra that are not B-site)
+
+        atom_symbols = self.cell.get_chemical_symbols()
         x_ions = set()
-        for oct in self._octahedra:
+        for oct in octahedra:
             for idx in oct['terminal_atoms'] + oct['interlayer_atoms'] + oct['intralayer_atoms']:
-                x_ions.add(self._atom_symbols[idx])
+                x_ions.add(atom_symbols[idx])
         x_ions = list(x_ions)
-        
-        # Extract A-site ions
-        a_ions = list(set(a['symbol'] for a in self._a_sites))
-        
-        # Get spacer molecules
-        spacer = self._spacers if self._spacers else None
+
+        a_sites = self.get_a_sites()
+        a_ions = list(set(a['symbol'] for a in a_sites))
+
+        spacers = self.get_spacers()
+        spacer = spacers if spacers else None
         
         return q2DStructure(
             self.cell,
@@ -695,8 +703,8 @@ class q2D_analyzer:
             X_ions=x_ions if x_ions else None,
             spacer=spacer,
             analysis_graph=self._graph,
-            octahedra=self._octahedra,
-            layers=self._layers,
+            octahedra=octahedra,
+            layers=self.get_layers(),
         )
     
     def export_graph_data(self, output_path: Optional[str] = None) -> str:
@@ -730,7 +738,6 @@ class q2D_analyzer:
         if output_path is None:
             output_path = f"{self.experiment_name}_graph.json"
 
-        # Helper function to convert numpy types to Python native types
         def to_native(obj):
             """Convert numpy types to native Python types for JSON serialization."""
             if obj is None:
@@ -745,28 +752,25 @@ class q2D_analyzer:
                 return [to_native(x) for x in obj]
             elif isinstance(obj, dict):
                 return {k: to_native(v) for k, v in obj.items()}
-            elif hasattr(obj, 'tolist'):  # Handle ASE Cell and other array-like objects
+            elif hasattr(obj, 'tolist'):
                 return to_native(obj.tolist())
             elif isinstance(obj, (str, int, float, bool)):
                 return obj
             else:
-                # Last resort: try to convert to string
                 return str(obj)
 
-        # Prepare nodes data
         nodes = []
         node_id_map = {}
         node_counter = 0
 
-        # Color scheme for B-site elements
         element_colors = {
             'Ti': '#8be9fd', 'Sn': '#50fa7b', 'Pb': '#ff5555', 'Ge': '#ffb86c',
             'Zr': '#bd93f9', 'Hf': '#ff79c6', 'Nb': '#f1fa8c', 'Ta': '#6272a4'
         }
         default_color = '#44475a'
 
-        # Add octahedra nodes
-        for oct in self._octahedra:
+        octahedra = self.get_octahedra()
+        for oct in octahedra:
             node_id = oct['id']
             node_id_map[node_id] = node_counter
             b_element = oct.get('central_atom_symbol', 'Unknown')
@@ -786,8 +790,8 @@ class q2D_analyzer:
             })
             node_counter += 1
 
-        # Add layer nodes
-        for layer_id, layer_info in self._layers.items():
+        layers = self.get_layers()
+        for layer_id, layer_info in layers.items():
             node_id = f"layer_{layer_id}"
             node_id_map[node_id] = node_counter
 
@@ -808,7 +812,6 @@ class q2D_analyzer:
             })
             node_counter += 1
 
-        # Prepare edges data
         edges = []
         for source, target in self._graph.edges():
             if source in node_id_map and target in node_id_map:
@@ -819,24 +822,20 @@ class q2D_analyzer:
                     'target_id': str(target)
                 })
 
-        # Prepare atom positions for visualization
+        atom_positions = self.cell.get_positions()
+        atom_symbols = self.cell.get_chemical_symbols()
         atoms = []
-        for i, (pos, symbol) in enumerate(zip(self._atom_positions, self._atom_symbols)):
+        for i, (pos, symbol) in enumerate(zip(atom_positions, atom_symbols)):
             atom_data = {
                 'index': int(i),
                 'symbol': str(symbol),
                 'position': to_native(pos),
             }
-            # Add X-atom classification if available
-            if hasattr(self, '_x_atom_classifications') and i in self._x_atom_classifications:
-                x_info = self._x_atom_classifications[i]
-                atom_data['x_atom_type'] = str(x_info.get('type', ''))
-                atom_data['x_connected_octahedra'] = to_native(x_info.get('connected_octahedra', []))
             atoms.append(atom_data)
 
-        # Prepare spacer information
+        spacers = self.get_spacers()
         spacers_data = []
-        for spacer in self._spacers:
+        for spacer in spacers:
             spacer_info = {
                 'formula': str(spacer.get_chemical_formula(mode='hill')),
                 'atom_count': int(len(spacer)),
@@ -844,9 +843,9 @@ class q2D_analyzer:
             }
             spacers_data.append(spacer_info)
 
-        # Prepare A-site information
+        a_sites = self.get_a_sites()
         a_sites_data = []
-        for a_site in self._a_sites:
+        for a_site in a_sites:
             a_sites_data.append({
                 'atom_index': to_native(a_site.get('atom_index')),
                 'symbol': str(a_site.get('symbol', '')),
@@ -855,23 +854,12 @@ class q2D_analyzer:
                 'formula': str(a_site.get('formula', a_site.get('symbol', '')))
             })
 
-        # Prepare X-atom classifications
-        x_atom_classifications_data = []
-        if hasattr(self, '_x_atom_classifications'):
-            for atom_idx, x_info in self._x_atom_classifications.items():
-                x_atom_classifications_data.append({
-                    'atom_index': int(atom_idx),
-                    'type': str(x_info.get('type', '')),
-                    'connected_octahedra': to_native(x_info.get('connected_octahedra', [])),
-                })
-
-        # Prepare layer-to-layer edges
         layer_edges = []
-        layer_ids = sorted([int(k) for k in self._layers.keys()])
+        layer_ids = sorted([int(k) for k in layers.keys()])
         for i in range(len(layer_ids) - 1):
             layer_a = str(layer_ids[i])
             layer_b = str(layer_ids[i + 1])
-            connecting_x_atoms = self._layers.get(layer_a, {}).get('interlayer_x_atoms_above', [])
+            connecting_x_atoms = layers.get(layer_a, {}).get('interlayer_x_atoms_above', [])
             if connecting_x_atoms:
                 layer_edges.append({
                     'from_layer': int(layer_ids[i]),
@@ -879,7 +867,6 @@ class q2D_analyzer:
                     'via_x_atoms': to_native(connecting_x_atoms),
                 })
 
-        # Create complete data structure
         graph_data = {
             'metadata': {
                 'experiment_name': str(self.experiment_name),
@@ -887,10 +874,10 @@ class q2D_analyzer:
                 'structure_type': str(self._structure_type),
                 'total_atoms': int(len(self.cell)),
                 'formula': str(self.cell.get_chemical_formula()),
-                'octahedra_count': int(len(self._octahedra)),
-                'layers_count': int(len(self._layers)),
-                'spacers_count': int(len(self._spacers)),
-                'a_sites_count': int(len(self._a_sites)),
+                'octahedra_count': int(len(octahedra)),
+                'layers_count': int(len(layers)),
+                'spacers_count': int(len(spacers)),
+                'a_sites_count': int(len(a_sites)),
                 'cell': to_native(self.cell.get_cell()),
             },
             'nodes': nodes,
@@ -898,11 +885,9 @@ class q2D_analyzer:
             'atoms': atoms,
             'spacers': spacers_data,
             'a_sites': a_sites_data,
-            'x_atom_classifications': x_atom_classifications_data,
             'layer_edges': layer_edges,
         }
 
-        # Write JSON file
         with open(output_path, 'w', encoding='utf-8') as f:
             json.dump(graph_data, f, indent=2)
 

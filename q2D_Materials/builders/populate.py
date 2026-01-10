@@ -1,9 +1,4 @@
-"""
-Population module for populating structure matrices with atoms.
-
-This module handles ion assignment, molecular alignment, and spacer attachment
-to convert abstract position matrices into complete ASE Atoms objects.
-"""
+"""Population module for populating structure matrices with atoms."""
 
 import numpy as np
 from ase import Atoms
@@ -29,23 +24,7 @@ from .collision import resolve_collisions
 
 
 def place_spacer_at_location(atoms, r, attachment_end):
-    """
-    Place a spacer molecule with its NH3+ N atom at the location r.
-
-    Parameters
-    ----------
-    atoms : Atoms
-        Spacer molecule (already aligned with NH3+ at correct end)
-    r : array
-        Vector for the translation (3,)
-    attachment_end : str
-        'top' or 'bottom' - which end of molecule contains the NH3+ group
-
-    Returns
-    -------
-    mod_atoms : Atoms
-        The modified atoms object with NH3+ N atom at position r.
-    """
+    """Place a spacer molecule with its NH3+ N atom at the location r."""
     mod_atoms = atoms.copy()
     spacer = SpacerMolecule.from_atoms(mod_atoms)
 
@@ -67,26 +46,7 @@ def _normalize_ion_list(
     normalize_func,
     copy_atoms: bool = False
 ) -> Union[str, Atoms, List[Union[str, Atoms]], None]:
-    """
-    Generic helper to normalize ion lists (single values or lists).
-
-    Handles the common pattern of checking if input is a list, and if so,
-    normalizing each element. If not a list, normalizes the single value.
-
-    Parameters
-    ----------
-    ions : str, Atoms, list, or None
-        Input ions (single or list)
-    normalize_func : callable
-        Function to normalize string inputs (e.g., normalize_a_site or normalize_spacer)
-    copy_atoms : bool
-        Whether to copy Atoms objects (needed for sharp_spacer)
-
-    Returns
-    -------
-    str, Atoms, list, or None
-        Normalized ions in same structure as input
-    """
+    """Normalize ion lists (single values or lists)."""
     if ions is None:
         return None
 
@@ -111,26 +71,7 @@ def _normalize_ion_list(
 
 
 def _get_next_ion_from_list(ions, site_type: str, site_counters: Dict[str, int]):
-    """
-    Get the next ion from a list (cycling through) or single value, with Atoms copying.
-
-    Handles the common pattern of cycling through ion lists for assignment.
-    If the list is empty, returns None.
-
-    Parameters
-    ----------
-    ions : str, Atoms, or list
-        Input ions (single value or list to cycle through)
-    site_type : str
-        Site type for counter tracking (e.g., 'A', 'B', 'X')
-    site_counters : dict
-        Dictionary to track counters for each site type
-
-    Returns
-    -------
-    str or Atoms or None
-        Next ion to assign, with Atoms objects copied. Returns None if list is empty.
-    """
+    """Get the next ion from a list (cycling through) or single value."""
     if isinstance(ions, list):
         if not ions:
             return None
@@ -267,41 +208,7 @@ def assign_ions_to_sites(
     sharp_spacer: Optional[List[Union[str, Atoms]]] = None,
     site_labels: Optional[Dict[str, List[str]]] = None,
 ) -> List[Tuple[str, Union[str, Atoms], np.ndarray, str]]:
-    """
-    Assign ions to positions using explicit patterns with site label metadata.
-    
-    This function assigns ions to positions based on explicit patterns provided by the user.
-    If a single ion is provided, it's used for all positions of that type.
-    If a list is provided, ions are assigned sequentially, cycling if the list is shorter.
-    Processes positions in layer-by-layer order (sorted by z-coordinate).
-    Maintains Ap override: Ap positions take precedence over A positions.
-    
-    Parameters
-    ----------
-    position_template : dict
-        Dictionary with site types ('A', 'B', 'X', 'Ap', 'S1', 'S2', etc.) and numpy arrays of positions
-    A_ions : str/Atoms or list[str/Atoms]
-        A-site ion(s). Single value or list pattern.
-    B_ions : str or list[str]
-        B-site ion(s). Single value or list pattern.
-    X_ions : str or list[str]
-        X-site ion(s). Single value or list pattern.
-    Ap_ions : optional
-        Ap-site spacer(s). Single value or list pattern.
-    sharp_spacer : optional list
-        Spacer molecules for S# sites (double or mono). List cycles through S# labels.
-    site_labels : optional dict
-        Dictionary mapping site types to lists of labels (e.g., {"S1": ["S1", "S1", ...], "A": ["A", "A", ...]})
-        
-    Returns
-    -------
-    list[tuple]
-        List of (site_type, ion, position, label) tuples where:
-        - site_type is the site type ('A', 'B', 'X', 'Ap', 'S1', etc.)
-        - ion is str or Atoms object
-        - position is numpy array [x, y, z]
-        - label is the site label (e.g., "S1", "S2", "A")
-    """
+    """Assign ions to positions using explicit patterns with site label metadata."""
     assignments = []
     
     # Collect all positions with their labels and z-coordinates for layer-by-layer processing
@@ -577,12 +484,7 @@ def _adjust_positions_for_double_spacer(
     sky_pos: np.ndarray,
     spacer_template: Atoms,
 ) -> Tuple[np.ndarray, np.ndarray]:
-    """Project ground/sky anchors onto the molecule's intrinsic N-N span.
-    
-    CRITICAL: Preserves X, Y coordinates of original S# sites exactly.
-    The kinematic solver will handle aligning the molecule between the two points,
-    so we don't need to adjust positions here - just return them as-is.
-    """
+    """Project ground/sky anchors onto the molecule's intrinsic N-N span."""
     # Simply return original positions - the kinematic solver will handle
     # aligning the molecule between P1 and P2 while respecting bond constraints
     return ground_pos, sky_pos

@@ -1,34 +1,15 @@
-"""
-A-site cation identification and cavity analysis.
+"""A-site cation identification and cavity analysis.
 
 This module identifies A-site cations and distinguishes them from spacer molecules
 using cavity geometry and interlayer region analysis.
-
-Functions
----------
-_find_attachment_nitrogens
-    Find nitrogen atoms that serve as spacer attachment points
-_classify_molecular_type
-    Classify molecular components as spacers or A-sites
-_has_path_to_multiple_layers
-    Check if a molecule connects to multiple layers
-_analyze_slab_structure
-    Analyze slab thickness and terminal octahedra
-_is_in_interlayer_region
-    Check if position is in interlayer region (spacer territory)
-_calculate_cavity_radius_from_octahedra
-    Calculate A-B cavity radius from octahedral geometry
-_is_molecule_in_cavity
-    Check if molecule center is within octahedral cavity
-_identify_a_site_cations
-    Main function to identify A-site cations
 """
 
 import numpy as np
 import networkx as nx
 from collections import defaultdict
-from .perovskite_constants import MOLECULAR_A_SITE_PATTERNS
+
 from ..utils.geometry import _calculate_distances
+from .perovskite_constants import MOLECULAR_A_SITE_PATTERNS
 
 
 def _find_attachment_nitrogens(
@@ -38,13 +19,11 @@ def _find_attachment_nitrogens(
     graph: nx.Graph,
     atoms_in_octahedra: set,
 ) -> list:
-    """
-    Find nitrogen atoms that serve as attachment points (S# sites) for spacers.
-    
+    """Find nitrogen atoms that serve as attachment points for spacers.
+
     In 2D perovskites, spacers attach to the inorganic framework via NH3+ groups
-    that hydrogen-bond to halide anions. These are the "branching points" that
-    separate spacer molecules from the inorganic framework.
-    
+    that hydrogen-bond to halide anions.
+
     Parameters
     ----------
     atom_positions : np.ndarray
@@ -57,7 +36,7 @@ def _find_attachment_nitrogens(
         Connectivity graph
     atoms_in_octahedra : set
         Indices of atoms in octahedra
-        
+
     Returns
     -------
     list of dict
@@ -79,33 +58,28 @@ def _find_attachment_nitrogens(
         # Check connectivity
         neighbors = list(graph.neighbors(atom_node))
         
-        # Count different neighbor types
         h_neighbors = []
         c_neighbors = []
         halide_neighbors = []
-        
+
         for neighbor in neighbors:
             if neighbor.startswith('atom_'):
                 neighbor_idx = int(neighbor.replace('atom_', ''))
                 neighbor_symbol = atom_symbols[neighbor_idx]
-                
+
                 if neighbor_symbol == 'H':
                     h_neighbors.append(neighbor_idx)
                 elif neighbor_symbol == 'C':
                     c_neighbors.append(neighbor_idx)
                 elif neighbor_symbol in halide_elements:
                     halide_neighbors.append(neighbor_idx)
-        
-        # NH3+ attachment: N with 3+ H neighbors and connection to halides
-        # or N with H neighbors bonded to carbon chain
+
         is_attachment = False
         attachment_type = None
-        
+
         if len(h_neighbors) >= 2:
-            # Check for hydrogen bonds to halides
             has_halide_contact = len(halide_neighbors) > 0
-            
-            # Also check if H atoms are close to halides
+
             if not has_halide_contact:
                 for h_idx in h_neighbors:
                     h_node = f'atom_{h_idx}'
@@ -117,13 +91,13 @@ def _find_attachment_nitrogens(
                                 break
                     if has_halide_contact:
                         break
-            
+
             if has_halide_contact:
                 is_attachment = True
                 if len(c_neighbors) > 0:
-                    attachment_type = 'NH3_organic'  # Part of organic spacer
+                    attachment_type = 'NH3_organic'
                 else:
-                    attachment_type = 'NH4'  # Ammonium ion
+                    attachment_type = 'NH4'
         
         if is_attachment:
             attachment_nitrogens.append({
@@ -138,13 +112,12 @@ def _find_attachment_nitrogens(
     return attachment_nitrogens
 
 def _classify_molecular_type(mol, octahedra_info: list, atom_positions: np.ndarray) -> str:
-    """
-    Classify a molecular component as spacer or A-site cation.
-    
+    """Classify a molecular component as spacer or A-site cation.
+
     - DJ spacer: bifunctional, connects two slab faces (2 attachment points)
     - RP spacer: monofunctional, connects to one slab face (1 attachment point)
-    - A-site: small cation enclosed in octahedral cavity (0 external attachments, small size)
-    
+    - A-site: small cation enclosed in octahedral cavity
+
     Parameters
     ----------
     mol : ase.Atoms
@@ -153,7 +126,7 @@ def _classify_molecular_type(mol, octahedra_info: list, atom_positions: np.ndarr
         List of octahedra information
     atom_positions : np.ndarray
         Full structure atom positions
-        
+
     Returns
     -------
     str
@@ -162,21 +135,17 @@ def _classify_molecular_type(mol, octahedra_info: list, atom_positions: np.ndarr
     n_attachments = mol.info.get('n_attachments', 0)
     formula = mol.get_chemical_formula(mode='hill')
     n_atoms = len(mol)
-    
-    # Check if it's a known A-site cation
+
     if formula in MOLECULAR_A_SITE_PATTERNS:
-        # Small molecular cations are likely A-sites
-        # But only if they don't have external attachments to different layers
         if n_attachments <= 1 and n_atoms <= 8:
             return 'a_site'
-    
-    # Classification by attachment count
+
     if n_attachments >= 2:
-        return 'dj_spacer'  # Bifunctional - connects two faces
+        return 'dj_spacer'
     elif n_attachments == 1:
-        return 'rp_spacer'  # Monofunctional - one attachment
+        return 'rp_spacer'
     elif n_atoms <= 8:
-        return 'a_site'  # Small molecule with no attachments - likely cavity cation
+        return 'a_site'
     else:
         return 'unknown'
 
@@ -186,11 +155,10 @@ def _has_path_to_multiple_layers(
     layer_info: dict,
     octahedra_info: list,
 ) -> tuple:
-    """
-    Check if a molecular component has connections to multiple layers.
-    
+    """Check if a molecular component has connections to multiple layers.
+
     Spacers bridge between layers, while A-sites are enclosed within one layer's cavities.
-    
+
     Parameters
     ----------
     mol_indices : list
@@ -201,50 +169,42 @@ def _has_path_to_multiple_layers(
         Layer information from _identify_layers
     octahedra_info : list
         List of octahedra dictionaries
-        
+
     Returns
     -------
     tuple
         (has_multi_layer_path, connected_layer_ids)
     """
-    # Build octahedra-to-layer mapping
     oct_to_layer = {}
     for layer_id, layer_data in layer_info.items():
         for oct_idx in layer_data.get('octahedra', []):
             oct_to_layer[oct_idx] = layer_id
-    
-    # Build atom-to-octahedra mapping
+
     atom_to_oct = {}
     for oct_idx, oct_data in enumerate(octahedra_info):
-        # Central atom
         central_idx = oct_data.get('central_atom_index')
         if central_idx is not None:
             atom_to_oct.setdefault(central_idx, []).append(oct_idx)
-        
-        # Neighbor atoms (X-sites)
+
         for neighbor_list in ['terminal_atoms', 'interlayer_atoms', 'intralayer_atoms']:
             for atom_idx in oct_data.get(neighbor_list, []):
                 atom_to_oct.setdefault(atom_idx, []).append(oct_idx)
-    
-    # Find which layers the molecular component connects to
+
     connected_layers = set()
-    
+
     for atom_idx in mol_indices:
         atom_node = f'atom_{atom_idx}'
         if not graph.has_node(atom_node):
             continue
-        
-        # Check neighbors for connections to octahedra
+
         for neighbor in graph.neighbors(atom_node):
             if neighbor.startswith('atom_'):
                 neighbor_idx = int(neighbor.replace('atom_', ''))
-                
-                # If neighbor is in an octahedron, find its layer
                 if neighbor_idx in atom_to_oct:
                     for oct_idx in atom_to_oct[neighbor_idx]:
                         if oct_idx in oct_to_layer:
                             connected_layers.add(oct_to_layer[oct_idx])
-    
+
     has_multi_layer = len(connected_layers) > 1
     return has_multi_layer, list(connected_layers)
 
@@ -295,21 +255,19 @@ def _analyze_slab_structure(
             'internal_octahedra': set(),
             'has_a_site_cavities': False,
         }
-    
-    # Get z-coordinates of octahedra centers
+
     oct_z_coords = {}
     for oct_idx, oct_data in enumerate(octahedra_info):
         center_idx = oct_data.get('central_atom_index')
         if center_idx is not None and atom_positions is not None:
             oct_z_coords[oct_idx] = atom_positions[center_idx][2]
         else:
-            oct_z_coords[oct_idx] = 0.0  # Fallback
-    
-    # Group octahedra by z-level (within tolerance)
-    z_tolerance = 1.0  # Å tolerance for same z-level
+            oct_z_coords[oct_idx] = 0.0
+
+    z_tolerance = 1.0
     z_levels = []
     oct_to_level = {}
-    
+
     for oct_idx in range(n_octahedra):
         z = oct_z_coords[oct_idx]
         found_level = None
@@ -317,54 +275,41 @@ def _analyze_slab_structure(
             if abs(z - level_z) < z_tolerance:
                 found_level = level_idx
                 break
-        
+
         if found_level is not None:
             z_levels[found_level][1].append(oct_idx)
             oct_to_level[oct_idx] = found_level
         else:
             z_levels.append((z, [oct_idx]))
             oct_to_level[oct_idx] = len(z_levels) - 1
-    
-    # Sort z-levels by z-coordinate
+
     z_levels.sort(key=lambda x: x[0])
-    
-    # Count axial connections (corner-sharing between different z-levels)
+
     axial_connections = defaultdict(set)
-    
+
     for (oct1, oct2), shared in shared_atoms.items():
         n_shared = len(shared)
-        # Corner-sharing: 1 shared atom AND at different z-levels
         if n_shared == 1:
             level1 = oct_to_level.get(oct1, -1)
             level2 = oct_to_level.get(oct2, -1)
-            if level1 != level2:  # Different z-levels = axial connection
+            if level1 != level2:
                 axial_connections[oct1].add(oct2)
                 axial_connections[oct2].add(oct1)
-    
-    # Determine terminal octahedra based on z-level position
-    # Terminal octahedra are at the top or bottom z-level
+
     terminal_octahedra = set()
     internal_octahedra = set()
-    
+
     if len(z_levels) == 1:
-        # Only one z-level: all are terminal (monolayer)
         terminal_octahedra = set(range(n_octahedra))
     elif len(z_levels) >= 2:
-        # Multiple z-levels: top and bottom levels are terminal
         bottom_level_octs = z_levels[0][1]
         top_level_octs = z_levels[-1][1]
         terminal_octahedra = set(bottom_level_octs + top_level_octs)
-        
-        # Internal octahedra are in middle z-levels
+
         for level_idx in range(1, len(z_levels) - 1):
             internal_octahedra.update(z_levels[level_idx][1])
-    
-    # Determine thickness = number of z-levels
+
     thickness = len(z_levels)
-    
-    # A-site cavities exist only if there are internal octahedra
-    # OR if there are multiple xy cavities in a thick slab
-    # For 2D perovskites with thickness >= 2, cavities exist between the layers
     has_a_site_cavities = len(internal_octahedra) > 0 or thickness > 1
     
     return {
@@ -384,16 +329,11 @@ def _is_in_interlayer_region(
     cell: np.ndarray,
     z_levels: list = None,
 ) -> bool:
-    """
-    Check if a position is in the interlayer region (between slabs).
-    
+    """Check if a position is in the interlayer region (between slabs).
+
     Atoms in the interlayer region are spacers, NOT A-sites.
-    The interlayer region is defined as:
-    - A GAP between two slabs (not at vacuum surfaces)
-    - For 2D perovskites: the region between terminal faces of different slabs
-    
-    For bulk structures (no interlayer gap), this should return False.
-    
+    For bulk structures (no interlayer gap), this returns False.
+
     Parameters
     ----------
     position : np.ndarray
@@ -408,7 +348,7 @@ def _is_in_interlayer_region(
         Unit cell matrix
     z_levels : list, optional
         List of (z_coord, octahedra_indices) tuples
-        
+
     Returns
     -------
     bool
@@ -416,27 +356,21 @@ def _is_in_interlayer_region(
     """
     if not terminal_octahedra or not octahedra_info:
         return False
-    
-    # Get all z-coordinates of octahedra centers
+
     all_z = []
     for oct in octahedra_info:
         center_idx = oct.get('central_atom_index')
         if center_idx is not None:
             all_z.append(atom_positions[center_idx][2])
-    
+
     if len(all_z) < 2:
         return False
-    
+
     min_oct_z = min(all_z)
     max_oct_z = max(all_z)
-    
-    # Get fractional z of the test position
+
     inv_cell = np.linalg.inv(cell)
-    pos_frac = position @ inv_cell.T
-    pos_z = position[2]  # Use absolute z
-    
-    # For bulk structures: if position is within the octahedra z-range, it's an A-site
-    # For 2D structures: if position is OUTSIDE the octahedra z-range, it's in the interlayer
+    pos_z = position[2]
     
     # Estimate interlayer gap: typical B-X distance * 2 (space between terminal X atoms)
     # For 2D perovskites, there should be a clear gap (> 3 Å) beyond the octahedra

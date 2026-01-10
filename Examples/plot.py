@@ -16,6 +16,7 @@ except Exception:
 
 from ase.io import write
 from q2D_Materials.core.creator import q2D_creator
+import numpy as np
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -74,33 +75,272 @@ glazer_tilted = q2d.create_structure(**(cubic_base | {"xy_expansion": (4, 4), "g
 write(IMAGES / "glazer-tilted-top.png", glazer_tilted, rotation=rotation_top, show_unit_cell=2)
 
 # -----------------------------------------------------------------------------
-# Space Group / Glazer Notation Examples
+# All 15 Glazer Space Groups (Howard & Stokes, 1998)
 # -----------------------------------------------------------------------------
-# Cubic (Pm-3m)
-glazer_cubic = q2d.create_structure(
-    **(cubic_base | {"xy_expansion": (2, 2)}),
-    glazer_pattern="Pm-3m"  # a0a0a0
-)
-write(IMAGES / "glazer-cubic.png", glazer_cubic, rotation=rotation_top, show_unit_cell=2)
+# First 10 using cubic template, last 5 using reduced template
 
-# Tetragonal (P4/mbm)
-glazer_tetragonal = q2d.create_structure(
-    **(cubic_base | {"xy_expansion": (2, 2)}),
-    thickness=2,
-    glazer_pattern="P4/mbm",  # a0a0c- (Out-of-phase tilt around c)
-    glazer_angles=[0, 0, 15]  # Explicitly set larger angle for visibility
-)
-write(IMAGES / "glazer-tetragonal.png", glazer_tetragonal, rotation=rotation_top, show_unit_cell=2)
+# Mapping of all 15 conventional Glazer patterns to space groups
+GLAZER_15_SYSTEMS = [
+    # 1-10: Using cubic template
+    ("a0a0a0", "Pm-3m", "cubic", "Cubic - No tilting"),
+    ("a0a0c+", "P4/mbm", "cubic", "Tetragonal - In-phase tilt about c"),
+    ("a0b+b+", "I4/mmm", "cubic", "Tetragonal - In-phase tilts about b and c"),
+    ("a+a+a+", "Im-3", "cubic", "Cubic - In-phase tilts about all axes"),
+    ("a+b+c+", "Immm", "cubic", "Orthorhombic - In-phase tilts, all different"),
+    ("a0a0c-", "I4/mcm", "cubic", "Tetragonal - Out-of-phase tilt about c"),
+    ("a0b-b-", "Imma", "cubic", "Orthorhombic - Out-of-phase tilts about b and c"),
+    ("a-a-a-", "R-3c", "cubic", "Rhombohedral - Out-of-phase tilts about all axes"),
+    ("a0b-c-", "C2/m", "cubic", "Monoclinic - Out-of-phase tilts about b and c"),
+    ("a-b-b-", "C2/c", "cubic", "Monoclinic - Out-of-phase tilts, b=c"),
+    # 11-15: Using reduced template
+    ("a-b-c-", "P-1", "reduced", "Triclinic - Out-of-phase tilts, all different"),
+    ("a0b+c-", "Cmcm", "reduced", "Orthorhombic - Mixed phases, b+ c-"),
+    ("a+b-b-", "Pnma", "reduced", "Orthorhombic - Mixed phases, a+ b- c-"),
+    ("a+b-c-", "P21/m", "reduced", "Monoclinic - Mixed phases, a+ b- c-"),
+    ("a+a+c-", "P42/nmc", "reduced", "Tetragonal - Mixed phases, a+ a+ c-"),
+]
 
-# Orthorhombic (Pnma)
-# Requires 2x2x2 supercell (which is handled by xy_expansion=2x2 and thickness=2)
-glazer_orthorhombic = q2d.create_structure(
-    **(cubic_base | {"xy_expansion": (2, 2)}),
-    thickness=2,
-    glazer_pattern="Pnma",        # a-b+a-
-    glazer_angles=[15, 15, 15]    # Larger angles for visibility
-)
-write(IMAGES / "glazer-orthorhombic.png", glazer_orthorhombic, rotation="45x,45y,45z", show_unit_cell=2)
+print("\n" + "="*70)
+print("Generating all 15 Glazer Space Group Systems")
+print("="*70)
+
+for idx, system_data in enumerate(GLAZER_15_SYSTEMS, 1):
+    # Unpack system data (view_axis may be None initially)
+    if len(system_data) == 5:
+        notation, space_group, template, description, _ = system_data
+    else:
+        notation, space_group, template, description = system_data[:4]
+    print(f"\n[{idx}/15] {space_group} ({notation}) - {description}")
+    
+    # Determine base configuration - use monolayer for all
+    if template == "cubic":
+        base_config = dict(
+            structure_type="monolayer",
+            A_ions="MA",
+            B_ions="Pb",
+            X_ions="I",
+            xy_expansion=(1, 1),
+            template="cubic",
+            vacuum=15.0
+        )
+    else:  # reduced
+        base_config = dict(
+            structure_type="monolayer",
+            A_ions="MA",
+            B_ions="Pb",
+            X_ions="I",
+            xy_expansion=(2, 2),
+            template="reduced",
+            vacuum=15.0
+        )
+    
+    # Determine supercell size based on pattern
+    # Out-of-phase patterns need 2x2 supercell
+    has_out_of_phase = "-" in notation
+    if has_out_of_phase:
+        xy_exp = (2, 2)
+        thickness = 2
+    else:
+        xy_exp = (2, 2) if idx <= 10 else (2, 2)  # Use 2x2 for visibility
+        thickness = 2
+    
+    base_config["xy_expansion"] = xy_exp
+    base_config["thickness"] = thickness
+    
+    # Create structure with appropriate angles for visibility
+    # Parse notation to determine angles for each axis
+    def get_angles_from_notation(notat):
+        """Extract tilt angles from Glazer notation.
+        
+        Ensures axes with the same magnitude letter get the same angle value.
+        """
+        if notat == "a0a0a0":
+            return None
+        
+        # First pass: determine angle for each unique magnitude letter
+        mag_to_angle_plus = {"a": 10.0, "b": 12.0, "c": 15.0}
+        mag_to_angle_minus = {"a": 12.0, "b": 14.0, "c": 16.0}
+        
+        # Track which magnitude letters we've seen and their assigned angles
+        mag_angles = {}
+        
+        angles = [0.0, 0.0, 0.0]
+        # Parse notation: mag1 phase1 mag2 phase2 mag3 phase3
+        for i in range(3):
+            mag_idx = i * 2
+            phase_idx = i * 2 + 1
+            mag = notat[mag_idx]
+            phase = notat[phase_idx]
+            
+            if phase == "0" or mag == "0":
+                angles[i] = 0.0
+            else:
+                # Use cached angle if we've seen this magnitude before
+                if mag in mag_angles:
+                    angles[i] = mag_angles[mag]
+                else:
+                    # Assign new angle based on phase and magnitude
+                    if phase == "+":
+                        angles[i] = mag_to_angle_plus[mag]
+                    elif phase == "-":
+                        angles[i] = mag_to_angle_minus[mag]
+                    # Cache this assignment
+                    mag_angles[mag] = angles[i]
+        
+        return angles
+    
+    angles = get_angles_from_notation(notation)
+    
+    try:
+        structure = q2d.create_structure(
+            **base_config,
+            glazer_pattern=notation,  # Use notation string directly
+            glazer_angles=angles if angles else None,
+        )
+        
+        # Generate three views for each space group: [001], [010], [100]
+        view_configs = [
+            ("001", "0x,0y,0z", "[0 0 1]"),    # Top view - looking down z-axis
+            ("010", "90x,90y,0z", "[0 1 0]"),   # Front view - looking along y-axis
+            ("100", "90x,0y,0z", "[1 0 0]"),   # Side view - looking along x-axis
+        ]
+        
+        saved_files = []
+        for view_code, rot, view_axis in view_configs:
+            # Generate filename with view code
+            filename = f"glazer_{idx:02d}_{space_group.lower().replace('/', '_')}_{view_code}.png"
+            write(IMAGES / filename, structure, rotation=rot, show_unit_cell=2)
+            saved_files.append((view_code, filename, view_axis))
+            print(f"  ✓ Saved: {filename} (view: {view_axis})")
+        
+    except Exception as e:
+        print(f"  ✗ Error creating {space_group}: {e}")
+
+print("\n" + "="*70)
+print("Completed generating all 15 Glazer Space Group Systems")
+print("="*70 + "\n")
+
+
+def save_multiview(atoms, filename, rotations, titles=None, radii=0.25, show_bonds=True):
+    """Save multi-view visualization with optional bonds.
+    
+    Bonds are drawn for specific pairs with cutoffs:
+    - N-H: 1.2 Å
+    - Pb-I: 4.6 Å
+    - C-N: 1.6 Å
+    """
+    if not MATPLOTLIB_AVAILABLE:
+        print(f"Matplotlib not available; skipping {filename}")
+        return
+    
+    # Define bond cutoffs for specific pairs
+    BOND_CUTOFFS = {
+        ('N', 'H'): 1.2,
+        ('H', 'N'): 1.2,
+        ('Pb', 'I'): 4.6,
+        ('I', 'Pb'): 4.6,
+        ('C', 'N'): 1.6,
+        ('N', 'C'): 1.6,
+    }
+    
+    # Detect bonds if requested
+    bonds = []
+    if show_bonds:
+        positions = atoms.get_positions()
+        symbols = atoms.get_chemical_symbols()
+        cell = atoms.get_cell()
+        
+        # Use PBC if cell is defined
+        if cell is not None and np.any(cell):
+            from q2D_Materials.builders.optimizers import _get_uc_neighbor_offsets
+            uc_offsets = _get_uc_neighbor_offsets(cell)
+        else:
+            uc_offsets = np.array([[0., 0., 0.]])
+        
+        for i in range(len(atoms)):
+            pos_i = positions[i]
+            sym_i = symbols[i]
+            pos_i_images = pos_i + uc_offsets
+            
+            for j in range(i + 1, len(atoms)):
+                sym_j = symbols[j]
+                pair = (sym_i, sym_j)
+                
+                # Check if this pair should have bonds
+                if pair not in BOND_CUTOFFS:
+                    continue
+                
+                cutoff = BOND_CUTOFFS[pair]
+                pos_j = positions[j]
+                
+                # Check distance to all periodic images
+                dists = np.linalg.norm(pos_i_images - pos_j, axis=1)
+                min_dist = np.min(dists)
+                
+                if min_dist <= cutoff:
+                    bonds.append((i, j))
+    
+    fig, axarr = plt.subplots(1, len(rotations), figsize=(4 * len(rotations), 4))
+    if len(rotations) == 1:
+        axarr = [axarr]
+    
+    for i, (ax, rot) in enumerate(zip(axarr, rotations)):
+        # Plot atoms
+        plot_atoms(atoms, ax, radii=radii, rotation=rot, show_unit_cell=0)
+        
+        # Draw bonds if available
+        if show_bonds and bonds:
+            positions = atoms.get_positions()
+            symbols = atoms.get_chemical_symbols()
+            
+            # Parse rotation string to determine which axes to project
+            # For axis-aligned views: [001] = 0x,0y,0z, [010] = 0x,90y,0z, [100] = 90x,0y,0z
+            rot_parts = rot.split(',') if rot else []
+            proj_axes = [0, 1]  # Default: project x and y
+            
+            # Determine projection axes based on rotation
+            if '90x' in rot or '90X' in rot:
+                # Side view [100]: project y and z
+                proj_axes = [1, 2]
+            elif '90y' in rot or '90Y' in rot:
+                # Front view [010]: project x and z
+                proj_axes = [0, 2]
+            else:
+                # Top view [001]: project x and y
+                proj_axes = [0, 1]
+            
+            # Draw bonds
+            for bond_i, bond_j in bonds:
+                pos_i = positions[bond_i]
+                pos_j = positions[bond_j]
+                
+                # Get bond color and style based on atom types
+                sym_i, sym_j = symbols[bond_i], symbols[bond_j]
+                if ('N' in (sym_i, sym_j) and 'H' in (sym_i, sym_j)):
+                    color = 'gray'
+                    linewidth = 1.0
+                elif ('Pb' in (sym_i, sym_j) and 'I' in (sym_i, sym_j)):
+                    color = 'orange'
+                    linewidth = 1.5
+                elif ('C' in (sym_i, sym_j) and 'N' in (sym_i, sym_j)):
+                    color = 'blue'
+                    linewidth = 1.0
+                else:
+                    color = 'gray'
+                    linewidth = 0.5
+                
+                # Draw line using the appropriate projection axes
+                ax.plot([pos_i[proj_axes[0]], pos_j[proj_axes[0]]], 
+                       [pos_i[proj_axes[1]], pos_j[proj_axes[1]]], 
+                       color=color, linewidth=linewidth, alpha=0.6, zorder=0)
+        
+        ax.set_axis_off()
+        if titles and i < len(titles):
+            ax.set_title(titles[i], fontsize=12, fontweight='bold')
+    
+    fig.tight_layout()
+    fig.savefig(filename, dpi=300, bbox_inches="tight")
+    plt.close(fig)
 
 
 # Monolayer: single and double thickness
@@ -179,23 +419,6 @@ rp_atomic = q2d.create_structure(
     penetration=0.2,
 )
 write(IMAGES / "rp_atomic_side.png", rp_atomic, rotation=rotation_iso, show_unit_cell=2)
-
-
-def save_multiview(atoms, filename, rotations, titles=None, radii=0.25):
-    if not MATPLOTLIB_AVAILABLE:
-        print(f"Matplotlib not available; skipping {filename}")
-        return
-    fig, axarr = plt.subplots(1, len(rotations), figsize=(4 * len(rotations), 4))
-    if len(rotations) == 1:
-        axarr = [axarr]
-    for i, (ax, rot) in enumerate(zip(axarr, rotations)):
-        plot_atoms(atoms, ax, radii=radii, rotation=rot)
-        ax.set_axis_off()
-        if titles and i < len(titles):
-            ax.set_title(titles[i])
-    fig.tight_layout()
-    fig.savefig(filename, dpi=300, bbox_inches="tight")
-    plt.close(fig)
 
 
 if MATPLOTLIB_AVAILABLE:

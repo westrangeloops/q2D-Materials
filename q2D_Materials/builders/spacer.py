@@ -1,11 +1,4 @@
-"""
-Generic spacer placement tools.
-
-This module provides low-level, structure-agnostic tools for placing
-atomic or molecular spacers. It includes kinematic solvers to ensure
-molecular spacers are placed with physically valid bond lengths and angles.
-Structure-specific logic (DJ, RP, monolayer) lives in slab.py.
-"""
+"""Generic spacer placement tools."""
 
 from __future__ import annotations
 
@@ -59,9 +52,7 @@ def prepare_spacer(
     spacer: Atoms,
     BX_dist: float,
 ) -> Tuple[float, float, Atoms]:
-    """
-    Prepare a spacer molecule/atom for placement.
-    """
+    """Prepare a spacer molecule/atom for placement."""
     from .molecule_builder import align_ase_molecule_for_perovskite, get_molecule_length
     from .A_sites import get_ionic_radius
     
@@ -208,21 +199,7 @@ def _find_terminal_nitrogens(mol: Atoms) -> Tuple[List[int], List[int]]:
 
 
 def count_nh3_groups(mol: Atoms) -> int:
-    """
-    Count the number of NH3+ groups in a molecule.
-
-    This is a convenience wrapper around _find_terminal_nitrogens().
-
-    Parameters
-    ----------
-    mol : Atoms
-        The molecule to analyze
-
-    Returns
-    -------
-    int
-        Number of NH3+ groups found
-    """
+    """Count the number of NH3+ groups in a molecule."""
     _, nh3_n_indices = _find_terminal_nitrogens(mol)
     return len(nh3_n_indices)
 
@@ -349,33 +326,7 @@ def place_double_spacer_between_positions(
     existing_structure: Optional[Atoms] = None,
     collision_strategy: str = "off",
 ) -> Atoms:
-    """
-    Physically aligns a flexible double spacer between two points using the specified optimizer.
-
-    Parameters
-    ----------
-    molecule : Atoms
-        The molecule to place
-    p1 : np.ndarray
-        Target position for first terminal NH3+ nitrogen
-    p2 : np.ndarray
-        Target position for second terminal NH3+ nitrogen
-    optimizer : str, default "KS"
-        Optimizer to use: "Off" (pure geometry), "KS" (Kinematic Solver), or "UFF" (UFF optimization)
-    cell : np.ndarray, optional
-        Unit cell matrix (3x3) for PBC-aware shortest vector calculation
-    target_vector : np.ndarray, optional
-        Explicit vector from p1 to p2. If provided, overrides internal shortest path calculation.
-    existing_structure : Atoms, optional
-        Existing structure to check for collisions against
-    collision_strategy : str, default "off"
-        Collision resolution strategy: "rotate", "nudge", "optimize", "reject", "off"
-
-    Returns
-    -------
-    Atoms
-        Aligned and collision-resolved molecule between p1 and p2
-    """
+    """Physically aligns a flexible double spacer between two points using the specified optimizer."""
     return place_spacer_with_optimizer(molecule, p1, p2, optimizer=optimizer, cell=cell,
                                      target_vector=target_vector, existing_structure=existing_structure,
                                      collision_strategy=collision_strategy)
