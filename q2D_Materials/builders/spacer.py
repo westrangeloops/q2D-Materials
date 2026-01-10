@@ -346,10 +346,12 @@ def place_double_spacer_between_positions(
     optimizer: str = "KS",
     cell: Optional[np.ndarray] = None,
     target_vector: Optional[np.ndarray] = None,
+    existing_structure: Optional[Atoms] = None,
+    collision_strategy: str = "off",
 ) -> Atoms:
     """
     Physically aligns a flexible double spacer between two points using the specified optimizer.
-    
+
     Parameters
     ----------
     molecule : Atoms
@@ -364,13 +366,19 @@ def place_double_spacer_between_positions(
         Unit cell matrix (3x3) for PBC-aware shortest vector calculation
     target_vector : np.ndarray, optional
         Explicit vector from p1 to p2. If provided, overrides internal shortest path calculation.
-        
+    existing_structure : Atoms, optional
+        Existing structure to check for collisions against
+    collision_strategy : str, default "off"
+        Collision resolution strategy: "rotate", "nudge", "optimize", "reject", "off"
+
     Returns
     -------
     Atoms
-        Aligned molecule between p1 and p2
+        Aligned and collision-resolved molecule between p1 and p2
     """
-    return place_spacer_with_optimizer(molecule, p1, p2, optimizer=optimizer, cell=cell, target_vector=target_vector)
+    return place_spacer_with_optimizer(molecule, p1, p2, optimizer=optimizer, cell=cell,
+                                     target_vector=target_vector, existing_structure=existing_structure,
+                                     collision_strategy=collision_strategy)
 
 
 def calculate_double_spacer_nh3_distances(molecule: Atoms) -> float:
@@ -425,6 +433,118 @@ def calculate_molecule_radius(molecule: Atoms, n1_index: Optional[int] = None, n
     mask[[n1_index, n2_index]] = False
 
     return float(dists[mask].max()) if np.any(mask) else 0.0
+
+
+def calculate_best_plane_normal(molecule: Atoms) -> Optional[np.ndarray]:
+    """
+    Calculate the normal of the best-fit plane that contains the N-N axis 
+    and fits the majority of the other atoms.
+    
+    Algorithm:
+    1. Identify N-N axis (or terminal NH3+ axis).
+    2. Consider planes defined by the N-N axis and each other atom.
+    3. For each candidate plane, calculate total squared distance of all atoms to it.
+    4. Return the normal of the plane with minimum error.
+    
+    Parameters
+    ----------
+    molecule : Atoms
+        The spacer molecule.
+        
+    Returns
+    -------
+    np.ndarray or None
+        Normal vector of the best fit plane, or None if undefined (e.g. linear molecule).
+    """
+    _, nh3_indices = _find_terminal_nitrogens(molecule)
+    
+    positions = molecule.get_positions()
+    
+    # Need at least one NH3/N for an axis anchor
+    if len(nh3_indices) == 0:
+        return None
+        
+    # Define axis
+    if len(nh3_indices) >= 2:
+        p1 = positions[nh3_indices[0]]
+        p2 = positions[nh3_indices[1]]
+    else:
+        # Mono-spacer: use N and CoM or N and furthest atom
+        p1 = positions[nh3_indices[0]]
+        # Use furthest atom from N as the second point to define main axis
+        dists = np.linalg.norm(positions - p1, axis=1)
+        furthest_idx = np.argmax(dists)
+        if dists[furthest_idx] < 0.1: # Molecule is just one atom/very small
+            return None
+        p2 = positions[furthest_idx]
+        
+    axis = p2 - p1
+    axis_len = np.linalg.norm(axis)
+    if axis_len < 1e-6:
+        return None
+        
+    axis_unit = axis / axis_len
+    
+    # Identify heavy atoms (non-H) for plane fitting to reduce noise
+    symbols = molecule.get_chemical_symbols()
+    heavy_indices = [i for i, s in enumerate(symbols) if s != 'H']
+    if not heavy_indices:
+        heavy_indices = range(len(molecule)) # Fallback to all
+        
+    # Gather atoms to fit
+    atoms_pos = positions[heavy_indices]
+    
+    # We will test planes defined by 'axis' and a third point 'p3' from atoms_pos
+    # A plane containing p1 and p2 (axis) and p3 has normal: axis x (p3 - p1)
+    
+    best_normal = None
+    min_error = float('inf')
+    
+    # Vectorized approach:
+    # 1. Vectors from p1 to all other atoms
+    vecs_from_p1 = atoms_pos - p1
+    
+    # 2. Candidate normals: cross product of axis with each atom vector
+    # Shape: (N, 3)
+    normals = np.cross(axis_unit, vecs_from_p1)
+    
+    # 3. Filter valid normals (non-zero length)
+    norms = np.linalg.norm(normals, axis=1)
+    valid_mask = norms > 1e-3
+    
+    if not np.any(valid_mask):
+        # All atoms are collinear with axis
+        return None
+        
+    valid_normals = normals[valid_mask]
+    valid_normals = valid_normals / norms[valid_mask][:, np.newaxis] # Normalize
+    
+    # Downsample if too many atoms to speed up O(N^2) check
+    if len(valid_normals) > 50:
+        indices = np.random.choice(len(valid_normals), 50, replace=False)
+        candidate_normals = valid_normals[indices]
+    else:
+        candidate_normals = valid_normals
+        
+    # 4. Check error for each candidate normal
+    # Error = sum of squared distances of all atoms to the plane.
+    # Distance of point r to plane (defined by p1 and normal n) is |(r - p1) . n|
+    
+    # Pre-compute vectors for error checking (use all atoms, not just heavy, or keep heavy?)
+    # Using heavy atoms is usually better for "plane of the molecule"
+    
+    # Dot products of all vectors with all candidate normals
+    # vecs_from_p1: (M, 3), candidate_normals: (K, 3)
+    # result: (K, M)
+    dots = np.abs(np.dot(candidate_normals, vecs_from_p1.T))
+    
+    # Sum of squared distances (or L1 norm?) L2 is standard for "best fit"
+    errors = np.sum(dots**2, axis=1)
+    
+    best_idx = np.argmin(errors)
+    best_normal = candidate_normals[best_idx]
+    
+    return best_normal
 
 
 def replace_spacer_molecule(

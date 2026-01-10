@@ -267,37 +267,37 @@ class q2DStructure(Atoms):
             "This will create an interface between two perovskite structures."
         )
     
-    def twist(self, m, n, interlayer_distance=11.0, vacuum=12.0, **kwargs):
+    def twist(self, m, n, interlayer_distance=11.0, vacuum=12.0, other=None, **kwargs):
         """
-        Create a twisted bilayer structure from a monolayer.
+        Create a twisted bilayer structure from this monolayer.
         
         Based on the Quadratic Twisted Bilayer Generator by Gabriel Xavier Pereira:
         Institute of Physics, University of São Paulo, São Paulo, SP, Brazil
         Email: gxpereira@usp.br
         
-        This method generates a twisted bilayer structure from a given quadratic monolayer
-        crystal. It constructs two stacked layers — a bottom and a top — that are related
-        by a well-defined twist angle determined by the integers (m, n) according to the
-        standard commensurate twist formula.
+        This method generates a twisted bilayer structure. If `other` is not provided,
+        creates a self-twisted bilayer (same monolayer twisted against itself).
+        The twist angle θ = arctan(2mn / (m² - n²)) creates a commensurate Moiré pattern.
         
         Parameters
         ----------
         m : int
-            First integer parameter for twist angle calculation
+            First integer parameter for twist angle calculation (m > n)
         n : int
-            Second integer parameter for twist angle calculation
+            Second integer parameter for twist angle calculation (n > 0)
         interlayer_distance : float, optional
-            Vertical distance between the two twisted layers (interlayer) in Angstroms (default: 11.0)
+            Vertical distance between the two twisted layers in Angstroms (default: 11.0)
         vacuum : float, optional
-            Vacuum space outside the sandwich structure (outerlayer) in Angstroms (default: 12.0)
-            This adds vacuum above the top layer and below the bottom layer
+            Total vacuum space (split evenly above/below) in Angstroms (default: 12.0)
+        other : q2DStructure, optional
+            Second monolayer structure. If None, uses self (self-twist).
         **kwargs : dict
-            Additional parameters (currently unused, reserved for future use)
+            Additional parameters (reserved for future use)
             
         Returns
         -------
         q2DStructure
-            New q2DStructure with the twisted bilayer (preserves metadata)
+            New q2DStructure with the twisted bilayer
             
         Raises
         ------
@@ -307,4 +307,7 @@ class q2DStructure(Atoms):
             If pymatgen is not available
         """
         from q2D_Materials.utils.twist_monolayer import create_twisted_bilayer
-        return create_twisted_bilayer(self, m, n, interlayer_distance, vacuum, **kwargs)
+        
+        # Use self for both layers if other is not specified (self-twist)
+        mono2 = other if other is not None else self
+        return create_twisted_bilayer(self, mono2, m, n, interlayer_distance, vacuum, **kwargs)

@@ -37,6 +37,7 @@ class q2D_creator:
         lattice_multipliers: Optional[List[float]] = None,
         optimizer: str = "KS",
         spacer_orientation: Optional[List[str]] = None,
+        collision_strategy: str = "rotate",
     ):
         """
         Create a q2DStructure for a given inorganic template.
@@ -59,6 +60,9 @@ class q2D_creator:
         - Spacer orientation controls the plane alignment of spacers: "A" (normal to BC,
           parallel to A vector) or "B" (normal to AC, parallel to B vector). Can be a single
           value or list that cycles through orientations.
+        - Collision strategy controls how atomic overlaps are resolved during spacer placement:
+          "rotate" (rotate molecule around N-N axis), "nudge" (small XY translations),
+          "optimize" (geometry optimization), "reject" (warn and skip), "off" (no checking).
         """
         # Determine effective BX distance:
         # - If B and X are provided, use ionic radii data.
@@ -93,6 +97,7 @@ class q2D_creator:
                 lattice_multipliers=lattice_multipliers,
                 optimizer=optimizer,
                 spacer_orientation=spacer_orientation,
+                collision_strategy=collision_strategy,
             )
         elif structure_type.lower() == "monolayer":
             atoms = create_monolayer_perovskite(
@@ -115,6 +120,7 @@ class q2D_creator:
                 lattice_multipliers=lattice_multipliers,
                 optimizer=optimizer,
                 spacer_orientation=spacer_orientation,
+                collision_strategy=collision_strategy,
             )
         else:
             raise ValueError(f"structure_type must be 'bulk' or 'monolayer', got '{structure_type}'")
@@ -141,9 +147,10 @@ class q2D_creator:
         """
         Create a twisted stacking of multiple monolayer structures.
         
-        This method takes two or more monolayer structures, finds the minimal common
-        supercell (LCM of xy_expansions), and returns a stacked structure with optional
-        rotations applied to each layer.
+        This method takes two or more monolayer structures and stacks them with
+        specified twist angles and interlayer distances. For bilayers (2 layers),
+        it uses commensurate Moiré supercells. For multilayers, it finds the
+        minimal common supercell.
         
         Parameters
         ----------
@@ -158,13 +165,12 @@ class q2D_creator:
             If None, defaults to 11.0 Å for all interlayer gaps.
             Length should be len(monolayers) - 1.
         vacuum : float, optional
-            Vacuum space outside the stacked structure in Angstroms (default: 12.0).
-            This adds vacuum above the top layer and below the bottom layer.
+            Total vacuum space (split evenly above/below) in Angstroms (default: 12.0).
             
         Returns
         -------
         q2DStructure
-            New q2DStructure with the stacked monolayers in a common supercell.
+            New q2DStructure with the stacked monolayers.
             
         Raises
         ------
@@ -174,6 +180,11 @@ class q2D_creator:
         ImportError
             If pymatgen is not available.
         """
+        from q2D_Materials.utils.twist_monolayer import (
+            create_twisted_bilayer,
+            create_twisted_multilayer
+        )
+        
         if len(monolayers) < 2:
             raise ValueError(
                 f"twist() requires at least 2 monolayer structures, got {len(monolayers)}"
@@ -191,53 +202,7 @@ class q2D_creator:
                     f"Structure {i} has structure_type='{mono.structure_type}'"
                 )
         
-        try:
-            from pymatgen.core import Structure, Lattice
-            from pymatgen.io.ase import AseAtomsAdaptor
-        except ImportError:
-            raise ImportError(
-                "pymatgen is required for twist() method. Please install pymatgen."
-            )
-        
-        adapter = AseAtomsAdaptor()
-        
-        def lcm(a: int, b: int) -> int:
-            """Calculate Least Common Multiple of two integers."""
-            return abs(a * b) // gcd(a, b) if a and b else 0
-        
-        def lcm_list(numbers: List[int]) -> int:
-            """Calculate LCM of a list of integers."""
-            result = numbers[0]
-            for num in numbers[1:]:
-                result = lcm(result, num)
-            return result
-        
-        xy_expansions = []
-        for mono in monolayers:
-            exp = mono.xy_expansion if mono.xy_expansion else (1, 1)
-            xy_expansions.append(exp)
-        
-        nx_values = [exp[0] for exp in xy_expansions]
-        ny_values = [exp[1] for exp in xy_expansions]
-        
-        common_nx = lcm_list(nx_values)
-        common_ny = lcm_list(ny_values)
-        
-        expanded_structures = []
-        for i, mono in enumerate(monolayers):
-            mono_pmg = adapter.get_structure(mono)
-            
-            exp = xy_expansions[i]
-            scale_x = common_nx // exp[0]
-            scale_y = common_ny // exp[1]
-            
-            if scale_x > 1 or scale_y > 1:
-                mono_pmg.make_supercell([[scale_x, 0, 0],
-                                        [0, scale_y, 0],
-                                        [0, 0, 1]])
-            
-            expanded_structures.append(mono_pmg)
-        
+        # Set defaults
         if twist_angles is None:
             twist_angles = [None] * (len(monolayers) - 1)
         elif len(twist_angles) != len(monolayers) - 1:
@@ -254,70 +219,22 @@ class q2D_creator:
                 f"(one per interlayer gap), got {len(interlayer_distances)}"
             )
         
-        all_coords = []
-        all_species = []
-        z_offset = 0.0
+        # For bilayer with a single twist angle, use the optimized bilayer function
+        if len(monolayers) == 2 and twist_angles[0] is not None:
+            m, n = twist_angles[0]
+            return create_twisted_bilayer(
+                monolayers[0], monolayers[1],
+                m, n,
+                interlayer_distance=interlayer_distances[0],
+                vacuum=vacuum
+            )
         
-        for i, (mono_pmg, mono) in enumerate(zip(expanded_structures, monolayers)):
-            coords = np.array([site.coords for site in mono_pmg], dtype=np.float64)
-            
-            if i > 0 and twist_angles[i - 1] is not None:
-                m, n = twist_angles[i - 1]
-                cost = (m**2 - n**2) / (m**2 + n**2)
-                sint = (2 * m * n) / (m**2 + n**2)
-                rot_matrix = np.array([[cost, -sint, 0],
-                                       [sint, cost, 0],
-                                       [0, 0, 1]], dtype=np.float64)
-                coords = coords @ rot_matrix.T
-            
-            coords[:, 2] += z_offset
-            all_coords.append(coords)
-            all_species.extend([site.species for site in mono_pmg])
-            
-            if i < len(monolayers) - 1:
-                z_offset -= interlayer_distances[i]
-        
-        all_coords = np.vstack(all_coords)
-        
-        base_lattice = expanded_structures[0].lattice
-        stacked = Structure(base_lattice, all_species, all_coords, coords_are_cartesian=True)
-        
-        stacked_atoms = adapter.get_atoms(stacked)
-        
-        positions = stacked_atoms.positions
-        min_z = np.min(positions[:, 2])
-        max_z = np.max(positions[:, 2])
-        
-        z_shift = vacuum / 2.0 - min_z
-        positions[:, 2] += z_shift
-        
-        new_z_length = max_z - min_z + vacuum
-        
-        current_cell = stacked_atoms.cell
-        stacked_atoms.cell = [
-            current_cell[0],
-            current_cell[1],
-            [0, 0, new_z_length]
-        ]
-        
-        combined_metadata = {}
-        if hasattr(monolayers[0], '_metadata') and monolayers[0]._metadata:
-            combined_metadata = monolayers[0]._metadata.copy()
-        combined_metadata['twist_params'] = twist_angles
-        combined_metadata['interlayer_distances'] = interlayer_distances
-        combined_metadata['vacuum'] = vacuum
-        combined_metadata['common_supercell'] = (common_nx, common_ny)
-        combined_metadata['n_layers'] = len(monolayers)
-        
-        return q2DStructure(
-            stacked_atoms,
-            structure_type='monolayer',
-            BX_dist=monolayers[0].BX_dist,
-            A_ions=monolayers[0].A_ions,
-            B_ions=monolayers[0].B_ions,
-            X_ions=monolayers[0].X_ions,
-            xy_expansion=(common_nx, common_ny),
-            **combined_metadata
+        # For multilayer or no-twist stacking, use the multilayer function
+        return create_twisted_multilayer(
+            monolayers,
+            twist_angles,
+            interlayer_distances,
+            vacuum=vacuum
         )
 
     def Twist(self, m1, m2, m=3, n=1, interlayer_distance=11.0, vacuum=12.0):

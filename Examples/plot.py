@@ -73,6 +73,36 @@ write(IMAGES / "glazer-untitled-top.png", glazer_untilted, rotation=rotation_top
 glazer_tilted = q2d.create_structure(**(cubic_base | {"xy_expansion": (4, 4), "glazer_angles": [0, 0, 10], "glazer_pattern": ["0", "0", "+"]}), layer_sequence=["L1", "L2"])
 write(IMAGES / "glazer-tilted-top.png", glazer_tilted, rotation=rotation_top, show_unit_cell=2)
 
+# -----------------------------------------------------------------------------
+# Space Group / Glazer Notation Examples
+# -----------------------------------------------------------------------------
+# Cubic (Pm-3m)
+glazer_cubic = q2d.create_structure(
+    **(cubic_base | {"xy_expansion": (2, 2)}),
+    glazer_pattern="Pm-3m"  # a0a0a0
+)
+write(IMAGES / "glazer-cubic.png", glazer_cubic, rotation=rotation_top, show_unit_cell=2)
+
+# Tetragonal (P4/mbm)
+glazer_tetragonal = q2d.create_structure(
+    **(cubic_base | {"xy_expansion": (2, 2)}),
+    thickness=2,
+    glazer_pattern="P4/mbm",  # a0a0c- (Out-of-phase tilt around c)
+    glazer_angles=[0, 0, 15]  # Explicitly set larger angle for visibility
+)
+write(IMAGES / "glazer-tetragonal.png", glazer_tetragonal, rotation=rotation_top, show_unit_cell=2)
+
+# Orthorhombic (Pnma)
+# Requires 2x2x2 supercell (which is handled by xy_expansion=2x2 and thickness=2)
+glazer_orthorhombic = q2d.create_structure(
+    **(cubic_base | {"xy_expansion": (2, 2)}),
+    thickness=2,
+    glazer_pattern="Pnma",        # a-b+a-
+    glazer_angles=[15, 15, 15]    # Larger angles for visibility
+)
+write(IMAGES / "glazer-orthorhombic.png", glazer_orthorhombic, rotation="45x,45y,45z", show_unit_cell=2)
+
+
 # Monolayer: single and double thickness
 mono1 = q2d.create_structure(structure_type="monolayer", A_ions="MA", B_ions="Pb", X_ions="I", xy_expansion=(1, 1), template="cubic", vacuum=15.0, thickness=1, layer_sequence=["L1", "L2"])
 write(IMAGES / "mono-1layer.png", mono1, rotation=rotation_iso, show_unit_cell=2)
@@ -139,7 +169,7 @@ rp_atomic = q2d.create_structure(
     template="cubic",
     layer_sequence="RP",
     thickness=4,
-    xy_expansion=(1, 1),
+    xy_expansion=(2, 2),
     A_ions="MA",
     B_ions="Pb",
     X_ions="I",

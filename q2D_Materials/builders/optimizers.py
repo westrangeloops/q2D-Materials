@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from typing import List, Set, Tuple, Optional, Union, Dict
-import warnings
-import itertools
+from typing import List, Set, Tuple, Optional, Dict
 import networkx as nx
 import numpy as np
 from ase import Atoms
 from ase.data import covalent_radii
 from ase.neighborlist import build_neighbor_list
+
+from .primitives import Vector3D, gram_schmidt, rodrigues_rotate
 
 
 
@@ -110,8 +110,34 @@ class KinematicChainSolver:
         return []
 
     def solve(self, anchor_idx: int, mover_idx: int, anchor_pos: np.ndarray,
-              target_pos: np.ndarray, tolerance: float = 0.1, max_iter: int = 100) -> Atoms:
-        """Align molecule: anchor_idx at anchor_pos, mover_idx near target_pos."""
+              target_pos: np.ndarray, tolerance: float = 0.1, max_iter: int = 100,
+              folding_weight: float = 0.0, backbone_path: Optional[List[int]] = None) -> Atoms:
+        """Align molecule: anchor_idx at anchor_pos, mover_idx near target_pos.
+        
+        Parameters
+        ----------
+        anchor_idx : int
+            Index of atom to anchor at anchor_pos
+        mover_idx : int
+            Index of atom to move toward target_pos
+        anchor_pos : np.ndarray
+            Position to anchor the anchor atom
+        target_pos : np.ndarray
+            Target position for mover atom
+        tolerance : float
+            Distance tolerance for convergence
+        max_iter : int
+            Maximum number of iterations
+        folding_weight : float, optional
+            Weight for folding penalty (0 = no penalty, higher = stronger anti-folding bias)
+        backbone_path : List[int], optional
+            Backbone atom indices for folding score calculation
+        
+        Returns
+        -------
+        Atoms
+            Optimized molecule
+        """
         # 1. Pre-translation: pin anchor to anchor_pos
         curr_pos = self.atoms.get_positions()
         shift = np.array(anchor_pos) - curr_pos[anchor_idx]
@@ -131,8 +157,18 @@ class KinematicChainSolver:
 
         for _ in range(max_iter):
             current_error = np.linalg.norm(self.atoms.positions[mover_idx] - target_pos)
-            if current_error < best_error:
-                best_error = current_error
+            
+            # Add folding penalty if requested
+            if folding_weight > 0 and backbone_path is not None:
+                folding_score = _calculate_folding_score(
+                    self.atoms.positions, backbone_path, anchor_idx, mover_idx
+                )
+                total_error = current_error + folding_weight * folding_score
+            else:
+                total_error = current_error
+            
+            if total_error < best_error:
+                best_error = total_error
                 best_atoms = self.atoms.copy()
 
             if current_error < tolerance:
@@ -152,52 +188,45 @@ class KinematicChainSolver:
                 if mover_idx not in moving_indices:
                     continue
 
-                # Geometry
+                # Geometry using clean abstractions
                 pos = self.atoms.get_positions()
                 pivot_loc = pos[pivot]
                 mover_loc = pos[mover_idx]
 
-                axis = pos[child] - pivot_loc
-                axis_len = np.linalg.norm(axis)
-                if axis_len < 1e-3:
+                # Create axis vector using geometry module
+                axis_vec = Vector3D(pos[child] - pivot_loc)
+                if axis_vec.length() < 1e-3:
                     continue
-                axis /= axis_len
+                axis_vec = axis_vec.normalize()
+                axis = axis_vec.coords
 
-                r_cur = mover_loc - pivot_loc
-                r_tar = target_pos - pivot_loc
+                # Current and target vectors relative to pivot
+                r_cur = Vector3D(mover_loc - pivot_loc)
+                r_tar = Vector3D(target_pos - pivot_loc)
 
-                # remove component parallel to axis
-                r_cur_perp = r_cur - np.dot(r_cur, axis) * axis
-                r_tar_perp = r_tar - np.dot(r_tar, axis) * axis
+                # Remove component parallel to axis (project perpendicular)
+                r_cur_perp = r_cur.subtract(axis_vec.multiply(r_cur.dot(axis_vec)))
+                r_tar_perp = r_tar.subtract(axis_vec.multiply(r_tar.dot(axis_vec)))
 
-                norm_cur = np.linalg.norm(r_cur_perp)
-                norm_tar = np.linalg.norm(r_tar_perp)
-                if norm_cur < 1e-2 or norm_tar < 1e-2:
+                if r_cur_perp.length() < 1e-2 or r_tar_perp.length() < 1e-2:
                     continue
 
-                r_cur_perp /= norm_cur
-                r_tar_perp /= norm_tar
+                r_cur_perp = r_cur_perp.normalize()
+                r_tar_perp = r_tar_perp.normalize()
 
-                cross = np.cross(r_cur_perp, r_tar_perp)
-                dot = np.dot(r_cur_perp, r_tar_perp)
-                angle = np.arctan2(np.dot(cross, axis), dot)
+                # Calculate rotation angle
+                cross_vec = r_cur_perp.cross(r_tar_perp)
+                dot_val = r_cur_perp.dot(r_tar_perp)
+                angle = np.arctan2(cross_vec.dot(axis_vec), dot_val)
 
                 if abs(angle) > 1e-4:
-                    angle_deg = np.degrees(angle * 0.5)
+                    # Use half the angle for damping (CCD standard practice)
+                    half_angle = angle * 0.5
+                    
+                    # Use vectorized Rodrigues rotation from geometry module
                     moving_positions = pos[moving_indices]
-                    # translate to pivot origin
-                    moving_centered = moving_positions - pivot_loc
-                    cos_a = np.cos(np.radians(angle_deg))
-                    sin_a = np.sin(np.radians(angle_deg))
-                    dot_products = np.dot(moving_centered, axis)
-                    cross_products = np.cross(axis, moving_centered)
-                    rotated = (
-                        moving_centered * cos_a
-                        + cross_products * sin_a
-                        + axis * dot_products[:, np.newaxis] * (1 - cos_a)
-                    )
-                    new_positions = rotated + pivot_loc
-                    self.atoms.positions[moving_indices] = new_positions
+                    rotated = rodrigues_rotate(moving_positions, axis_vec, half_angle, center=pivot_loc)
+                    self.atoms.positions[moving_indices] = rotated
 
         # use best solution
         self.atoms = best_atoms
@@ -345,26 +374,24 @@ def place_spacer_geometric(molecule: Atoms, p1: np.ndarray, p2: np.ndarray,
     target_len = np.linalg.norm(vec)
     
     if current_len > 1e-6 and target_len > 1e-6:
-        # Normalize vectors
-        current_unit = current_vec / current_len
-        target_unit = vec / target_len
+        # Use geometry module for clean vector operations
+        current_vec_obj = Vector3D(current_vec).normalize()
+        target_vec_obj = Vector3D(vec).normalize()
         
         # Calculate rotation axis and angle
-        cross = np.cross(current_unit, target_unit)
-        dot = np.clip(np.dot(current_unit, target_unit), -1.0, 1.0)
+        cross_vec = current_vec_obj.cross(target_vec_obj)
+        dot = np.clip(current_vec_obj.dot(target_vec_obj), -1.0, 1.0)
         
-        if np.linalg.norm(cross) > 1e-6:
+        if cross_vec.length() > 1e-6:
             # Rotation needed
-            axis = cross / np.linalg.norm(cross)
+            axis = cross_vec.normalize().coords
             angle = np.arccos(dot)
             mol_copy.rotate(np.degrees(angle), v=axis, center=p1)
         elif dot < 0:
-            # Vectors are opposite, rotate 180 degrees around perpendicular axis
-            perp = np.array([1, 0, 0]) if abs(current_unit[0]) < 0.9 else np.array([0, 1, 0])
-            axis = np.cross(current_unit, perp)
-            if np.linalg.norm(axis) > 1e-6:
-                axis = axis / np.linalg.norm(axis)
-                mol_copy.rotate(180, v=axis, center=p1)
+            # Vectors are opposite, rotate 180 degrees
+            # Use Gram-Schmidt to get a robust perpendicular axis
+            perp1, perp2 = gram_schmidt(current_vec_obj)
+            mol_copy.rotate(180, v=perp1.coords, center=p1)
     
     # Final adjustment to align ends to p1 and virtual p2
     final_positions = mol_copy.get_positions()
@@ -409,13 +436,37 @@ def place_spacer_geometric(molecule: Atoms, p1: np.ndarray, p2: np.ndarray,
 
 def place_spacer_with_optimizer(molecule: Atoms, p1: np.ndarray, p2: np.ndarray,
                                 optimizer: str = "KS", cell: Optional[np.ndarray] = None,
-                                target_vector: Optional[np.ndarray] = None) -> Atoms:
-    """Place spacer between p1 and p2. Options: "Off" (geometric only), "KS" (elongate + KS, default)."""
+                                target_vector: Optional[np.ndarray] = None,
+                                existing_structure: Optional[Atoms] = None,
+                                collision_strategy: str = "off") -> Atoms:
+    """Place spacer between p1 and p2. Options: "Off" (geometric only), "KS" (elongate + KS, default).
+
+    Parameters
+    ----------
+    molecule : Atoms
+        Spacer molecule to place
+    p1, p2 : np.ndarray
+        Anchor points for terminal NH3+ groups
+    optimizer : str, default "KS"
+        Optimization method: "Off", "KS", or "UFF"
+    cell : np.ndarray, optional
+        Unit cell for PBC calculations
+    target_vector : np.ndarray, optional
+        Explicit vector from p1 to p2
+    existing_structure : Atoms, optional
+        Existing structure to check for collisions against
+    collision_strategy : str, default "off"
+        Collision resolution strategy: "rotate", "nudge", "optimize", "reject", "off"
+
+    Returns
+    -------
+    Atoms
+        Placed and collision-resolved spacer molecule
+    """
     optimizer = optimizer.upper()
     
     if optimizer == "OFF":
-        return place_spacer_geometric(molecule, p1, p2, cell=cell, target_vector=target_vector)
-        
+        placed = place_spacer_geometric(molecule, p1, p2, cell=cell, target_vector=target_vector)
     else:  # KS or UFF: do elongation if needed, then geometric placement
         from .spacer import _find_terminal_nitrogens
         _, nh3_indices = _find_terminal_nitrogens(molecule)
@@ -434,38 +485,566 @@ def place_spacer_with_optimizer(molecule: Atoms, p1: np.ndarray, p2: np.ndarray,
                                                    target_distance=None)  # None = use default max elongation
 
         # Use geometric placement for all cases (preserves molecular conformation)
-        return place_spacer_geometric(molecule, p1, p2, cell=cell, target_vector=target_vector)
+        placed = place_spacer_geometric(molecule, p1, p2, cell=cell, target_vector=target_vector)
 
-        # Pick the two furthest NH3 groups if > 2
-        positions = elongated.get_positions()
-        if len(nh3_indices) > 2:
-            max_d = -1.0
-            best_pair = (0, 1)
-            nh3_pos = positions[nh3_indices]
-            for i in range(len(nh3_indices)):
-                for j in range(i+1, len(nh3_indices)):
-                    d = np.linalg.norm(nh3_pos[i] - nh3_pos[j])
-                    if d > max_d:
-                        max_d = d
-                        best_pair = (i, j)
-            idx1, idx2 = nh3_indices[best_pair[0]], nh3_indices[best_pair[1]]
-        else:
-            idx1, idx2 = nh3_indices[0], nh3_indices[1]
-
-        aligned_mol = solver.solve(
-            anchor_idx=idx1,
-            mover_idx=idx2,
-            anchor_pos=p1,
-            target_pos=p1 + vec,
-            tolerance=0.1,
-            max_iter=150
+    # Check for and resolve collisions if existing structure provided
+    if existing_structure is not None and collision_strategy != "off":
+        from .collision import resolve_collisions
+        placed, collision_resolved = resolve_collisions(
+            placed, existing_structure, cell=cell, strategy=collision_strategy
         )
-        return aligned_mol
+        if not collision_resolved and collision_strategy == "reject":
+            # Return empty atoms to indicate rejection
+            return Atoms()
+
+    return placed
+
+
+def _get_torsion_angle(positions: np.ndarray, a: int, b: int, c: int, d: int) -> float:
+    """
+    Calculate the torsion (dihedral) angle for atoms a-b-c-d.
+    
+    Parameters
+    ----------
+    positions : np.ndarray
+        Atomic positions
+    a, b, c, d : int
+        Atom indices defining the torsion
+    
+    Returns
+    -------
+    float
+        Torsion angle in degrees (-180 to 180)
+    """
+    # Get positions
+    p_a = positions[a]
+    p_b = positions[b]
+    p_c = positions[c]
+    p_d = positions[d]
+    
+    # Calculate vectors
+    v1 = p_b - p_a
+    v2 = p_c - p_b
+    v3 = p_d - p_c
+    
+    # Calculate normal vectors to the planes
+    n1 = np.cross(v1, v2)
+    n2 = np.cross(v2, v3)
+    
+    # Normalize
+    n1_norm = np.linalg.norm(n1)
+    n2_norm = np.linalg.norm(n2)
+    
+    if n1_norm < 1e-6 or n2_norm < 1e-6:
+        return 0.0  # Degenerate case
+    
+    n1 = n1 / n1_norm
+    n2 = n2 / n2_norm
+    
+    # Calculate angle
+    cos_angle = np.clip(np.dot(n1, n2), -1.0, 1.0)
+    angle = np.arccos(cos_angle)
+    
+    # Determine sign using the cross product
+    cross = np.cross(n1, n2)
+    v2_norm = np.linalg.norm(v2)
+    if v2_norm > 1e-6:
+        sign = np.sign(np.dot(cross, v2 / v2_norm))
+        angle = sign * angle
+    
+    return np.degrees(angle)
+
+
+def _set_torsion_angle(atoms: Atoms, a: int, b: int, c: int, d: int, 
+                       target_angle: float, moving_indices: List[int]) -> Atoms:
+    """
+    Set the torsion angle for atoms a-b-c-d by rotating around the b-c bond.
+    
+    Uses Gram-Schmidt orthogonalization for robust perpendicular axis generation,
+    ensuring reliable torsion angle calculations even in near-degenerate cases.
+    
+    Parameters
+    ----------
+    atoms : Atoms
+        The molecule
+    a, b, c, d : int
+        Atom indices defining the torsion
+    target_angle : float
+        Target torsion angle in degrees
+    moving_indices : List[int]
+        Indices of atoms that should move (typically the 'd' side of the bond)
+    
+    Returns
+    -------
+    Atoms
+        Modified molecule with new torsion angle
+    """
+    result = atoms.copy()
+    positions = result.get_positions()
+    
+    # Get current angle
+    current_angle = _get_torsion_angle(positions, a, b, c, d)
+    
+    # Calculate rotation needed
+    rotation_angle = target_angle - current_angle
+    
+    if abs(rotation_angle) < 0.1:
+        return result  # Already at target
+    
+    # Rotation axis is the b-c bond
+    p_b = positions[b]
+    p_c = positions[c]
+    axis_vec = Vector3D(p_c - p_b)
+    
+    if axis_vec.length() < 1e-6:
+        return result  # Degenerate bond
+    
+    # Generate orthonormal basis using Gram-Schmidt
+    # This ensures robust perpendicular vectors even for axis-aligned bonds
+    perp1, perp2 = gram_schmidt(axis_vec)
+    
+    # Use vectorized Rodrigues rotation from geometry module
+    angle_rad = np.radians(rotation_angle)
+    moving_positions = positions[moving_indices]
+    
+    rotated = rodrigues_rotate(moving_positions, axis_vec, angle_rad, center=p_b)
+    
+    result.positions[moving_indices] = rotated
+    
+    return result
+
+
+def _sequential_unfold(atoms: Atoms, torsion_info: Dict, n1_idx: int, n2_idx: int,
+                      target_distance: float) -> Atoms:
+    """
+    Sequentially unfold the molecule bond-by-bond from anchor toward target.
+    
+    This refines the conformation after CCD by ensuring each segment of the
+    backbone projects "outward" in the direction from N1 to N2.
+    
+    Parameters
+    ----------
+    atoms : Atoms
+        The molecule after CCD optimization
+    torsion_info : dict
+        Backbone and torsion information
+    n1_idx : int
+        Anchor nitrogen index
+    n2_idx : int
+        Target nitrogen index
+    target_distance : float
+        Desired N-N distance
+    
+    Returns
+    -------
+    Atoms
+        Refined molecule with sequential unfolding applied
+    """
+    result = atoms.copy()
+    positions = result.get_positions()
+    
+    backbone_path = torsion_info['backbone_path']
+    torsion_quads = torsion_info['torsion_quads']
+    
+    if len(backbone_path) < 3 or not torsion_quads:
+        return result  # Nothing to unfold
+    
+    # Build connectivity graph
+    from ase.data import covalent_radii
+    from ase.neighborlist import build_neighbor_list
+    
+    G = nx.Graph()
+    G.add_nodes_from(range(len(atoms)))
+    
+    radii = [covalent_radii[z] for z in atoms.numbers]
+    nl = build_neighbor_list(atoms, cutoffs=[r * 1.2 for r in radii], self_interaction=False)
+    
+    for i in range(len(atoms)):
+        neighbors, _ = nl.get_neighbors(i)
+        for j in neighbors:
+            j = int(j)
+            if i < j:
+                G.add_edge(i, j)
+    
+    # Ideal direction: from N1 toward N2
+    n1_pos = positions[n1_idx]
+    n2_pos = positions[n2_idx]
+    ideal_direction = n2_pos - n1_pos
+    ideal_len = np.linalg.norm(ideal_direction)
+    
+    if ideal_len < 1e-6:
+        return result
+    
+    ideal_direction = ideal_direction / ideal_len
+    
+    # Process torsions sequentially along the backbone
+    for torsion_quad in torsion_quads:
+        a, b, c, d = torsion_quad
+        
+        # Determine which side to rotate (away from anchor)
+        if G.has_edge(b, c):
+            G.remove_edge(b, c)
+            
+            component_b = set(nx.node_connected_component(G, b))
+            component_c = set(nx.node_connected_component(G, c))
+            
+            # Rotate the component that doesn't contain the anchor
+            if n1_idx in component_b:
+                moving_indices = list(component_c)
+                pivot_pos = positions[b]
+            else:
+                moving_indices = list(component_b)
+                pivot_pos = positions[c]
+            
+            G.add_edge(b, c)
+            
+            # Calculate center of mass of moving segment
+            moving_positions = positions[moving_indices]
+            moving_com = moving_positions.mean(axis=0)
+            
+            # Vector from pivot to moving COM
+            pivot_to_com = moving_com - pivot_pos
+            pivot_to_com_len = np.linalg.norm(pivot_to_com)
+            
+            if pivot_to_com_len < 1e-6:
+                continue
+            
+            pivot_to_com_unit = pivot_to_com / pivot_to_com_len
+            
+            # Check if moving segment is projecting in the ideal direction
+            projection = np.dot(pivot_to_com_unit, ideal_direction)
+            
+            # Try to improve projection if not optimal
+            if projection < 0.8:  # More aggressive threshold
+                # Try different torsion angles to maximize outward projection
+                current_angle = _get_torsion_angle(positions, a, b, c, d)
+                best_angle = current_angle
+                best_projection = projection
+                
+                # Try angles around trans (180) and gauche (±60, ±120)
+                # Also try intermediate angles for fine-tuning
+                test_angles = [180.0, 60.0, -60.0, 120.0, -120.0, 90.0, -90.0, 150.0, -150.0]
+                
+                for test_angle in test_angles:
+                    test_atoms = _set_torsion_angle(result.copy(), a, b, c, d, 
+                                                    test_angle, moving_indices)
+                    test_positions = test_atoms.get_positions()
+                    test_moving_com = test_positions[moving_indices].mean(axis=0)
+                    test_pivot_to_com = test_moving_com - pivot_pos
+                    test_len = np.linalg.norm(test_pivot_to_com)
+                    
+                    if test_len > 1e-6:
+                        test_projection = np.dot(test_pivot_to_com / test_len, ideal_direction)
+                        
+                        # Prefer projections that extend the molecule
+                        if test_projection > best_projection:
+                            best_projection = test_projection
+                            best_angle = test_angle
+                
+                # Apply best angle if it's a significant improvement
+                if best_projection > projection + 0.1 or abs(best_angle - current_angle) > 10.0:
+                    result = _set_torsion_angle(result, a, b, c, d, best_angle, moving_indices)
+                    positions = result.get_positions()
+    
+    return result
+
+
+def _calculate_folding_score(positions: np.ndarray, backbone_path: List[int], 
+                             n1_idx: int, n2_idx: int) -> float:
+    """
+    Calculate how "folded" the molecule is.
+    
+    Measures:
+    1. Deviation of backbone atoms from the N-N axis
+    2. Atoms projecting inward toward the center (negative progress along axis)
+    
+    Lower score = more extended, higher score = more folded
+    
+    Parameters
+    ----------
+    positions : np.ndarray
+        Atomic positions
+    backbone_path : List[int]
+        Ordered list of backbone atom indices
+    n1_idx : int
+        First nitrogen index
+    n2_idx : int
+        Second nitrogen index
+    
+    Returns
+    -------
+    float
+        Folding score (0 = perfectly extended, higher = more folded)
+    """
+    if len(backbone_path) < 3:
+        return 0.0  # Too short to fold
+    
+    n1_pos = positions[n1_idx]
+    n2_pos = positions[n2_idx]
+    
+    # N-N axis
+    axis = n2_pos - n1_pos
+    axis_len = np.linalg.norm(axis)
+    
+    if axis_len < 1e-6:
+        return 0.0  # Degenerate case
+    
+    axis_unit = axis / axis_len
+    
+    # Calculate perpendicular distances and progress along axis for backbone atoms
+    folding_score = 0.0
+    
+    for idx in backbone_path:
+        if idx == n1_idx or idx == n2_idx:
+            continue  # Skip endpoints
+        
+        pos = positions[idx]
+        rel_pos = pos - n1_pos
+        
+        # Progress along axis (should be between 0 and axis_len for extended molecule)
+        progress = np.dot(rel_pos, axis_unit)
+        
+        # Perpendicular distance from axis
+        proj_on_axis = progress * axis_unit
+        perp_vec = rel_pos - proj_on_axis
+        perp_dist = np.linalg.norm(perp_vec)
+        
+        # Penalty for being far from axis (folding sideways)
+        folding_score += perp_dist ** 2
+        
+        # Penalty for negative progress (folding backwards)
+        if progress < 0:
+            folding_score += abs(progress) * 10.0
+        
+        # Penalty for going past the endpoint (folding forward)
+        if progress > axis_len:
+            folding_score += (progress - axis_len) * 10.0
+    
+    # Normalize by number of backbone atoms
+    if len(backbone_path) > 2:
+        folding_score /= (len(backbone_path) - 2)
+    
+    return folding_score
+
+
+def _set_extended_conformation(atoms: Atoms, torsion_info: Dict, 
+                               n1_idx: int, n2_idx: int) -> Atoms:
+    """
+    Set all rotatable backbone torsions to trans (180 degrees) conformation.
+    
+    This creates an initial extended conformation before CCD refinement,
+    helping to avoid folded local minima.
+    
+    Parameters
+    ----------
+    atoms : Atoms
+        The molecule
+    torsion_info : dict
+        Output from _identify_backbone_and_torsions
+    n1_idx : int
+        Anchor nitrogen index
+    n2_idx : int
+        Target nitrogen index
+    
+    Returns
+    -------
+    Atoms
+        Molecule with extended backbone conformation
+    """
+    result = atoms.copy()
+    
+    if not torsion_info['torsion_quads']:
+        return result  # No rotatable torsions
+    
+    # Build connectivity graph to determine which atoms move with each rotation
+    from ase.data import covalent_radii
+    from ase.neighborlist import build_neighbor_list
+    
+    G = nx.Graph()
+    G.add_nodes_from(range(len(atoms)))
+    
+    radii = [covalent_radii[z] for z in atoms.numbers]
+    nl = build_neighbor_list(atoms, cutoffs=[r * 1.2 for r in radii], self_interaction=False)
+    
+    for i in range(len(atoms)):
+        neighbors, _ = nl.get_neighbors(i)
+        for j in neighbors:
+            j = int(j)
+            if i < j:
+                G.add_edge(i, j)
+    
+    # Process each torsion from anchor (n1) toward target (n2)
+    backbone_path = torsion_info['backbone_path']
+    
+    for torsion_quad in torsion_info['torsion_quads']:
+        a, b, c, d = torsion_quad
+        
+        # Determine which side of the bond to rotate
+        # We want to rotate the side away from the anchor
+        if G.has_edge(b, c):
+            G.remove_edge(b, c)
+            
+            # Find which component contains the anchor
+            component_b = set(nx.node_connected_component(G, b))
+            component_c = set(nx.node_connected_component(G, c))
+            
+            # Rotate the component that doesn't contain the anchor
+            if n1_idx in component_b:
+                moving_indices = list(component_c)
+            else:
+                moving_indices = list(component_b)
+            
+            G.add_edge(b, c)
+            
+            # Set torsion to 180 degrees (trans)
+            result = _set_torsion_angle(result, a, b, c, d, 180.0, moving_indices)
+    
+    return result
+
+
+def _identify_backbone_and_torsions(atoms: Atoms, n1_idx: int, n2_idx: int, 
+                                    rigid_bonds: Set[Tuple[int, int]]) -> Dict:
+    """
+    Identify the backbone path between two NH3+ groups and classify bonds.
+    
+    Parameters
+    ----------
+    atoms : Atoms
+        The molecule
+    n1_idx : int
+        Index of first NH3+ nitrogen
+    n2_idx : int
+        Index of second NH3+ nitrogen
+    rigid_bonds : Set[Tuple[int, int]]
+        Set of rigid bonds (rings, double bonds)
+    
+    Returns
+    -------
+    dict
+        - backbone_path: ordered list of atom indices from N1 to N2
+        - backbone_bonds: list of (i, j) tuples along the backbone
+        - rotatable_bonds: backbone bonds that can rotate (not in rings, not double bonds)
+        - torsion_quads: list of (a, b, c, d) for each rotatable bond defining torsion angle
+    """
+    # Build connectivity graph (should already exist in KinematicChainSolver, but rebuild here)
+    from ase.data import covalent_radii
+    from ase.neighborlist import build_neighbor_list
+    
+    G = nx.Graph()
+    G.add_nodes_from(range(len(atoms)))
+    
+    radii = [covalent_radii[z] for z in atoms.numbers]
+    nl = build_neighbor_list(atoms, cutoffs=[r * 1.2 for r in radii], self_interaction=False)
+    
+    for i in range(len(atoms)):
+        neighbors, _ = nl.get_neighbors(i)
+        for j in neighbors:
+            j = int(j)
+            if i < j:
+                G.add_edge(i, j)
+    
+    # Find shortest path between N1 and N2
+    try:
+        backbone_path = nx.shortest_path(G, source=n1_idx, target=n2_idx)
+    except nx.NetworkXNoPath:
+        return {
+            'backbone_path': [],
+            'backbone_bonds': [],
+            'rotatable_bonds': [],
+            'torsion_quads': []
+        }
+    
+    # Extract backbone bonds
+    backbone_bonds = []
+    for i in range(len(backbone_path) - 1):
+        bond = tuple(sorted((backbone_path[i], backbone_path[i+1])))
+        backbone_bonds.append(bond)
+    
+    # Identify rotatable bonds (not rigid, not terminal)
+    rotatable_bonds = []
+    for bond in backbone_bonds:
+        if bond not in rigid_bonds and (bond[1], bond[0]) not in rigid_bonds:
+            rotatable_bonds.append(bond)
+    
+    # Build torsion quads for each rotatable bond
+    # A torsion is defined by 4 atoms: a-b-c-d where b-c is the rotatable bond
+    torsion_quads = []
+    symbols = atoms.get_chemical_symbols()
+    
+    for bond in rotatable_bonds:
+        b, c = bond  # Central bond atoms
+        
+        # Find atom 'a' connected to 'b' (prefer backbone, avoid 'c')
+        neighbors_b = list(G.neighbors(b))
+        a = None
+        for neighbor in neighbors_b:
+            if neighbor != c:
+                # Prefer backbone atoms
+                if neighbor in backbone_path:
+                    a = neighbor
+                    break
+        if a is None:
+            # No backbone neighbor, take any non-c neighbor
+            for neighbor in neighbors_b:
+                if neighbor != c:
+                    a = neighbor
+                    break
+        
+        # Find atom 'd' connected to 'c' (prefer backbone, avoid 'b')
+        neighbors_c = list(G.neighbors(c))
+        d = None
+        for neighbor in neighbors_c:
+            if neighbor != b:
+                # Prefer backbone atoms
+                if neighbor in backbone_path:
+                    d = neighbor
+                    break
+        if d is None:
+            # No backbone neighbor, take any non-b neighbor
+            for neighbor in neighbors_c:
+                if neighbor != b:
+                    d = neighbor
+                    break
+        
+        # Only add if we found all 4 atoms
+        if a is not None and d is not None:
+            torsion_quads.append((a, b, c, d))
+    
+    return {
+        'backbone_path': backbone_path,
+        'backbone_bonds': backbone_bonds,
+        'rotatable_bonds': rotatable_bonds,
+        'torsion_quads': torsion_quads
+    }
 
 
 def _elongate_single_molecule(molecule: str | Atoms, step_size: float = 0.5,
                               max_iterations: int = 100, target_distance: Optional[float] = None) -> Atoms:
-    """Elongate molecule towards target N-N distance using kinematic solver."""
+    """
+    Elongate molecule towards target N-N distance using multi-phase unfolding.
+    
+    Phases:
+    1. Identify backbone and rotatable torsions
+    2. Set extended (trans) conformation
+    3. Use outward-biased CCD to reach target distance
+    4. Apply sequential refinement to ensure straightness
+    
+    Parameters
+    ----------
+    molecule : str | Atoms
+        SMILES string or Atoms object to elongate
+    step_size : float
+        Step size for iterative elongation (deprecated, kept for compatibility)
+    max_iterations : int
+        Maximum iterations for CCD solver
+    target_distance : float, optional
+        Target N-N distance. If None, maximizes elongation.
+    
+    Returns
+    -------
+    Atoms
+        Elongated molecule with extended conformation
+    """
     # Convert SMILES to Atoms if needed
     if isinstance(molecule, str):
         from .molecule_builder import smiles_to_ase_atoms
@@ -473,186 +1052,119 @@ def _elongate_single_molecule(molecule: str | Atoms, step_size: float = 0.5,
     else:
         mol_atoms = molecule.copy()
 
-    # Find terminal NH3+ groups (using our enhanced detection)
+    # Find terminal NH3+ groups
     from .spacer import _find_terminal_nitrogens
     _, nh3_indices = _find_terminal_nitrogens(mol_atoms)
 
     if len(nh3_indices) < 2:
-        # Not enough NH3+ groups to elongate
-        return mol_atoms
+        return mol_atoms  # Not enough NH3+ groups to elongate
 
     # Get initial positions and current distance
     positions = mol_atoms.get_positions()
-    n1_pos = positions[nh3_indices[0]]
-    n2_pos = positions[nh3_indices[1]]
+    n1_idx = nh3_indices[0]
+    n2_idx = nh3_indices[1]
+    n1_pos = positions[n1_idx]
+    n2_pos = positions[n2_idx]
     current_distance = np.linalg.norm(n2_pos - n1_pos)
 
-    # Unit vector along N-N axis
-    direction = (n2_pos - n1_pos) / current_distance
-
-    # Helper function to check if molecule is straight along N-N axis
-    def is_molecule_straight(positions, n1_idx, n2_idx, axis_vec, mol_atoms):
-        """Check if molecule is oriented correctly along the N-N axis."""
-        n1_pos = positions[n1_idx]
-        n2_pos = positions[n2_idx]
-
-        # Get all atom positions relative to N1
-        rel_pos = positions - n1_pos
-
-        # Project onto the N-N axis
-        proj_scalars = np.dot(rel_pos, axis_vec)
-
-        # Check that N2 is further along the axis than N1 (basic sanity check)
-        n1_proj = proj_scalars[n1_idx]
-        n2_proj = proj_scalars[n2_idx]
-
-        if n2_proj <= n1_proj:
-            return False  # N2 should be further along the axis than N1
-
-        # Check perpendicular distances from axis - should be reasonable
-        axis_length = np.linalg.norm(axis_vec)
-        if axis_length < 1e-6:
-            return False
-
-        # Project positions onto axis
-        axis_unit = axis_vec / axis_length
-        proj_vecs = proj_scalars[:, np.newaxis] * axis_unit
-        orth_vecs = rel_pos - proj_vecs
-        distances_from_axis = np.linalg.norm(orth_vecs, axis=1)
-
-        # For a straight molecule, most atoms should be close to the axis
-        # Allow some tolerance for molecular structure
-        max_distance = np.max(distances_from_axis)
-        return max_distance <= 2.0  # 2Å tolerance for molecular width
-
-    # If no target distance provided, use the old maximum elongation behavior
+    # Determine target distance
     if target_distance is None:
-        target_distance = current_distance * 2.5  # Old behavior: maximize
+        target_distance = current_distance * 2.5  # Maximize elongation
     else:
-        # Ensure target is reasonable (not less than current distance)
         target_distance = max(target_distance, current_distance)
 
-    # Initialize best result tracking
-    best_atoms = mol_atoms.copy()
-    best_distance = current_distance
-    best_distance_error = abs(current_distance - target_distance)
-
-    # Check if the initial molecule is reasonably oriented
-    initial_positions = mol_atoms.get_positions()
-    initial_axis_vec = direction
-    initial_is_straight = is_molecule_straight(initial_positions, nh3_indices[0], nh3_indices[1], initial_axis_vec, mol_atoms)
-
-    # If initial molecule is straight, keep it as candidate
-    if initial_is_straight:
-        best_distance_error = abs(current_distance - target_distance)
+    # PHASE 1: Identify backbone and torsions
+    solver_init = KinematicChainSolver(mol_atoms)
+    torsion_info = _identify_backbone_and_torsions(
+        mol_atoms, n1_idx, n2_idx, solver_init.rigid_bonds
+    )
+    
+    if not torsion_info['backbone_path']:
+        return mol_atoms  # No path found
+    
+    # PHASE 2: Set extended conformation (all torsions to trans)
+    extended_mol = _set_extended_conformation(mol_atoms, torsion_info, n1_idx, n2_idx)
+    
+    # Update positions after extension
+    positions = extended_mol.get_positions()
+    n1_pos = positions[n1_idx]
+    n2_pos = positions[n2_idx]
+    extended_distance = np.linalg.norm(n2_pos - n1_pos)
+    
+    # If extended conformation is already better than original, use it as starting point
+    if extended_distance > current_distance * 1.05:
+        current_distance = extended_distance
     else:
-        # Initial molecule is not straight, mark it as invalid to force improvement
-        best_distance_error = float('inf')
-
-    # Adaptive step size: start large, get smaller near target
-    current_step = max(1.0, min(step_size * 4, target_distance - current_distance))  # Start with large steps
-    min_step = 0.05  # Minimum step size for fine tuning
-
-    consecutive_failures = 0
-    max_consecutive_failures = 5
-
-    # Elongation loop: try to reach the target distance
-    current_target_dist = current_distance
-    iteration = 0
-
-    while iteration < max_iterations and current_step >= min_step:
-        # Adapt step size based on distance to target
-        dist_to_target = abs(current_target_dist - target_distance)
-
-        if dist_to_target < 2.0:  # Close to target, use small steps
-            current_step = max(min_step, current_step * 0.5)
-        elif consecutive_failures > 0:  # Having trouble, reduce step size
-            current_step = max(min_step, current_step * 0.5)
-        elif dist_to_target > 5.0:  # Far from target, can use larger steps
-            current_step = min(2.0, current_step * 1.2)
-
-        # Determine next target distance
-        if current_target_dist < target_distance:
-            next_target_dist = min(target_distance, current_target_dist + current_step)
-        else:
-            # We're past target, reduce towards target
-            next_target_dist = max(target_distance, current_target_dist - current_step)
-
-        # Skip if we're not making progress
-        if abs(next_target_dist - current_target_dist) < min_step * 0.5:
-            break
-
-        current_target_dist = next_target_dist
-
-        # Target position for second NH3+ along the axis
-        target_pos = n1_pos + direction * current_target_dist
-
-        # Use kinematic solver
-        solver = KinematicChainSolver(mol_atoms.copy())
-        solver_max_iter = 100 if current_step > 0.2 else 150  # More iterations for small steps
-
+        # Extended conformation didn't help much, keep original
+        extended_mol = mol_atoms.copy()
+        positions = extended_mol.get_positions()
+        n1_pos = positions[n1_idx]
+        n2_pos = positions[n2_idx]
+    
+    direction = (n2_pos - n1_pos) / max(current_distance, 1e-6)
+    
+    # PHASE 3: Outward-biased CCD elongation
+    best_atoms = extended_mol.copy()
+    best_distance = current_distance
+    best_folding_score = _calculate_folding_score(
+        extended_mol.get_positions(), torsion_info['backbone_path'], n1_idx, n2_idx
+    )
+    
+    # Iterative elongation with folding penalty
+    num_attempts = min(max_iterations // 20, 10)  # Multiple attempts with different targets
+    
+    for attempt in range(num_attempts):
+        # Gradually increase target distance
+        intermediate_target = current_distance + (target_distance - current_distance) * (attempt + 1) / num_attempts
+        target_pos = n1_pos + direction * intermediate_target
+        
+        # Use CCD with folding penalty
+        solver = KinematicChainSolver(extended_mol.copy())
         elongated = solver.solve(
-            anchor_idx=nh3_indices[0],
-            mover_idx=nh3_indices[1],
+            anchor_idx=n1_idx,
+            mover_idx=n2_idx,
             anchor_pos=n1_pos,
             target_pos=target_pos,
-            tolerance=0.1,  # Tighter tolerance for target-directed elongation
-            max_iter=solver_max_iter
+            tolerance=0.1,
+            max_iter=max_iterations // num_attempts,
+            folding_weight=0.5,  # Moderate anti-folding bias
+            backbone_path=torsion_info['backbone_path']
         )
-
-        # Check result
+        
+        # Evaluate result
         final_positions = elongated.get_positions()
-        final_distance = np.linalg.norm(final_positions[nh3_indices[1]] - final_positions[nh3_indices[0]])
-        distance_error = abs(final_distance - current_target_dist)
-
-        iteration += 1
-
-        if distance_error < 0.3:  # Distance success (within tolerance)
-            # Also check if molecule is reasonably straight
-            axis_vec = (final_positions[nh3_indices[1]] - final_positions[nh3_indices[0]]) / final_distance
-            if is_molecule_straight(final_positions, nh3_indices[0], nh3_indices[1], axis_vec, mol_atoms):
-                # Update best result if this is closer to target
-                target_error = abs(final_distance - target_distance)
-                if target_error < best_distance_error:
-                    best_atoms = elongated
-                    best_distance = final_distance
-                    best_distance_error = target_error
-
-                consecutive_failures = 0
-            else:
-                # Molecule is folded, treat as failure to encourage longer distances
-                consecutive_failures += 1
-        else:
-            consecutive_failures += 1
-
-        # Stop if too many consecutive failures
-        if consecutive_failures >= max_consecutive_failures:
-            break
-
-    # Final refinement: try to get even closer to target with smaller tolerance
-    if best_distance_error > 0.1 and best_distance > current_distance + 0.1:
-        final_target_pos = n1_pos + direction * (target_distance if target_distance > best_distance else best_distance)
-        final_solver = KinematicChainSolver(best_atoms.copy())
-        final_attempt = final_solver.solve(
-            anchor_idx=nh3_indices[0],
-            mover_idx=nh3_indices[1],
-            anchor_pos=n1_pos,
-            target_pos=final_target_pos,
-            tolerance=0.05,  # Very tight tolerance for final refinement
-            max_iter=200
+        final_distance = np.linalg.norm(final_positions[n2_idx] - final_positions[n1_idx])
+        final_folding_score = _calculate_folding_score(
+            final_positions, torsion_info['backbone_path'], n1_idx, n2_idx
         )
-
-        final_positions = final_attempt.get_positions()
-        final_distance = np.linalg.norm(final_positions[nh3_indices[1]] - final_positions[nh3_indices[0]])
-        final_error = abs(final_distance - target_distance)
-
-        # Check if final attempt is both close to target and straight
-        axis_vec = (final_positions[nh3_indices[1]] - final_positions[nh3_indices[0]]) / final_distance
-        if final_error < best_distance_error and is_molecule_straight(final_positions, nh3_indices[0], nh3_indices[1], axis_vec, mol_atoms):
-            best_atoms = final_attempt
+        
+        # Keep if better (longer and less folded)
+        if final_distance > best_distance and final_folding_score <= best_folding_score * 1.2:
+            best_atoms = elongated
             best_distance = final_distance
-            best_distance_error = final_error
-
+            best_folding_score = final_folding_score
+            extended_mol = elongated  # Use as starting point for next iteration
+            
+            # Update direction
+            positions = extended_mol.get_positions()
+            n1_pos = positions[n1_idx]
+            n2_pos = positions[n2_idx]
+            direction = (n2_pos - n1_pos) / max(np.linalg.norm(n2_pos - n1_pos), 1e-6)
+    
+    # PHASE 4: Sequential refinement to unfold any remaining kinks
+    refined_mol = _sequential_unfold(best_atoms, torsion_info, n1_idx, n2_idx, target_distance)
+    
+    # Check if refinement improved the result
+    refined_positions = refined_mol.get_positions()
+    refined_distance = np.linalg.norm(refined_positions[n2_idx] - refined_positions[n1_idx])
+    refined_folding_score = _calculate_folding_score(
+        refined_positions, torsion_info['backbone_path'], n1_idx, n2_idx
+    )
+    
+    # Use refined version if it's better or comparable
+    if refined_folding_score < best_folding_score * 0.9 or refined_distance > best_distance * 1.05:
+        best_atoms = refined_mol
+    
     # Wrap atoms back into the unit cell before returning
     if hasattr(best_atoms, 'wrap'):
         best_atoms.wrap()

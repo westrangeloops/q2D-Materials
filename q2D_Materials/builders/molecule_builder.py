@@ -1118,3 +1118,157 @@ def find_molecule_patterns(structure: Atoms, pattern: Atoms,
 
     return matches
 
+
+def align_molecule_plane(molecule: Atoms, target_plane: str, cell_vectors: np.ndarray) -> Atoms:
+    """
+    Align the molecule's best-fit plane to a target lattice plane.
+
+    The molecule's plane is defined as the plane containing the N-N axis and
+    the majority of the atoms. This plane is rotated around the N-N axis to
+    align with the target lattice plane.
+
+    Parameters
+    ----------
+    molecule : Atoms
+        The molecule to align
+    target_plane : str
+        Target lattice plane:
+        - "A": Align to plane normal to BC (parallel to A vector, contains B and C)
+        - "B": Align to plane normal to AC (parallel to B vector, contains A and C)
+    cell_vectors : np.ndarray
+        Unit cell vectors (3x3 matrix) with shape (3, 3)
+
+    Returns
+    -------
+    Atoms
+        Aligned molecule
+
+    Raises
+    ------
+    ValueError
+        If target_plane is not "A" or "B", or if cell_vectors is invalid
+    """
+    from .spacer import calculate_best_plane_normal
+
+    if target_plane not in ["A", "B"]:
+        raise ValueError(f"target_plane must be 'A' or 'B', got '{target_plane}'")
+
+    if cell_vectors.shape != (3, 3):
+        raise ValueError(f"cell_vectors must have shape (3, 3), got {cell_vectors.shape}")
+
+    aligned_molecule = molecule.copy()
+
+    # Calculate current molecule plane normal
+    current_normal = calculate_best_plane_normal(aligned_molecule)
+
+    if current_normal is None:
+        # No defined plane (e.g., linear molecule), return as-is
+        return aligned_molecule
+
+    # Determine target normal based on lattice vectors
+    # Normalize cell vectors
+    a_vec = cell_vectors[0] / np.linalg.norm(cell_vectors[0])
+    b_vec = cell_vectors[1] / np.linalg.norm(cell_vectors[1])
+    c_vec = cell_vectors[2] / np.linalg.norm(cell_vectors[2])
+
+    if target_plane == "A":
+        # Target plane contains B and C vectors, so normal is parallel to A
+        target_normal = a_vec
+    else:  # target_plane == "B"
+        # Target plane contains A and C vectors, so normal is parallel to B
+        target_normal = b_vec
+
+    # Check if already aligned (within tolerance)
+    cos_angle = np.abs(np.dot(current_normal, target_normal))
+    if cos_angle > 0.999:  # Within ~2 degrees
+        return aligned_molecule
+
+    # Find rotation axis: the N-N axis for the molecule
+    from .spacer import _find_terminal_nitrogens
+    _, nh3_indices = _find_terminal_nitrogens(aligned_molecule)
+
+    positions = aligned_molecule.get_positions()
+
+    if len(nh3_indices) >= 2:
+        # Double spacer: axis is between two NH3+ groups
+        p1 = positions[nh3_indices[0]]
+        p2 = positions[nh3_indices[1]]
+    elif len(nh3_indices) == 1:
+        # Mono spacer: axis is from NH3+ to center of mass
+        p1 = positions[nh3_indices[0]]
+        p2 = aligned_molecule.get_center_of_mass()
+    else:
+        # No NH3+ groups found, use molecule's principal axis
+        # Simple fallback: use first and last atoms
+        p1 = positions[0]
+        p2 = positions[-1] if len(positions) > 1 else aligned_molecule.get_center_of_mass()
+
+    rotation_axis = p2 - p1
+    axis_length = np.linalg.norm(rotation_axis)
+
+    if axis_length < 1e-6:
+        # Degenerate axis, can't rotate
+        return aligned_molecule
+
+    rotation_axis = rotation_axis / axis_length
+
+    # Compute rotation matrix to align current_normal to target_normal around rotation_axis
+    # This is a rotation in the plane perpendicular to rotation_axis
+
+    # Project both normals onto the plane perpendicular to rotation_axis
+    current_normal_proj = current_normal - np.dot(current_normal, rotation_axis) * rotation_axis
+    target_normal_proj = target_normal - np.dot(target_normal, rotation_axis) * rotation_axis
+
+    current_norm_proj = np.linalg.norm(current_normal_proj)
+    target_norm_proj = np.linalg.norm(target_normal_proj)
+
+    if current_norm_proj < 1e-6 or target_norm_proj < 1e-6:
+        # One or both normals are parallel to rotation axis, can't rotate
+        return aligned_molecule
+
+    current_normal_proj = current_normal_proj / current_norm_proj
+    target_normal_proj = target_normal_proj / target_norm_proj
+
+    # Calculate rotation angle between projected normals
+    cos_theta = np.dot(current_normal_proj, target_normal_proj)
+    cos_theta = np.clip(cos_theta, -1.0, 1.0)
+
+    # Check if the projected vectors are parallel or anti-parallel
+    if np.abs(cos_theta) > 0.999:
+        # Already aligned in the plane, no rotation needed
+        return aligned_molecule
+
+    # Calculate cross product to determine rotation direction
+    cross = np.cross(current_normal_proj, target_normal_proj)
+    sin_theta = np.dot(cross, rotation_axis)  # Component along rotation axis
+
+    theta = np.arctan2(sin_theta, cos_theta)
+
+    # Apply rotation around rotation_axis by angle theta
+    # Use rotation matrix construction
+    axis = rotation_axis
+    cos_t = np.cos(theta)
+    sin_t = np.sin(theta)
+    one_minus_cos = 1 - cos_t
+
+    # Rodrigues' rotation formula
+    rotation_matrix = np.array([
+        [cos_t + axis[0]**2 * one_minus_cos,
+         axis[0]*axis[1]*one_minus_cos - axis[2]*sin_t,
+         axis[0]*axis[2]*one_minus_cos + axis[1]*sin_t],
+        [axis[1]*axis[0]*one_minus_cos + axis[2]*sin_t,
+         cos_t + axis[1]**2 * one_minus_cos,
+         axis[1]*axis[2]*one_minus_cos - axis[0]*sin_t],
+        [axis[2]*axis[0]*one_minus_cos - axis[1]*sin_t,
+         axis[2]*axis[1]*one_minus_cos + axis[0]*sin_t,
+         cos_t + axis[2]**2 * one_minus_cos]
+    ])
+
+    # Apply rotation to all atomic positions around center of mass
+    com = aligned_molecule.get_center_of_mass()
+    positions_centered = positions - com
+    rotated_positions = np.dot(positions_centered, rotation_matrix.T)
+    aligned_molecule.set_positions(rotated_positions + com)
+
+    return aligned_molecule
+

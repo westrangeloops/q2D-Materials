@@ -1,0 +1,1487 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Structure Analyzer - q2D Materials</title>
+    <link rel="stylesheet" href="http://localhost:8000/static/theme.css">
+
+    <script>
+    // Apply theme immediately before anything else loads
+    (function() {
+        const currentTheme = localStorage.getItem('theme');
+        if (currentTheme === 'dark') {
+            document.documentElement.setAttribute('data-theme', 'dark');
+        } else if (currentTheme === 'light') {
+            document.documentElement.removeAttribute('data-theme');
+        }
+    })();
+    </script>
+
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+
+    <style>
+        /* --- Analyzer Specific Styles --- */
+        #app { display: flex; width: 100%; height: 100%; gap: 0; }
+
+        .sidebar {
+            width: 360px;
+            background: var(--bg-panel);
+            border-right: 1px solid rgba(255,255,255,0.05);
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            padding: 25px;
+            gap: 20px;
+            flex-shrink: 0;
+            z-index: 10;
+            box-shadow: 5px 0 20px rgba(0,0,0,0.1);
+        }
+
+        .main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 25px;
+            overflow: hidden;
+            position: relative;
+            background: var(--gradient-main);
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-shrink: 0;
+            padding: 0 5px;
+        }
+
+        .workstation {
+            display: flex;
+            gap: 25px;
+            flex: 1;
+            min-height: 0;
+        }
+
+        .panel {
+            flex: 1;
+            min-height: 0;
+            max-height: 100%;
+        }
+
+        .tree-canvas-container {
+            width: 100%;
+            height: 100%;
+            background: var(--bg-canvas);
+            border-radius: var(--radius-lg);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        #treeCanvas {
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+            touch-action: none;
+        }
+
+        .hierarchy-container {
+            width: 100%;
+            height: 100%;
+            background: var(--bg-canvas);
+            border-radius: var(--radius-lg);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .info-panel {
+            width: 400px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .info-card {
+            background: var(--bg-input);
+            border-radius: var(--radius-md);
+            padding: 15px;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .info-card h4 {
+            margin: 0 0 10px 0;
+            color: var(--accent);
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.03);
+            font-size: 0.85rem;
+        }
+
+        .info-row:last-child {
+            border-bottom: none;
+        }
+
+        .info-label {
+            color: var(--fg-secondary);
+            font-weight: 500;
+        }
+
+        .info-value {
+            color: var(--fg-primary);
+            font-weight: 600;
+            font-family: monospace;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: var(--radius-pill);
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .badge-bulk { background: rgba(131, 211, 220, 0.2); color: var(--accent); }
+        .badge-dj { background: rgba(245, 177, 2, 0.2); color: var(--warning); }
+        .badge-rp { background: rgba(143, 38, 171, 0.2); color: var(--danger); }
+        .badge-monolayer { background: rgba(73, 173, 182, 0.2); color: var(--success); }
+
+        .atom-list {
+            max-height: 300px;
+            overflow-y: auto;
+            margin-top: 10px;
+        }
+
+        .atom-item {
+            background: rgba(255,255,255,0.03);
+            padding: 8px 12px;
+            border-radius: var(--radius-sm);
+            margin-bottom: 6px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.8rem;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+
+        .atom-item:hover {
+            background: rgba(255,255,255,0.08);
+            transform: translateX(3px);
+        }
+
+        .atom-symbol {
+            font-weight: 700;
+            font-family: monospace;
+        }
+
+        .upload-area {
+            border: 2px dashed var(--accent);
+            border-radius: var(--radius-lg);
+            padding: 40px;
+            text-align: center;
+            background: rgba(131, 211, 220, 0.05);
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .upload-area:hover {
+            background: rgba(131, 211, 220, 0.1);
+            border-color: var(--accent-hover);
+        }
+
+        .upload-area.dragover {
+            background: rgba(131, 211, 220, 0.2);
+            border-color: var(--accent-hover);
+            transform: scale(1.02);
+        }
+
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: var(--fg-secondary);
+            text-align: center;
+            padding: 40px;
+        }
+
+        .empty-state-icon {
+            font-size: 4rem;
+            margin-bottom: 20px;
+            opacity: 0.5;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .stat-box {
+            background: rgba(255,255,255,0.03);
+            padding: 12px;
+            border-radius: var(--radius-sm);
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--accent);
+            display: block;
+        }
+
+        .stat-label {
+            font-size: 0.75rem;
+            color: var(--fg-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-top: 4px;
+        }
+
+        .legend {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 6px 10px;
+            background: rgba(255,255,255,0.03);
+            border-radius: var(--radius-sm);
+            font-size: 0.85rem;
+        }
+
+        .legend-color {
+            width: 16px;
+            height: 16px;
+            border-radius: 4px;
+            flex-shrink: 0;
+        }
+
+        h2 { font-size: 1.2rem; font-weight: 700; color: var(--fg-primary); margin: 0; }
+        h3 { font-size: 0.9rem; font-weight: 600; color: var(--fg-secondary); text-transform: uppercase; letter-spacing: 1px; margin: 10px 0; }
+    </style>
+</head>
+<body>
+
+<div id="app">
+    <div class="sidebar">
+        <div @click="goToIndex" style="display:flex; align-items:center; gap:10px; margin-bottom: 10px; cursor:pointer; padding:10px; border-radius:var(--radius-md); transition:all 0.2s; background:transparent;"
+             @mouseover="$event.currentTarget.style.background='rgba(131, 211, 220, 0.1)'; $event.currentTarget.style.transform='translateX(-2px)'"
+             @mouseout="$event.currentTarget.style.background='transparent'; $event.currentTarget.style.transform='translateX(0)'">
+            <object type="image/svg+xml" data="/Logos/logo_q2D_materials.svg" width="200" height="60" style="pointer-events: none;"></object>
+        </div>
+
+        <div style="display:flex; align-items:center; justify-content:center; margin-bottom: 15px; padding: 10px; background: rgba(255,255,255,0.03); border-radius: var(--radius-md);">
+            <h2 style="color:var(--fg-primary); letter-spacing:-0.5px; margin:0; font-size:1.1rem;">Structure<span style="color:var(--accent);">Analyzer</span></h2>
+        </div>
+
+        <div v-if="!graphData">
+            <input type="file" @change="handleFileUpload" accept=".json" style="display:none;" ref="fileInput">
+            <div class="upload-area" @click="$refs.fileInput.click()"
+                 @dragover.prevent="isDragging = true"
+                 @dragleave="isDragging = false"
+                 @drop.prevent="handleFileDrop"
+                 :class="{ dragover: isDragging }">
+                <div style="font-size: 3rem; margin-bottom: 15px;">📊</div>
+                <h3 style="margin: 0 0 10px 0; color: var(--fg-primary);">Load Structure Data</h3>
+                <p style="color: var(--fg-secondary); font-size: 0.85rem; margin: 0;">
+                    Drop JSON file here or click to browse
+                </p>
+            </div>
+
+            <div style="margin-top: 20px; padding: 15px; background: rgba(131, 211, 220, 0.1); border-radius: var(--radius-md); border-left: 3px solid var(--accent);">
+                <h4 style="margin: 0 0 10px 0; color: var(--accent); font-size: 0.9rem;">💡 How to use</h4>
+                <ol style="margin: 0; padding-left: 20px; color: var(--fg-secondary); font-size: 0.85rem; line-height: 1.6;">
+                    <li>Analyze your structure with q2D_analyzer</li>
+                    <li>Call analyzer.export_graph_data('file.json')</li>
+                    <li>Load the JSON file here</li>
+                    <li>Explore the interactive graph</li>
+                </ol>
+            </div>
+        </div>
+
+        <template v-if="graphData">
+            <div class="info-card">
+                <h4>📋 Structure Info</h4>
+                <div class="info-row">
+                    <span class="info-label">Name</span>
+                    <span class="info-value">{{ metadata.experiment_name }}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Type</span>
+                    <span class="badge" :class="`badge-${metadata.structure_type}`">
+                        {{ metadata.structure_type }}
+                    </span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Formula</span>
+                    <span class="info-value">{{ metadata.formula }}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Total Atoms</span>
+                    <span class="info-value">{{ metadata.total_atoms }}</span>
+                </div>
+            </div>
+
+            <div class="info-card">
+                <h4>📊 Statistics</h4>
+                <div class="stats-grid">
+                    <div class="stat-box">
+                        <span class="stat-value">{{ metadata.octahedra_count }}</span>
+                        <span class="stat-label">Octahedra</span>
+                    </div>
+                    <div class="stat-box">
+                        <span class="stat-value">{{ metadata.layers_count }}</span>
+                        <span class="stat-label">Layers</span>
+                    </div>
+                    <div class="stat-box">
+                        <span class="stat-value">{{ metadata.spacers_count }}</span>
+                        <span class="stat-label">Spacers</span>
+                    </div>
+                    <div class="stat-box">
+                        <span class="stat-value">{{ metadata.a_sites_count }}</span>
+                        <span class="stat-label">A-sites</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="info-card" v-if="selectedNode">
+                <h4>🔍 Selected Node</h4>
+                <div class="info-row">
+                    <span class="info-label">Type</span>
+                    <span class="info-value">{{ selectedNode.type }}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Label</span>
+                    <span class="info-value">{{ selectedNode.label }}</span>
+                </div>
+                <template v-if="selectedNode.type === 'octahedron'">
+                    <div class="info-row">
+                        <span class="info-label">B-Element</span>
+                        <span class="info-value">{{ selectedNode.b_element }}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Terminal Atoms</span>
+                        <span class="info-value">{{ selectedNode.terminal_atoms.length }}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Interlayer Atoms</span>
+                        <span class="info-value">{{ selectedNode.interlayer_atoms.length }}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Intralayer Atoms</span>
+                        <span class="info-value">{{ selectedNode.intralayer_atoms.length }}</span>
+                    </div>
+                </template>
+                <template v-else-if="selectedNode.type === 'layer'">
+                    <div class="info-row">
+                        <span class="info-label">Position</span>
+                        <span class="info-value">{{ selectedNode.position }}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Octahedra Count</span>
+                        <span class="info-value">{{ selectedNode.octahedra_count }}</span>
+                    </div>
+                </template>
+            </div>
+
+            <div class="info-card">
+                <h4>🎨 Legend</h4>
+                <div class="legend">
+                    <div class="legend-item">
+                        <div class="legend-color" style="background-color: #8be9fd;"></div>
+                        <span>Octahedra (BX₆ units)</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background-color: #ff79c6;"></div>
+                        <span>Layers</span>
+                    </div>
+                </div>
+            </div>
+
+            <button class="danger full-width" @click="clearData" style="margin-top: 10px;">
+                🗑️ Clear Data
+            </button>
+        </template>
+    </div>
+
+    <div class="main">
+        <div class="header">
+            <h2 v-if="graphData">{{ metadata.experiment_name }} - Graph Visualization</h2>
+            <h2 v-else>Structure Analyzer</h2>
+
+            <div v-if="graphData" style="display:flex; gap:10px;">
+                <button @click="resetView" class="primary">
+                    🔄 Reset View
+                </button>
+                <button @click="fitTree" class="primary">
+                    🔍 Fit to Screen
+                </button>
+                <button @click="expandAllNodes" class="primary">
+                    ➕ Expand All
+                </button>
+                <button @click="collapseAllNodes" class="primary">
+                    ➖ Collapse All
+                </button>
+            </div>
+        </div>
+
+        <div class="workstation">
+            <div class="panel">
+                <div class="panel-header">
+                    <span>🕸️ Interactive Network Graph</span>
+                    <span v-if="graphData" style="margin-left:auto; font-size:0.8em; opacity:0.5;">
+                        Click nodes to expand hierarchy • Scroll to Zoom • Drag to Pan
+                    </span>
+                </div>
+                <div class="panel-content" style="padding: 0;">
+                    <div v-if="!graphData" class="empty-state">
+                        <div class="empty-state-icon">📊</div>
+                        <h3 style="color: var(--fg-primary); margin: 0 0 10px 0;">No Data Loaded</h3>
+                        <p style="max-width: 400px;">
+                            Load a structure analysis JSON file to visualize the graph network.
+                            Use the upload panel on the left to get started.
+                        </p>
+                    </div>
+                    <div v-else class="tree-canvas-container">
+                        <canvas id="treeCanvas" ref="treeCanvas" 
+                                @click="handleTreeClick"
+                                @mousemove="handleTreeMouseMove"
+                                @mousedown="handleTreeMouseDown"
+                                @mouseup="handleTreeMouseUp"
+                                @mouseleave="handleTreeMouseUp"
+                                @wheel.prevent="handleTreeWheel"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const { createApp, ref, onMounted, onUnmounted, watch, computed, nextTick } = Vue;
+
+createApp({
+    setup() {
+        const graphData = ref(null);
+        const metadata = ref(null);
+        const selectedNode = ref(null);
+        const treeCanvas = ref(null);
+        const isDragging = ref(false);
+        const fileInput = ref(null);
+        
+        // Tree visualization state
+        const expandedNodes = ref(new Set());
+        const allNodes = ref(new Map()); // id -> node data
+        const allEdges = ref([]);
+        const nodeHierarchy = ref(new Map()); // id -> {children: [], parent: id}
+        const nodePositions = ref(new Map()); // id -> {x, y, angle, radius}
+        
+        // Canvas transform state
+        const canvasOffset = ref({ x: 0, y: 0 });
+        const canvasZoom = ref(1.0);
+        const dragStart = ref({ x: 0, y: 0 });
+        const hoveredNode = ref(null);
+
+        const goToIndex = () => {
+            window.location.href = '/';
+        };
+
+        const handleFileUpload = async (event) => {
+            const file = event.target.files[0];
+            if (!file) return;
+            await loadFile(file);
+        };
+
+        const handleFileDrop = async (event) => {
+            isDragging.value = false;
+            const file = event.dataTransfer.files[0];
+            if (!file) return;
+            await loadFile(file);
+        };
+
+        const loadFile = async (file) => {
+            try {
+                const text = await file.text();
+                const data = JSON.parse(text);
+
+                if (!data.metadata || !data.nodes || !data.edges) {
+                    alert('Invalid graph data format. Please ensure the JSON file was exported from q2D_analyzer.');
+                    return;
+                }
+
+                graphData.value = data;
+                metadata.value = data.metadata;
+
+                await nextTick();
+                buildExpandableNetwork();
+                initTree();
+            } catch (error) {
+                console.error('Error loading file:', error);
+                alert('Error loading file. Please check the console for details.');
+            }
+        };
+
+        const buildExpandableNetwork = () => {
+            if (!graphData.value) return;
+
+            allNodes.value.clear();
+            allEdges.value = [];
+            nodeHierarchy.value.clear();
+            expandedNodes.value.clear();
+
+            // Node ID counter for new nodes
+            let nextId = Math.max(...graphData.value.nodes.map(n => n.id), -1) + 1;
+
+            // 1. Create Cell node (root)
+            const cellId = 'cell';
+            allNodes.value.set(cellId, {
+                id: cellId,
+                label: 'Cell',
+                type: 'cell',
+                level: 0,
+                color: '#83D3DC',
+                shape: 'ellipse',
+                size: 30,
+                _nodeData: { type: 'cell', metadata: metadata.value }
+            });
+            nodeHierarchy.value.set(cellId, { children: [], parent: null });
+
+            // 2. Create Layer nodes and connect to Cell
+            const layerNodes = new Map();
+            graphData.value.nodes.forEach(node => {
+                if (node.type === 'layer') {
+                    const layerId = `layer_${node.id}`;
+                    allNodes.value.set(layerId, {
+                        id: layerId,
+                        label: node.label,
+                        type: 'layer',
+                        level: 1,
+                        color: '#ff79c6',
+                        shape: 'ellipse',
+                        size: 25,
+                        _nodeData: node
+                    });
+                    layerNodes.set(node.id, layerId);
+                    nodeHierarchy.value.set(layerId, { children: [], parent: cellId });
+                    nodeHierarchy.value.get(cellId).children.push(layerId);
+                    allEdges.value.push({ from: cellId, to: layerId, type: 'contains' });
+                }
+            });
+
+            // 3. Create Octahedra nodes and connect to Layers
+            const octahedraNodes = new Map();
+            graphData.value.nodes.forEach(node => {
+                if (node.type === 'octahedron') {
+                    const octId = `oct_${node.id}`;
+                    allNodes.value.set(octId, {
+                        id: octId,
+                        label: node.label,
+                        type: 'octahedron',
+                        level: 2,
+                        color: node.color || '#8be9fd',
+                        shape: 'box',
+                        size: 20,
+                        _nodeData: node
+                    });
+                    octahedraNodes.set(node.id, octId);
+                    nodeHierarchy.value.set(octId, { children: [], parent: null });
+
+                    // Find parent layer via edges
+                    const layerEdge = graphData.value.edges.find(e => 
+                        (e.from === node.id && graphData.value.nodes.find(n => n.id === e.to && n.type === 'layer')) ||
+                        (e.to === node.id && graphData.value.nodes.find(n => n.id === e.from && n.type === 'layer'))
+                    );
+                    
+                    if (layerEdge) {
+                        const layerId = layerEdge.from === node.id ? layerEdge.to : layerEdge.from;
+                        const parentLayerId = layerNodes.get(layerId);
+                        if (parentLayerId) {
+                            nodeHierarchy.value.get(octId).parent = parentLayerId;
+                            nodeHierarchy.value.get(parentLayerId).children.push(octId);
+                            allEdges.value.push({ from: parentLayerId, to: octId, type: 'contains' });
+                        }
+                    }
+                }
+            });
+
+            // 4. Create Atom nodes and connect to Octahedra (hidden by default)
+            graphData.value.atoms.forEach(atom => {
+                const atomId = `atom_${atom.index}`;
+                allNodes.value.set(atomId, {
+                    id: atomId,
+                    label: `${atom.symbol}${atom.index}`,
+                    type: 'atom',
+                    level: 3,
+                    color: '#50fa7b',
+                    shape: 'dot',
+                    size: 15,
+                    hidden: true, // Hidden until parent is expanded
+                    _nodeData: atom
+                });
+                nodeHierarchy.value.set(atomId, { children: [], parent: null });
+
+                // Find which octahedra contain this atom
+                graphData.value.nodes.forEach(node => {
+                    if (node.type === 'octahedron') {
+                        const allAtoms = [
+                            ...(node.terminal_atoms || []),
+                            ...(node.interlayer_atoms || []),
+                            ...(node.intralayer_atoms || [])
+                        ];
+                        if (node.central_atom_index !== null && node.central_atom_index !== undefined) {
+                            allAtoms.push(node.central_atom_index);
+                        }
+                        
+                        if (allAtoms.includes(atom.index)) {
+                            const parentOctId = octahedraNodes.get(node.id);
+                            if (parentOctId) {
+                                nodeHierarchy.value.get(atomId).parent = parentOctId;
+                                nodeHierarchy.value.get(parentOctId).children.push(atomId);
+                            }
+                        }
+                    }
+                });
+            });
+
+            // 5. Create Spacer/Molecule nodes and connect to Cell
+            // First, deduplicate spacers by grouping by their atom indices
+            if (graphData.value.spacers && graphData.value.spacers.length > 0) {
+                const spacerGroups = new Map();
+                const usedAtomIndices = new Set();
+                
+                // Group spacers by their original_indices to detect duplicates
+                graphData.value.spacers.forEach((spacer, idx) => {
+                    const indices = spacer.original_indices || [];
+                    if (indices.length === 0) return; // Skip spacers with no indices
+                    
+                    // Check if any atoms are already used in another spacer
+                    const hasOverlap = indices.some(idx => usedAtomIndices.has(idx));
+                    if (hasOverlap) {
+                        // This spacer shares atoms with another - skip it (it's likely a duplicate)
+                        return;
+                    }
+                    
+                    // Create a key from sorted indices
+                    const key = indices.slice().sort((a, b) => a - b).join(',');
+                    
+                    // Only keep the spacer with more atoms if there's a duplicate
+                    if (!spacerGroups.has(key) || (spacerGroups.get(key).atom_count || 0) < (spacer.atom_count || indices.length)) {
+                        spacerGroups.set(key, {
+                            ...spacer,
+                            original_indices: indices,
+                            atom_count: spacer.atom_count || indices.length
+                        });
+                        // Mark these atoms as used
+                        indices.forEach(idx => usedAtomIndices.add(idx));
+                    }
+                });
+                
+                // Create nodes only for unique spacers
+                let spacerIdx = 0;
+                spacerGroups.forEach((spacer, key) => {
+                    const spacerId = `spacer_${spacerIdx}`;
+                    let formula = spacer.formula || 'Spacer';
+                    if (!formula && typeof spacer === 'object' && spacer.get_chemical_formula) {
+                        formula = spacer.get_chemical_formula({mode: 'hill'});
+                    }
+                    
+                    allNodes.value.set(spacerId, {
+                        id: spacerId,
+                        label: `Spacer: ${formula}`,
+                        type: 'molecule',
+                        level: 1,
+                        color: '#ffb86c',
+                        shape: 'ellipse',
+                        size: 25,
+                        _nodeData: spacer
+                    });
+                    nodeHierarchy.value.set(spacerId, { children: [], parent: cellId });
+                    nodeHierarchy.value.get(cellId).children.push(spacerId);
+                    allEdges.value.push({ from: cellId, to: spacerId, type: 'contains' });
+                    
+                    // Create atom children for this spacer
+                    const spacerAtomIndices = spacer.original_indices || [];
+                    spacerAtomIndices.forEach(atomIndex => {
+                        // Create a unique atom node ID for this spacer's atoms
+                        // Use a prefix to avoid conflicts with octahedra atoms
+                        const spacerAtomId = `spacer_${spacerIdx}_atom_${atomIndex}`;
+                        const atomData = graphData.value.atoms.find(a => a.index === atomIndex);
+                        
+                        if (atomData) {
+                            // Create atom node for this spacer
+                            const spacerAtomNode = {
+                                id: spacerAtomId,
+                                label: `${atomData.symbol}${atomIndex}`,
+                                type: 'atom',
+                                level: 2,
+                                color: '#50fa7b',
+                                shape: 'dot',
+                                size: 15,
+                                hidden: true, // Hidden until parent spacer is expanded
+                                _nodeData: atomData
+                            };
+                            
+                            allNodes.value.set(spacerAtomId, spacerAtomNode);
+                            nodeHierarchy.value.set(spacerAtomId, { children: [], parent: spacerId });
+                            nodeHierarchy.value.get(spacerId).children.push(spacerAtomId);
+                            allEdges.value.push({ from: spacerId, to: spacerAtomId, type: 'contains' });
+                        }
+                    });
+                    
+                    spacerIdx++;
+                });
+            }
+
+            // 6. Create A-site nodes and connect to Cell
+            if (graphData.value.a_sites && graphData.value.a_sites.length > 0) {
+                graphData.value.a_sites.forEach((aSite, idx) => {
+                    const aSiteId = `a_site_${idx}`;
+                    const formula = aSite.formula || aSite.symbol || 'A-site';
+                    allNodes.value.set(aSiteId, {
+                        id: aSiteId,
+                        label: `A-site: ${formula}`,
+                        type: 'molecule',
+                        level: 1,
+                        color: '#ffb86c',
+                        shape: 'ellipse',
+                        size: 25,
+                        _nodeData: aSite
+                    });
+                    nodeHierarchy.value.set(aSiteId, { children: [], parent: cellId });
+                    nodeHierarchy.value.get(cellId).children.push(aSiteId);
+                    allEdges.value.push({ from: cellId, to: aSiteId, type: 'contains' });
+                });
+            }
+
+            // Expand Cell by default to show top level
+            expandedNodes.value.add(cellId);
+        };
+
+        const getVisibleNodes = () => {
+            const visible = [];
+            const visited = new Set();
+
+            const addNode = (nodeId) => {
+                if (visited.has(nodeId)) return;
+                visited.add(nodeId);
+                
+                const node = allNodes.value.get(nodeId);
+                if (!node) return;
+
+                const hierarchy = nodeHierarchy.value.get(nodeId);
+                
+                // Show node if:
+                // 1. It's not hidden (like Cell, Layers, Octahedra), OR
+                // 2. It's hidden but its parent is expanded (like Atoms)
+                const shouldShow = !node.hidden || (hierarchy && hierarchy.parent && expandedNodes.value.has(hierarchy.parent));
+                
+                if (shouldShow) {
+                    visible.push({
+                        id: node.id,
+                        label: node.label,
+                        title: getNodeTooltip(node._nodeData),
+                        color: {
+                            background: node.color,
+                            border: '#f8f8f2',
+                            highlight: {
+                                background: node.color,
+                                border: '#83D3DC'
+                            }
+                        },
+                        shape: node.shape,
+                        size: node.size,
+                        font: {
+                            color: '#f8f8f2',
+                            size: 14,
+                            face: 'Arial'
+                        },
+                        _nodeData: node._nodeData,
+                        _hierarchy: hierarchy
+                    });
+
+                    // If expanded, recursively show children
+                    if (expandedNodes.value.has(nodeId) && hierarchy && hierarchy.children && hierarchy.children.length > 0) {
+                        hierarchy.children.forEach(childId => addNode(childId));
+                    }
+                }
+            };
+
+            // Start from Cell
+            addNode('cell');
+            return visible;
+        };
+
+        // Initialize tree canvas
+        const initTree = () => {
+            if (!treeCanvas.value || !graphData.value) return;
+            
+            const canvas = treeCanvas.value;
+            const rect = canvas.getBoundingClientRect();
+            canvas.width = rect.width;
+            canvas.height = rect.height;
+            
+            calculateNodePositions();
+            drawRadialTree();
+        };
+        
+        // Calculate positions for all nodes in radial layout
+        const calculateNodePositions = () => {
+            if (!graphData.value) return;
+            
+            nodePositions.value.clear();
+            const centerX = 0;
+            const centerY = 0;
+            
+            // Cell at center
+            nodePositions.value.set('cell', { x: centerX, y: centerY, angle: 0, radius: 0 });
+            
+            // Get visible nodes
+            const visibleNodes = getVisibleNodes();
+            const cellNode = visibleNodes.find(n => n.id === 'cell');
+            if (!cellNode) return;
+            
+            // Group nodes by level and parent
+            const layers = visibleNodes.filter(n => {
+                const node = allNodes.value.get(n.id);
+                return node && node.type === 'layer';
+            });
+            
+            const molecules = visibleNodes.filter(n => {
+                const node = allNodes.value.get(n.id);
+                return node && node.type === 'molecule';
+            });
+            
+            // Position layers in a circle around Cell
+            const layerRadius = 150;
+            layers.forEach((layer, idx) => {
+                const angle = (idx / layers.length) * Math.PI * 2;
+                nodePositions.value.set(layer.id, {
+                    x: centerX + Math.cos(angle) * layerRadius,
+                    y: centerY + Math.sin(angle) * layerRadius,
+                    angle: angle,
+                    radius: layerRadius
+                });
+            });
+            
+            // Position molecules in a circle around Cell (alternating with layers)
+            const moleculeRadius = 150;
+            const moleculeStartAngle = layers.length > 0 ? (Math.PI / layers.length) : 0;
+            molecules.forEach((mol, idx) => {
+                const angle = moleculeStartAngle + (idx / molecules.length) * Math.PI * 2;
+                nodePositions.value.set(mol.id, {
+                    x: centerX + Math.cos(angle) * moleculeRadius,
+                    y: centerY + Math.sin(angle) * moleculeRadius,
+                    angle: angle,
+                    radius: moleculeRadius
+                });
+            });
+            
+            // Position octahedra around their parent layers
+            visibleNodes.forEach(node => {
+                const nodeData = allNodes.value.get(node.id);
+                if (nodeData && nodeData.type === 'octahedron') {
+                    const hierarchy = nodeHierarchy.value.get(node.id);
+                    if (hierarchy && hierarchy.parent) {
+                        const parentPos = nodePositions.value.get(hierarchy.parent);
+                        if (parentPos) {
+                            const parentChildren = nodeHierarchy.value.get(hierarchy.parent)?.children || [];
+                            const octahedraInLayer = parentChildren.filter(childId => {
+                                const child = allNodes.value.get(childId);
+                                return child && child.type === 'octahedron';
+                            });
+                            const octIdx = octahedraInLayer.indexOf(node.id);
+                            const octRadius = 100;
+                            const octAngle = parentPos.angle + (octIdx / octahedraInLayer.length) * Math.PI * 0.5 - Math.PI * 0.25;
+                            nodePositions.value.set(node.id, {
+                                x: parentPos.x + Math.cos(octAngle) * octRadius,
+                                y: parentPos.y + Math.sin(octAngle) * octRadius,
+                                angle: octAngle,
+                                radius: octRadius
+                            });
+                        }
+                    }
+                }
+            });
+            
+            // Position atoms around their parent octahedra
+            visibleNodes.forEach(node => {
+                const nodeData = allNodes.value.get(node.id);
+                if (nodeData && nodeData.type === 'atom') {
+                    const hierarchy = nodeHierarchy.value.get(node.id);
+                    if (hierarchy && hierarchy.parent) {
+                        const parentPos = nodePositions.value.get(hierarchy.parent);
+                        if (parentPos) {
+                            const parentChildren = nodeHierarchy.value.get(hierarchy.parent)?.children || [];
+                            const atomsInOct = parentChildren.filter(childId => {
+                                const child = allNodes.value.get(childId);
+                                return child && child.type === 'atom';
+                            });
+                            const atomIdx = atomsInOct.indexOf(node.id);
+                            const atomRadius = 50;
+                            const atomAngle = parentPos.angle + (atomIdx / atomsInOct.length) * Math.PI * 2;
+                            nodePositions.value.set(node.id, {
+                                x: parentPos.x + Math.cos(atomAngle) * atomRadius,
+                                y: parentPos.y + Math.sin(atomAngle) * atomRadius,
+                                angle: atomAngle,
+                                radius: atomRadius
+                            });
+                        }
+                    }
+                }
+            });
+        };
+
+        const getNodeTooltip = (node) => {
+            if (node.type === 'octahedron') {
+                return `
+                    <div style="padding: 10px;">
+                        <strong>Octahedron: ${node.label}</strong><br>
+                        B-site: ${node.b_element}<br>
+                        Central atom: ${node.central_atom_index}<br>
+                        Terminal atoms: ${node.terminal_atoms.length}<br>
+                        Interlayer atoms: ${node.interlayer_atoms.length}<br>
+                        Intralayer atoms: ${node.intralayer_atoms.length}
+                    </div>
+                `;
+            } else {
+                return `
+                    <div style="padding: 10px;">
+                        <strong>Layer: ${node.layer_id}</strong><br>
+                        Position: ${node.position}<br>
+                        Octahedra count: ${node.octahedra_count}
+                    </div>
+                `;
+            }
+        };
+
+        // Identify interlayer atoms (atoms shared between layers)
+        const identifyInterlayerAtoms = () => {
+            const interlayerAtoms = new Map(); // atomIndex -> {layers: [], octahedra: []}
+            
+            // Get all visible nodes
+            const visibleNodes = getVisibleNodes();
+            
+            // Find all atoms and their parent octahedra
+            visibleNodes.forEach(node => {
+                const nodeData = allNodes.value.get(node.id);
+                if (nodeData && nodeData.type === 'atom') {
+                    const hierarchy = nodeHierarchy.value.get(node.id);
+                    if (hierarchy && hierarchy.parent) {
+                        const parentOct = allNodes.value.get(hierarchy.parent);
+                        if (parentOct && parentOct.type === 'octahedron') {
+                            const octHierarchy = nodeHierarchy.value.get(hierarchy.parent);
+                            if (octHierarchy && octHierarchy.parent) {
+                                const parentLayer = allNodes.value.get(octHierarchy.parent);
+                                if (parentLayer && parentLayer.type === 'layer') {
+                                    const atomIndex = nodeData._nodeData.index;
+                                    if (!interlayerAtoms.has(atomIndex)) {
+                                        interlayerAtoms.set(atomIndex, { layers: new Set(), octahedra: new Set() });
+                                    }
+                                    interlayerAtoms.get(atomIndex).layers.add(octHierarchy.parent);
+                                    interlayerAtoms.get(atomIndex).octahedra.add(hierarchy.parent);
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+            
+            // Filter to only atoms that appear in multiple layers
+            const trueInterlayer = new Map();
+            interlayerAtoms.forEach((data, atomIndex) => {
+                if (data.layers.size > 1) {
+                    trueInterlayer.set(atomIndex, {
+                        layers: Array.from(data.layers),
+                        octahedra: Array.from(data.octahedra)
+                    });
+                }
+            });
+            
+            return trueInterlayer;
+        };
+        
+        // Draw the radial tree
+        const drawRadialTree = () => {
+            if (!treeCanvas.value || !graphData.value) return;
+            
+            const canvas = treeCanvas.value;
+            const ctx = canvas.getContext('2d');
+            const width = canvas.width;
+            const height = canvas.height;
+            
+            // Clear canvas
+            const bgColor = getComputedStyle(document.documentElement).getPropertyValue('--bg-canvas').trim() || '#282a36';
+            ctx.fillStyle = bgColor;
+            ctx.fillRect(0, 0, width, height);
+            
+            // Apply transformations
+            ctx.save();
+            ctx.translate(width / 2 + canvasOffset.value.x, height / 2 + canvasOffset.value.y);
+            ctx.scale(canvasZoom.value, canvasZoom.value);
+            
+            // Get visible nodes
+            const visibleNodes = getVisibleNodes();
+            const interlayerAtoms = identifyInterlayerAtoms();
+            
+            // Draw connections first (so nodes appear on top)
+            visibleNodes.forEach(node => {
+                const hierarchy = nodeHierarchy.value.get(node.id);
+                if (hierarchy && hierarchy.parent) {
+                    const parentPos = nodePositions.value.get(hierarchy.parent);
+                    const nodePos = nodePositions.value.get(node.id);
+                    if (parentPos && nodePos) {
+                        drawConnection(ctx, parentPos, nodePos, node);
+                    }
+                }
+            });
+            
+            // Draw interlayer atoms at branch overlaps (between layers)
+            interlayerAtoms.forEach((data, atomIndex) => {
+                if (data.layers.length >= 2) {
+                    const layerPositions = data.layers.map(layerId => nodePositions.value.get(layerId)).filter(p => p);
+                    if (layerPositions.length >= 2) {
+                        // Calculate position at the overlap point between layers
+                        // Use the midpoint, but adjust towards the center to show it's between layers
+                        const centerX = 0;
+                        const centerY = 0;
+                        const midX = layerPositions.reduce((sum, p) => sum + p.x, 0) / layerPositions.length;
+                        const midY = layerPositions.reduce((sum, p) => sum + p.y, 0) / layerPositions.length;
+                        
+                        // Position closer to center, at about 75% of the way from center to midpoint
+                        const overlapX = centerX + (midX - centerX) * 0.75;
+                        const overlapY = centerY + (midY - centerY) * 0.75;
+                        
+                        // Find the atom node (might be in multiple octahedra, use first one)
+                        const atomNode = visibleNodes.find(n => {
+                            const nodeData = allNodes.value.get(n.id);
+                            return nodeData && nodeData._nodeData && nodeData._nodeData.index === atomIndex;
+                        });
+                        
+                        if (atomNode) {
+                            const atomPos = { x: overlapX, y: overlapY, angle: 0, radius: 0 };
+                            // Use a special ID for interlayer atoms to avoid conflicts
+                            const interlayerAtomId = `interlayer_atom_${atomIndex}`;
+                            nodePositions.value.set(interlayerAtomId, atomPos);
+                            
+                            // Draw connections to all parent octahedra with dashed lines
+                            data.octahedra.forEach(octId => {
+                                const octPos = nodePositions.value.get(octId);
+                                if (octPos) {
+                                    drawConnection(ctx, octPos, atomPos, atomNode, true);
+                                }
+                            });
+                            
+                            // Draw interlayer atom node with special styling
+                            drawNode(ctx, atomPos, { ...atomNode, id: interlayerAtomId }, true);
+                        }
+                    }
+                }
+            });
+            
+            // Draw all visible nodes (excluding interlayer atoms which are drawn separately)
+            visibleNodes.forEach(node => {
+                const pos = nodePositions.value.get(node.id);
+                const nodeData = allNodes.value.get(node.id);
+                // Skip if this is an interlayer atom (they're drawn separately at overlaps)
+                if (pos && nodeData && nodeData._nodeData && !interlayerAtoms.has(nodeData._nodeData.index)) {
+                    drawNode(ctx, pos, node);
+                }
+            });
+            
+            ctx.restore();
+        };
+        
+        // Draw a connection line between two nodes
+        const drawConnection = (ctx, fromPos, toPos, toNode, isInterlayer = false) => {
+            ctx.save();
+            
+            // Create gradient for connection
+            const gradient = ctx.createLinearGradient(fromPos.x, fromPos.y, toPos.x, toPos.y);
+            
+            if (isInterlayer) {
+                gradient.addColorStop(0, '#f1fa8c');
+                gradient.addColorStop(1, '#ffb86c');
+                ctx.strokeStyle = gradient;
+                ctx.lineWidth = 2.5;
+                ctx.setLineDash([5, 5]);
+            } else {
+                gradient.addColorStop(0, '#6272a4');
+                gradient.addColorStop(1, '#44475a');
+                ctx.strokeStyle = gradient;
+                ctx.lineWidth = 1.5;
+                ctx.setLineDash([]);
+            }
+            
+            ctx.globalAlpha = 0.6;
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.2)';
+            ctx.shadowBlur = 3;
+            ctx.beginPath();
+            ctx.moveTo(fromPos.x, fromPos.y);
+            ctx.lineTo(toPos.x, toPos.y);
+            ctx.stroke();
+            
+            ctx.restore();
+        };
+        
+        // Draw a node
+        const drawNode = (ctx, pos, node, isInterlayer = false) => {
+            const nodeData = allNodes.value.get(node.id);
+            if (!nodeData) return;
+            
+            const hierarchy = nodeHierarchy.value.get(node.id);
+            const hasChildren = hierarchy && hierarchy.children && hierarchy.children.length > 0;
+            const isExpanded = expandedNodes.value.has(node.id);
+            const isSelected = selectedNode.value && (
+                (selectedNode.value.id !== undefined && selectedNode.value.id === node._nodeData?.id) ||
+                (selectedNode.value.index !== undefined && selectedNode.value.index === node._nodeData?.index) ||
+                (selectedNode.value === node._nodeData)
+            );
+            const isHovered = hoveredNode.value === node.id;
+            
+            ctx.save();
+            
+            // Node colors
+            let nodeColor = nodeData.color || '#6272a4';
+            if (isInterlayer) {
+                nodeColor = '#f1fa8c';
+            }
+            
+            // Draw shadow
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
+            ctx.shadowBlur = isSelected || isHovered ? 15 : 8;
+            ctx.shadowOffsetX = 2;
+            ctx.shadowOffsetY = 2;
+            
+            // Draw node shape with gradient
+            const size = nodeData.size || 20;
+            
+            // Create gradient for node
+            let gradient;
+            if (nodeData.shape === 'box' || nodeData.type === 'octahedron') {
+                gradient = ctx.createLinearGradient(pos.x - size/2, pos.y - size/2, pos.x + size/2, pos.y + size/2);
+            } else {
+                gradient = ctx.createRadialGradient(pos.x, pos.y, 0, pos.x, pos.y, size / 2);
+            }
+            
+            const baseColor = nodeColor;
+            gradient.addColorStop(0, baseColor + 'FF');
+            gradient.addColorStop(1, baseColor + 'AA');
+            
+            if (nodeData.shape === 'box' || nodeData.type === 'octahedron') {
+                // Draw rounded rectangle with gradient
+                const radius = 4;
+                ctx.fillStyle = isSelected || isHovered ? gradient : baseColor + 'CC';
+                ctx.strokeStyle = isSelected ? '#83D3DC' : baseColor;
+                ctx.lineWidth = isSelected ? 3 : 2;
+                roundRect(ctx, pos.x - size/2, pos.y - size/2, size, size, radius);
+                ctx.fill();
+                ctx.stroke();
+            } else if (nodeData.shape === 'dot' || nodeData.type === 'atom') {
+                // Draw circle with gradient
+                ctx.fillStyle = isSelected || isHovered ? gradient : baseColor + 'CC';
+                ctx.strokeStyle = isSelected ? '#83D3DC' : baseColor;
+                ctx.lineWidth = isSelected ? 3 : 2;
+                ctx.beginPath();
+                ctx.arc(pos.x, pos.y, size / 2, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+            } else {
+                // Draw ellipse with gradient
+                ctx.fillStyle = isSelected || isHovered ? gradient : baseColor + 'CC';
+                ctx.strokeStyle = isSelected ? '#83D3DC' : baseColor;
+                ctx.lineWidth = isSelected ? 3 : 2;
+                ctx.beginPath();
+                ctx.ellipse(pos.x, pos.y, size / 2, size / 2.5, 0, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+            }
+            
+            ctx.shadowBlur = 0;
+            
+            // Draw expand/collapse indicator
+            if (hasChildren) {
+                ctx.fillStyle = '#f8f8f2';
+                ctx.font = 'bold 12px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(isExpanded ? '−' : '+', pos.x, pos.y - size - 8);
+            }
+            
+            // Draw label
+            ctx.fillStyle = '#f8f8f2';
+            ctx.font = '12px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'top';
+            const label = nodeData.label || node.label || 'Node';
+            ctx.fillText(label, pos.x, pos.y + size / 2 + 4);
+            
+            ctx.restore();
+        };
+        
+        // Helper function for rounded rectangles
+        const roundRect = (ctx, x, y, width, height, radius) => {
+            ctx.beginPath();
+            ctx.moveTo(x + radius, y);
+            ctx.lineTo(x + width - radius, y);
+            ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+            ctx.lineTo(x + width, y + height - radius);
+            ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+            ctx.lineTo(x + radius, y + height);
+            ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+            ctx.lineTo(x, y + radius);
+            ctx.quadraticCurveTo(x, y, x + radius, y);
+            ctx.closePath();
+        };
+        
+        const resetView = () => {
+            canvasOffset.value = { x: 0, y: 0 };
+            canvasZoom.value = 1.0;
+            calculateNodePositions();
+            drawRadialTree();
+        };
+        
+        const fitTree = () => {
+            // Calculate bounding box of all visible nodes
+            const visibleNodes = getVisibleNodes();
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            
+            visibleNodes.forEach(node => {
+                const pos = nodePositions.value.get(node.id);
+                if (pos) {
+                    minX = Math.min(minX, pos.x);
+                    minY = Math.min(minY, pos.y);
+                    maxX = Math.max(maxX, pos.x);
+                    maxY = Math.max(maxY, pos.y);
+                }
+            });
+            
+            if (minX !== Infinity) {
+                const canvas = treeCanvas.value;
+                const width = canvas.width;
+                const height = canvas.height;
+                
+                const treeWidth = maxX - minX;
+                const treeHeight = maxY - minY;
+                const centerX = (minX + maxX) / 2;
+                const centerY = (minY + maxY) / 2;
+                
+                const scaleX = (width * 0.8) / treeWidth;
+                const scaleY = (height * 0.8) / treeHeight;
+                canvasZoom.value = Math.min(scaleX, scaleY, 1.0);
+                
+                canvasOffset.value = {
+                    x: -centerX * canvasZoom.value,
+                    y: -centerY * canvasZoom.value
+                };
+                
+                calculateNodePositions();
+                drawRadialTree();
+            }
+        };
+
+        const expandAllNodes = () => {
+            allNodes.value.forEach((node, nodeId) => {
+                const hierarchy = nodeHierarchy.value.get(nodeId);
+                if (hierarchy && hierarchy.children.length > 0) {
+                    expandedNodes.value.add(nodeId);
+                }
+            });
+            calculateNodePositions();
+            drawRadialTree();
+        };
+
+        const collapseAllNodes = () => {
+            expandedNodes.value.clear();
+            expandedNodes.value.add('cell'); // Keep Cell expanded
+            calculateNodePositions();
+            drawRadialTree();
+        };
+
+        // Tree interaction handlers
+        const handleTreeClick = (event) => {
+            if (!treeCanvas.value || !graphData.value) return;
+            
+            const canvas = treeCanvas.value;
+            const rect = canvas.getBoundingClientRect();
+            const x = (event.clientX - rect.left - canvasOffset.value.x - canvas.width / 2) / canvasZoom.value;
+            const y = (event.clientY - rect.top - canvasOffset.value.y - canvas.height / 2) / canvasZoom.value;
+            
+            // Find clicked node
+            const visibleNodes = getVisibleNodes();
+            let clickedNode = null;
+            let minDist = Infinity;
+            
+            visibleNodes.forEach(node => {
+                const pos = nodePositions.value.get(node.id);
+                if (pos) {
+                    const nodeData = allNodes.value.get(node.id);
+                    const size = nodeData ? nodeData.size || 20 : 20;
+                    const dist = Math.sqrt((x - pos.x) ** 2 + (y - pos.y) ** 2);
+                    if (dist < size && dist < minDist) {
+                        minDist = dist;
+                        clickedNode = node;
+                    }
+                }
+            });
+            
+            if (clickedNode) {
+                const hierarchy = nodeHierarchy.value.get(clickedNode.id);
+                if (hierarchy && hierarchy.children && hierarchy.children.length > 0) {
+                    // Toggle expansion
+                    if (expandedNodes.value.has(clickedNode.id)) {
+                        expandedNodes.value.delete(clickedNode.id);
+                    } else {
+                        expandedNodes.value.add(clickedNode.id);
+                    }
+                    calculateNodePositions();
+                    drawRadialTree();
+                }
+                
+                const nodeData = allNodes.value.get(clickedNode.id);
+                if (nodeData) {
+                    selectedNode.value = nodeData._nodeData;
+                }
+            } else {
+                selectedNode.value = null;
+            }
+        };
+        
+        const handleTreeMouseDown = (event) => {
+            isDragging.value = true;
+            dragStart.value = {
+                x: event.clientX - canvasOffset.value.x,
+                y: event.clientY - canvasOffset.value.y
+            };
+        };
+        
+        const handleTreeMouseUp = () => {
+            isDragging.value = false;
+        };
+        
+        const handleTreeMouseMove = (event) => {
+            if (isDragging.value) {
+                canvasOffset.value = {
+                    x: event.clientX - dragStart.value.x,
+                    y: event.clientY - dragStart.value.y
+                };
+                drawRadialTree();
+            } else {
+                // Check for hover
+                if (!treeCanvas.value || !graphData.value) return;
+                
+                const canvas = treeCanvas.value;
+                const rect = canvas.getBoundingClientRect();
+                const x = (event.clientX - rect.left - canvasOffset.value.x - canvas.width / 2) / canvasZoom.value;
+                const y = (event.clientY - rect.top - canvasOffset.value.y - canvas.height / 2) / canvasZoom.value;
+                
+                const visibleNodes = getVisibleNodes();
+                let hovered = null;
+                let minDist = Infinity;
+                
+                visibleNodes.forEach(node => {
+                    const pos = nodePositions.value.get(node.id);
+                    if (pos) {
+                        const nodeData = allNodes.value.get(node.id);
+                        const size = nodeData ? nodeData.size || 20 : 20;
+                        const dist = Math.sqrt((x - pos.x) ** 2 + (y - pos.y) ** 2);
+                        if (dist < size && dist < minDist) {
+                            minDist = dist;
+                            hovered = node.id;
+                        }
+                    }
+                });
+                
+                if (hovered !== hoveredNode.value) {
+                    hoveredNode.value = hovered;
+                    drawRadialTree();
+                }
+            }
+        };
+        
+        const handleTreeWheel = (event) => {
+            event.preventDefault();
+            const delta = event.deltaY > 0 ? 0.9 : 1.1;
+            canvasZoom.value = Math.max(0.3, Math.min(3.0, canvasZoom.value * delta));
+            drawRadialTree();
+        };
+
+        const clearData = () => {
+            if (confirm('Are you sure you want to clear the current data?')) {
+                graphData.value = null;
+                metadata.value = null;
+                selectedNode.value = null;
+                expandedNodes.value = new Set();
+                allNodes.value.clear();
+                allEdges.value = [];
+                nodeHierarchy.value.clear();
+                nodePositions.value.clear();
+                canvasOffset.value = { x: 0, y: 0 };
+                canvasZoom.value = 1.0;
+                hoveredNode.value = null;
+            }
+        };
+        
+        // Handle window resize
+        const handleResize = () => {
+            if (treeCanvas.value && graphData.value) {
+                const canvas = treeCanvas.value;
+                const rect = canvas.getBoundingClientRect();
+                canvas.width = rect.width;
+                canvas.height = rect.height;
+                calculateNodePositions();
+                drawRadialTree();
+            }
+        };
+        
+        onMounted(() => {
+            window.addEventListener('resize', handleResize);
+        });
+        
+        onUnmounted(() => {
+            window.removeEventListener('resize', handleResize);
+        });
+
+            return {
+            graphData,
+            metadata,
+            selectedNode,
+            treeCanvas,
+            isDragging,
+            fileInput,
+            goToIndex,
+            handleFileUpload,
+            handleFileDrop,
+            resetView,
+            fitTree,
+            clearData,
+            expandAllNodes,
+            collapseAllNodes,
+            handleTreeClick,
+            handleTreeMouseMove,
+            handleTreeMouseDown,
+            handleTreeMouseUp,
+            handleTreeWheel
+        };
+    }
+}).mount('#app');
+</script>
+</body>
+</html>

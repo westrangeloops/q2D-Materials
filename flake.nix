@@ -54,11 +54,23 @@
           shellHook = ''
             export PYTHONPATH=$PWD:$PYTHONPATH
 
+            # Set up virtual environment in project directory
+            if [ ! -d ".venv" ]; then
+              echo "Creating virtual environment..."
+              python3 -m venv .venv
+            fi
+
+            # Activate virtual environment
+            source .venv/bin/activate
+
+            # Install/upgrade pip in virtual environment
+            pip install --upgrade pip
+
             # Install additional packages from requirements.txt if needed
-            if [ ! -f .venv_installed ]; then
+            if [ ! -f .venv/.installed ]; then
               echo "Installing additional Python packages from requirements.txt..."
-              pip install --break-system-packages -r requirements.txt
-              touch .venv_installed
+              pip install -r requirements.txt
+              touch .venv/.installed
             fi
 
             echo "q2D-Materials development environment ready!"

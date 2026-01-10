@@ -28,15 +28,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Mount static files for JSmol
-# This serves files from the 'static' directory at /static
+# Define directories
 BACKEND_DIR = Path(__file__).parent
-STATIC_DIR = BACKEND_DIR / "static"
-if STATIC_DIR.exists():
-    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
-
-# Mount current directory for static files including SVG, CSS, etc.
-app.mount("/static", StaticFiles(directory=str(BACKEND_DIR)), name="visual_tools_static")
+PARENT_DIR = BACKEND_DIR.parent
 
 # --- State Management (In-Memory) ---
 state = {
@@ -171,6 +165,18 @@ async def serve_structure_generator():
         return JSONResponse(
             status_code=404,
             content={"detail": "Structure Generator module not found"}
+        )
+
+@app.get("/analyzer.html")
+async def serve_analyzer():
+    """Serve the Analyzer module HTML file."""
+    analyzer_file = BACKEND_DIR / "analyzer.html"
+    if analyzer_file.exists():
+        return FileResponse(analyzer_file)
+    else:
+        return JSONResponse(
+            status_code=404,
+            content={"detail": "Analyzer module not found"}
         )
 
 @app.get("/state")
@@ -861,6 +867,15 @@ def render_3d_view(angle: float = 45.0, elev: float = 30.0, spacing: float = 3.0
     plt.close(fig)  # Important: free memory
     
     return Response(content=buf.getvalue(), media_type="image/png")
+
+# Mount static files AFTER all routes to avoid conflicts
+# Mount Logos directory
+LOGOS_DIR = PARENT_DIR / "Logos"
+if LOGOS_DIR.exists():
+    app.mount("/Logos", StaticFiles(directory=str(LOGOS_DIR)), name="logos")
+
+# Mount visual_tools directory for CSS and other static assets
+app.mount("/static", StaticFiles(directory=str(BACKEND_DIR)), name="visual_tools_static")
 
 if __name__ == "__main__":
     import uvicorn

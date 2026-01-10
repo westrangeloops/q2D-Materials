@@ -355,6 +355,7 @@ def populate_positions(
     optimizer: str = "KS",
     BX_dist=None,
     spacer_orientation: Optional[List[str]] = None,
+    collision_strategy: str = "rotate",
 ) -> Atoms:
     """Populate ions using the population toolchain."""
     positions_np = {site: np.asarray(coords, dtype=float) for site, coords in positions.items()}
@@ -371,6 +372,7 @@ def populate_positions(
         optimizer=optimizer,
         BX_dist=BX_dist,
         spacer_orientation=spacer_orientation,
+        collision_strategy=collision_strategy,
     )
 
 

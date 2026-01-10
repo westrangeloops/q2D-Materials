@@ -25,6 +25,7 @@ from .molecule_builder import (
 from ..utils.A_sites import get_ionic_radius, is_molecular_a_cation, get_a_site_object
 from .optimizers import find_optimal_spacer_vectors_global
 from .spacer import count_nh3_groups, SpacerMolecule, _find_terminal_nitrogens
+from .collision import resolve_collisions
 
 
 def place_spacer_at_location(atoms, r, attachment_end):
@@ -114,6 +115,7 @@ def _get_next_ion_from_list(ions, site_type: str, site_counters: Dict[str, int])
     Get the next ion from a list (cycling through) or single value, with Atoms copying.
 
     Handles the common pattern of cycling through ion lists for assignment.
+    If the list is empty, returns None.
 
     Parameters
     ----------
@@ -126,10 +128,12 @@ def _get_next_ion_from_list(ions, site_type: str, site_counters: Dict[str, int])
 
     Returns
     -------
-    str or Atoms
-        Next ion to assign, with Atoms objects copied
+    str or Atoms or None
+        Next ion to assign, with Atoms objects copied. Returns None if list is empty.
     """
     if isinstance(ions, list):
+        if not ions:
+            return None
         if site_type not in site_counters:
             site_counters[site_type] = 0
         ion = ions[site_counters[site_type] % len(ions)]
@@ -227,6 +231,7 @@ def populate_from_floor_schema(
     sharp_spacer: Optional[List[Union[str, Atoms]]] = None,
     penetration: float = 0.0,
     BX_dist: float | None = None,
+    spacer_orientation: Optional[List[str]] = None,
 ) -> Atoms:
     """
     Populate directly from a floor schema (numbered floors with cartesian coords).
@@ -249,6 +254,7 @@ def populate_from_floor_schema(
         site_labels=site_labels,
         floors_cart=list(schema.floors.values()),
         BX_dist=BX_dist,
+        spacer_orientation=spacer_orientation,
     )
 
 
@@ -600,6 +606,24 @@ class _SharpSpacerSequence:
         return template
 
 
+class _SpacerOrientationSequence:
+    """Simple cursor that cycles through user-provided spacer orientations across floor pairs."""
+
+    def __init__(self, orientations: Optional[List[str]]):
+        self.orientations = orientations or []
+        self.index = 0
+
+    def has_orientations(self) -> bool:
+        return len(self.orientations) > 0
+
+    def next_orientation(self) -> Optional[str]:
+        if not self.orientations:
+            return None
+        orientation = self.orientations[self.index % len(self.orientations)]
+        self.index += 1
+        return orientation
+
+
 def _calculate_xy_pbc_distances(reference_pos: np.ndarray, positions: np.ndarray, cell: np.ndarray) -> np.ndarray:
     """
     Calculate PBC-aware distances considering only XY periodic images (9 total: center + 8 neighbors).
@@ -678,6 +702,8 @@ def populate_sharp(
     sharp_sequence: Optional[_SharpSpacerSequence],
     optimizer: str = "KS",
     BX_dist: Optional[float] = None,
+    spacer_orientation: Optional[List[str]] = None,
+    collision_strategy: str = "rotate",
 ) -> Atoms:
     """Populate sharp (S#) sites between a ground slab and an optional sky slab."""
     if sharp_sequence is None or not sharp_sequence.has_templates():
@@ -699,11 +725,21 @@ def populate_sharp(
     # Get cell for PBC-aware calculations
     cell = structure.cell if structure.cell is not None else None
 
+    # Create orientation sequence for cycling through orientations
+    orientation_sequence = _SpacerOrientationSequence(spacer_orientation)
+
     for label in shared_labels:
         template = sharp_sequence.next_template()
         spacer_template = _prepare_sharp_template(template)
         if spacer_template is None:
             continue
+
+        # Apply plane alignment if orientation is specified
+        if orientation_sequence.has_orientations() and cell is not None:
+            orientation = orientation_sequence.next_orientation()
+            if orientation in ["A", "B"]:
+                from .molecule_builder import align_molecule_plane
+                spacer_template = align_molecule_plane(spacer_template, orientation, cell)
 
         ground_entries = _sort_spacer_entries(ground_labels.get(label, []))
         sky_entries = _sort_spacer_entries(sky_labels.get(label, []))
@@ -822,6 +858,12 @@ def populate_sharp(
                     spacer_template,
                 )
 
+                # Update target vector Z component to match adjusted positions
+                target_vector = None
+                if i < len(vectors):
+                    target_vector = vectors[i].copy()
+                    target_vector[2] = sky_pos_adjusted[2] - ground_pos_adjusted[2]
+
                 # Place the spacer molecule using the specific vector from global optimization
                 placed = place_double_spacer_between_positions(
                     spacer_template.copy(),
@@ -829,20 +871,47 @@ def populate_sharp(
                     sky_pos_adjusted,
                     optimizer=optimizer,
                     cell=cell,
-                    target_vector=vectors[i] if i < len(vectors) else None,
+                    target_vector=target_vector,
+                    existing_structure=structure if collision_strategy != "off" else None,
+                    collision_strategy=collision_strategy,
                 )
                 if placed is not None and len(placed) > 0:
+                    # Check for and resolve collisions before adding to structure
+                    if collision_strategy != "off":
+                        placed, collision_resolved = resolve_collisions(
+                            placed, structure, cell=cell, strategy=collision_strategy
+                        )
+                        if not collision_resolved and collision_strategy == "reject":
+                            continue  # Skip this spacer placement
+
                     # Add spacer atoms to structure
                     structure = add_atoms(structure, placed)
         else:
             # Mono spacers: no global optimization needed
+            # Note: orientation alignment was already applied above for the template
             for entry in ground_entries:
                 placed = _place_mono_sharp_spacer(spacer_template.copy(), entry["position"], 'bottom')
                 if placed is not None and len(placed) > 0:
+                    # Check for and resolve collisions before adding to structure
+                    if collision_strategy != "off":
+                        placed, collision_resolved = resolve_collisions(
+                            placed, structure, cell=cell, strategy=collision_strategy
+                        )
+                        if not collision_resolved and collision_strategy == "reject":
+                            continue  # Skip this spacer placement
+
                     structure = add_atoms(structure, placed)
             for entry in sky_entries:
                 placed = _place_mono_sharp_spacer(spacer_template.copy(), entry["position"], 'top')
                 if placed is not None and len(placed) > 0:
+                    # Check for and resolve collisions before adding to structure
+                    if collision_strategy != "off":
+                        placed, collision_resolved = resolve_collisions(
+                            placed, structure, cell=cell, strategy=collision_strategy
+                        )
+                        if not collision_resolved and collision_strategy == "reject":
+                            continue  # Skip this spacer placement
+
                     structure = add_atoms(structure, placed)
 
     return structure
@@ -855,12 +924,14 @@ def _process_floor_slab(
     sharp_sequence: Optional[_SharpSpacerSequence],
     optimizer: str = "KS",
     BX_dist: Optional[float] = None,
+    spacer_orientation: Optional[List[str]] = None,
+    collision_strategy: str = "rotate",
 ) -> Atoms:
     """Process a single ground slab and optionally populate sharp spacers to the sky."""
     structure = populate_a_sites(structure, ground_slab)
     structure = populate_b_sites(structure, ground_slab)
     structure = populate_x_sites(structure, ground_slab)
-    structure = populate_sharp(structure, ground_slab, sky_slab, sharp_sequence, optimizer=optimizer, BX_dist=BX_dist)
+    structure = populate_sharp(structure, ground_slab, sky_slab, sharp_sequence, optimizer=optimizer, BX_dist=BX_dist, spacer_orientation=spacer_orientation, collision_strategy=collision_strategy)
     return structure
 
 
@@ -875,12 +946,24 @@ def populate_structure(
     site_labels: Optional[Dict[str, List[str]]] = None,
     optimizer: str = "KS",
     BX_dist: Optional[float] = None,
+    spacer_orientation: Optional[List[str]] = None,
+    collision_strategy: str = "rotate",
 ) -> Atoms:
     """
     Populate structure matrix with atoms based on site labels (A, B, X, Ap, S#).
-    
+
     Floors are processed strictly in the provided cartesian order (floors_cart).
     Handles double spacers (sharp_spacer) for S# sites that connect adjacent layers.
+
+    Parameters
+    ----------
+    collision_strategy : str, default "rotate"
+        Strategy for resolving atomic collisions during placement:
+        - "rotate": Rotate molecule around N-N axis to find collision-free orientation
+        - "nudge": Apply small XY translations to resolve collisions
+        - "optimize": Use geometry optimization to push atoms apart (slowest but most robust)
+        - "reject": Raise warning and skip placement if collisions detected
+        - "off": Skip collision detection entirely
     """
     # Normalize A-site ions (convert molecular strings to Atoms objects)
     A_ions = _normalize_ion_list(A_ions, normalize_a_site)
@@ -968,6 +1051,8 @@ def populate_structure(
             sharp_sequence,
             optimizer=optimizer,
             BX_dist=BX_dist,
+            spacer_orientation=spacer_orientation,
+            collision_strategy=collision_strategy,
         )
 
     return structure

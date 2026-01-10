@@ -25,6 +25,15 @@ Example from salts.json:
 
 This allows templates to specify spacer connections that span unit cell boundaries,
 creating complex packing patterns and diagonal connections as needed.
+
+Dynamic Template Support:
+-------------------------
+Templates can be provided in three ways:
+1. File-based: A string name (e.g., "cubic") corresponding to a file in data/.
+2. JSON-based: A raw JSON string containing the template definition.
+3. Dictionary-based: A Python dictionary containing the template definition.
+
+This allows for on-the-fly template generation without modifying the data/ directory.
 """
 
 import json
@@ -35,7 +44,8 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
-from q2D_Materials.builders.glazer_tilting import apply_glazer_tilt
+from q2D_Materials.builders.glazer_tilting import apply_glazer_tilt, apply_glazer_tilt_from_notation
+from q2D_Materials.builders.glazer_notation import resolve_glazer_input
 
 
 # -----------------------------------------------------------------------------
@@ -68,14 +78,14 @@ class FloorSchema:
 
 
 def build_floor_schema(
-    template_name: str,
+    template_name: str | Dict,
     BX_dist: float = 3.0,
     jahn_teller_dist: float = 1.0,
     layer_sequence: Optional[List[str] | str] = None,
     xy_expansion: Tuple[int, int] = (1, 1),
     sharp_spacer_nn_distance: Optional[float] = None,
     glazer_angles: Optional[List[float]] = None,
-    glazer_pattern: Optional[List[str]] = None,
+    glazer_pattern: Optional[List[str] | str] = None,
     lattice_multipliers: Optional[List[float]] = None,
     interlayer_distances: Optional[Dict[int, float]] = None,
 ) -> FloorSchema:
@@ -102,6 +112,12 @@ def build_floor_schema(
     - Vector: points to periodic cell (0,1), creating vertical-up connection
     
     See module docstring for detailed explanation of quadrant-based vector calculation.
+
+    Dynamic Template Support:
+    -------------------------
+    The `template_name` argument accepts a string (filename), a JSON string, or a 
+    pre-loaded dictionary. If a dictionary or JSON string is provided, the builder 
+    uses it directly instead of searching the data/ directory.
     """
     data = _load_template_json(template_name)
     angles = tuple(data.get("angles", [90.0, 90.0, 90.0]))
@@ -133,13 +149,14 @@ def build_floor_schema(
             entries.append([site, float(cart[0]), float(cart[1]), float(cart[2])])
         floors[floor_key] = entries
 
-    if glazer_angles is not None and glazer_pattern is not None:
-        floors, cell_matrix, lattice_lengths = _apply_glazer_to_floors(
-            floors, lattice_lengths, glazer_angles, glazer_pattern
-        )
-
     if xy_expansion != (1, 1):
         floors, cell_matrix = _apply_xy_expansion(floors, cell_matrix, xy_expansion)
+
+    if glazer_pattern is not None:
+        floors, cell_matrix, lattice_lengths = _apply_glazer_to_floors(
+            floors, lattice_lengths, glazer_angles, glazer_pattern,
+            xy_expansion=xy_expansion, BX_dist=BX_dist
+        )
 
     return FloorSchema(
         floors=floors,
@@ -214,7 +231,26 @@ def cell_matrix_from_parameters(
 # -----------------------------------------------------------------------------
 
 
-def _load_template_json(template_name: str) -> Dict:
+def _load_template_json(template_name: str | Dict) -> Dict:
+    """
+    Load a template from a JSON file or return it directly if it's already a dict/string.
+    
+    Accepts:
+    - str: Template name (e.g. "cubic") -> loads from data/cubic.json
+    - str: JSON string -> parses to dict
+    - dict: Returns directly
+    """
+    if isinstance(template_name, dict):
+        return template_name
+        
+    # Check if input is a valid JSON string
+    if isinstance(template_name, str) and template_name.strip().startswith("{"):
+        try:
+            return json.loads(template_name)
+        except json.JSONDecodeError:
+            pass # Fall back to file loading if it fails
+            
+    # Load from file
     template_dir = os.path.dirname(os.path.abspath(__file__))
     json_path = os.path.join(template_dir, "data", f"{template_name}.json")
     with open(json_path, "r") as f:
@@ -405,8 +441,10 @@ def _apply_xy_expansion(
 def _apply_glazer_to_floors(
     floors: "OrderedDict[str, List[List[float]]]",
     lattice_lengths: Tuple[float, float, float],
-    glazer_angles: List[float],
-    glazer_pattern: List[str],
+    glazer_angles: Optional[List[float]],
+    glazer_pattern: List[str] | str,
+    xy_expansion: Tuple[int, int] = (1, 1),
+    BX_dist: float = 3.0,
 ) -> Tuple["OrderedDict[str, List[List[float]]]", np.ndarray, Tuple[float, float, float]]:
     """
     Apply Glazer tilting to X-sites and return updated floors and cell.
@@ -414,6 +452,9 @@ def _apply_glazer_to_floors(
     Glazer tilting requires both B and X networks. If either B or X is absent
     in the position matrix, the tilting step is skipped and the original
     geometry is returned unchanged.
+    
+    Supports both list-based patterns (requires angles) and string-based
+    notation/space-groups (can infer angles).
     """
     # Build position matrix grouped by site
     position_matrix: Dict[str, List[List[float]]] = {}
@@ -429,17 +470,71 @@ def _apply_glazer_to_floors(
         or "B" not in position_matrix
         or len(position_matrix["B"]) == 0
     ):
-        cell_matrix = cell_matrix_from_parameters(*lattice_lengths, 90.0, 90.0, 90.0)
-        return floors, cell_matrix, lattice_lengths
+        # If we expanded but didn't tilt, we need to return the expanded cell
+        # The lattice_lengths passed in are the *unit* lengths (from _calculate_lattice_lengths)
+        # But we might have expanded.
+        # Wait, build_floor_schema passes updated cell_matrix from _apply_xy_expansion
+        # But here we regenerate cell_matrix from lattice_lengths.
+        # We must respect the expansion in the output cell.
+        
+        # Reconstruct expanded cell
+        a, b, c = lattice_lengths
+        nx, ny = xy_expansion
+        cell_matrix = cell_matrix_from_parameters(a, b, c, 90.0, 90.0, 90.0)
+        cell_matrix[0] *= nx
+        cell_matrix[1] *= ny
+        
+        # Return full dimensions
+        return floors, cell_matrix, (a*nx, b*ny, c)
 
-    tilted_positions, lv_unit, cell_lengths = apply_glazer_tilt(
-        position_matrix,
-        lattice_vectors=lattice_lengths,
-        supercell=(1, 1, 1),
-        angles=glazer_angles,
-        tilt_pattern=glazer_pattern,
-        adjust_cell=True,
-    )
+    # Determine unit cell vectors and supercell dimensions for indexing
+    # lattice_lengths contains (a_unit, b_unit, c_total)
+    # We need (a_unit, b_unit, c_unit) for Glazer indexing
+    a_unit = lattice_lengths[0]
+    b_unit = lattice_lengths[1]
+    
+    # Estimate c_unit (octahedron height) and nz
+    # Use 2*BX_dist as reference for one octahedron layer height
+    c_unit_ref = 2.0 * BX_dist
+    total_height = lattice_lengths[2]
+    nz = max(1, int(round(total_height / c_unit_ref)))
+    c_unit = total_height / nz
+    
+    unit_lattice_vectors = (a_unit, b_unit, c_unit)
+    supercell_dims = (xy_expansion[0], xy_expansion[1], nz)
+
+    if isinstance(glazer_pattern, str):
+        # Resolve notation/space group
+        notation = resolve_glazer_input(glazer_pattern)
+        
+        tilted_positions, lv_unit, cell_lengths = apply_glazer_tilt_from_notation(
+            position_matrix,
+            lattice_vectors=unit_lattice_vectors,
+            supercell=supercell_dims,
+            glazer_notation=notation,
+            angles=glazer_angles,
+            adjust_cell=False,  # Don't wrap - let ASE/pymatgen handle it with fractional coords
+        )
+    else:
+        # List-based pattern requires angles
+        if glazer_angles is None:
+             # Same as above, return expanded cell
+             a, b, c = lattice_lengths
+             nx, ny = xy_expansion
+             cell_matrix = cell_matrix_from_parameters(a, b, c, 90.0, 90.0, 90.0)
+             cell_matrix[0] *= nx
+             cell_matrix[1] *= ny
+             return floors, cell_matrix, (a*nx, b*ny, c)
+
+        tilted_positions, lv_unit, cell_lengths = apply_glazer_tilt(
+            position_matrix,
+            lattice_vectors=unit_lattice_vectors,
+            supercell=supercell_dims,
+            angles=glazer_angles,
+            tilt_pattern=glazer_pattern,
+            adjust_cell=False,  # Don't wrap - let ASE/pymatgen handle it with fractional coords
+        )
+
     # Preserve any site types not touched by tilting (e.g., S#)
     for site, coords in original_positions.items():
         if site not in tilted_positions:
@@ -462,9 +557,14 @@ def _apply_glazer_to_floors(
                 new_entries.append([site, pos[0], pos[1], pos[2]])
         updated_floors[floor_key] = new_entries
 
-    # Build orthogonal cell from updated lengths
-    cell_matrix = np.diag(cell_lengths)
-    return updated_floors, cell_matrix, tuple(cell_lengths)
+    # Build orthogonal cell from updated lengths (lv_unit is unit cell, we need full cell)
+    # lv_unit returned by apply_glazer_tilt is (a', b', c') of the unit cell (strained)
+    # We need to scale by supercell
+    nx, ny, nz = supercell_dims
+    full_lengths = (lv_unit[0] * nx, lv_unit[1] * ny, lv_unit[2] * nz)
+    cell_matrix = np.diag(full_lengths)
+    
+    return updated_floors, cell_matrix, full_lengths
 
 
 # -----------------------------------------------------------------------------

@@ -37,6 +37,7 @@ def create_bulk_perovskite(
     lattice_multipliers: Optional[List[float]] = None,
     optimizer: str = "KS",
     spacer_orientation: Optional[List[str]] = None,
+    collision_strategy: str = "rotate",
 ) -> Atoms:
     """
     Build a bulk perovskite (or related) structure using a geometry template.
@@ -108,6 +109,7 @@ def create_bulk_perovskite(
         optimizer=optimizer,
         BX_dist=BX_dist,
         spacer_orientation=spacer_orientation,
+        collision_strategy=collision_strategy,
     )
     
     return atoms
@@ -132,6 +134,7 @@ def create_monolayer_perovskite(
     lattice_multipliers: Optional[List[float]] = None,
     optimizer: str = "KS",
     spacer_orientation: Optional[List[str]] = None,
+    collision_strategy: str = "rotate",
 ) -> Atoms:
     """
     Build a monolayer perovskite (or related) structure using a geometry template.
@@ -221,6 +224,7 @@ def create_monolayer_perovskite(
         optimizer=optimizer,
         BX_dist=BX_dist,
         spacer_orientation=spacer_orientation,
+        collision_strategy=collision_strategy,
     )
 
     if len(atoms) == 0:

@@ -24,6 +24,35 @@ tilting = q2d.create_structure(
 )
 ```
 
+### Using Space Groups and Notations
+You can now specify the `glazer_pattern` as a string using either standard Glazer notation (e.g., `"a-b+a-"`) or by specifying a target space group (e.g., `"Pnma"`). When using a string, `glazer_angles` are optional (defaults to 10°).
+
+```python
+# Using Glazer notation string
+pnma_style = q2d.create_structure(
+    ...,
+    glazer_pattern="a-b+a-",  # Suggests [10, 10, 10] angles
+)
+
+# Using Space Group symbol (case insensitive)
+pnma_by_group = q2d.create_structure(
+    ...,
+    glazer_pattern="Pnma",    # Resolves to a-b+a-
+)
+```
+
+**Common Space Group to Glazer Notation Mapping:**
+
+| Space Group | Glazer Notation | System |
+|-------------|----------------|--------|
+| `Pm-3m` | `a0a0a0` | Cubic |
+| `I4/mcm` | `a0a0c-` | Tetragonal |
+| `P4/mbm` | `a0a0c+` | Tetragonal |
+| `Imma` | `a0b-b-` | Orthorhombic |
+| `Pnma` | `a-b+a-` | Orthorhombic |
+| `Cmcm` | `a0b+c+` | Orthorhombic |
+| `R-3c` | `a-a-a-` | Rhombohedral |
+
 ### See it (top-down, 4×4 cell)
 - First frame: no Glazer tilt (reference) — `glazer_angles=[0,0,0]`
 - Second frame: positive tilt about z — `glazer_angles=[0,0,10]`, `glazer_pattern=['0','0','+']`

@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>q2D Materials - Module Launcher</title>
-    <link rel="stylesheet" href="http://localhost:8000/static/theme.css">
+    <link rel="stylesheet" href="/static/theme.css">
     
     <script>
     // Apply theme immediately before page renders
@@ -45,10 +45,16 @@
         }
         .modules-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            grid-template-columns: repeat(3, 1fr);
             gap: 25px;
             width: 100%;
-            max-width: 900px;
+            max-width: 1200px;
+        }
+
+        @media (max-width: 900px) {
+            .modules-grid {
+                grid-template-columns: 1fr;
+            }
         }
         .module-card {
             background: var(--bg-panel);
@@ -165,7 +171,7 @@
     <div class="container">
         <div class="header">
             <div class="logo">
-                <object type="image/svg+xml" data="http://localhost:8000/static/logo_q2D_materials.svg" width="320" height="100" style="pointer-events: none;"></object>
+                <object type="image/svg+xml" data="/Logos/logo_q2D_materials.svg" width="320" height="100" style="pointer-events: none;"></object>
             </div>
             <div class="theme-toggle">
                 <span>🌙</span>
@@ -180,7 +186,7 @@
         <div class="modules-grid">
             <div class="module-card" onclick="launchModule('layer_arquitect.html')">
                 <div class="module-visual">
-                    <object type="image/svg+xml" data="http://localhost:8000/static/layer_arquitect_icon.svg" width="200" height="200" style="pointer-events: none;"></object>
+                    <object type="image/svg+xml" data="/Logos/layer_arquitect_icon.svg" width="200" height="200" style="pointer-events: none;"></object>
                 </div>
                 <div class="module-label">
                     <div class="module-title">Layer Architect</div>
@@ -198,6 +204,18 @@
                     <div class="module-title">Structure Generator</div>
                     <div class="module-description">
                         Convert layer designs into complete crystal structures for DFT
+                    </div>
+                </div>
+            </div>
+
+            <div class="module-card" onclick="launchModule('analyzer.html')">
+                <div class="module-visual">
+                    <div class="module-icon-emoji">📊</div>
+                </div>
+                <div class="module-label">
+                    <div class="module-title">Structure Analyzer</div>
+                    <div class="module-description">
+                        Visualize and analyze perovskite structures with interactive graph networks
                     </div>
                 </div>
             </div>
