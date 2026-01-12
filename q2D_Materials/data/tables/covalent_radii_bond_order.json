@@ -1,0 +1,91 @@
+{
+  "_description": "Covalent radii for elements by bond order (single, double, triple) in Angstroms. Source: First-principle calculations from Nikolaienko et al. (2019).",
+  "_reference": "Nikolaienko, T. Y., Chuiko, V. S., & Bulavin, L. A. (2019). The covalent radii derived from the first-principle data. Computational and Theoretical Chemistry.",
+  "_note": "Values derived from 26,050 molecular structures using quantum-chemical calculations. Single bond radii are recommended for general use. Double and triple bond radii available for enhanced accuracy when bond order is known.",
+  "H": {
+    "single": 0.341,
+    "double": null,
+    "triple": null
+  },
+  "B": {
+    "single": 0.790,
+    "double": 0.819,
+    "triple": 0.657
+  },
+  "C": {
+    "single": 0.741,
+    "double": 0.671,
+    "triple": 0.603
+  },
+  "N": {
+    "single": 0.681,
+    "double": 0.626,
+    "triple": 0.563
+  },
+  "O": {
+    "single": 0.644,
+    "double": 0.537,
+    "triple": 0.554
+  },
+  "F": {
+    "single": 0.612,
+    "double": 0.510,
+    "triple": null
+  },
+  "Si": {
+    "single": 1.088,
+    "double": 1.045,
+    "triple": 0.977
+  },
+  "P": {
+    "single": 1.050,
+    "double": 0.956,
+    "triple": 0.923
+  },
+  "S": {
+    "single": 1.033,
+    "double": 0.957,
+    "triple": 0.957
+  },
+  "Cl": {
+    "single": 1.038,
+    "double": 0.952,
+    "triple": null
+  },
+  "Ge": {
+    "single": 1.168,
+    "double": null,
+    "triple": null
+  },
+  "As": {
+    "single": 1.169,
+    "double": 1.078,
+    "triple": 1.039
+  },
+  "Se": {
+    "single": 1.157,
+    "double": 1.065,
+    "triple": null
+  },
+  "Br": {
+    "single": 1.187,
+    "double": 1.119,
+    "triple": null
+  },
+  "Li": {
+    "single": 1.390,
+    "double": null,
+    "triple": null
+  },
+  "Na": {
+    "single": 1.594,
+    "double": null,
+    "triple": null
+  },
+  "Al": {
+    "single": 1.109,
+    "double": null,
+    "triple": null
+  }
+}
+

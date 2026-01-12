@@ -18,9 +18,10 @@ from q2D_Materials.builders.glazer_notation import resolve_glazer_input
 
 
 def available_templates() -> List[str]:
-    """Return list of template names based on JSON files in data/."""
-    template_dir = os.path.dirname(os.path.abspath(__file__))
-    data_dir = os.path.join(template_dir, "data")
+    """Return list of template names based on JSON files in data/templates/."""
+    # Load from central data/templates directory
+    data_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    data_dir = os.path.join(data_dir, "q2D_Materials", "data", "templates")
     if not os.path.exists(data_dir):
         return []
 
@@ -168,8 +169,9 @@ def _load_template_json(template_name: str | Dict) -> Dict:
             return json.loads(template_name)
         except json.JSONDecodeError:
             pass
-    template_dir = os.path.dirname(os.path.abspath(__file__))
-    json_path = os.path.join(template_dir, "data", f"{template_name}.json")
+    # Load from central data/templates directory
+    data_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    json_path = os.path.join(data_dir, "q2D_Materials", "data", "templates", f"{template_name}.json")
     with open(json_path, "r") as f:
         return json.load(f)
 

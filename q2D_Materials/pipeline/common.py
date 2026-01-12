@@ -17,7 +17,7 @@ from q2D_Materials.builders.templates import (
     flatten_floor_schema,
 )
 from q2D_Materials.builders.populate import populate_structure
-from q2D_Materials.utils.A_sites import (
+from q2D_Materials.utils.sites.A_sites import (
     calculate_BX_distance,
     get_a_site_object,
 )
@@ -103,15 +103,12 @@ def _create_atomic_atoms(element_str: str) -> Atoms:
     ValueError
         If the string is not a valid atomic element
     """
-    try:
-        from pymatgen.core.periodic_table import Element
+    from pymatgen.core.periodic_table import Element
 
-        try:
-            Element(element_str)
-            return Atoms(element_str, positions=[[0, 0, 0]])
-        except (ValueError, KeyError):
-            pass
-    except ImportError:
+    try:
+        Element(element_str)
+        return Atoms(element_str, positions=[[0, 0, 0]])
+    except (ValueError, KeyError):
         pass
 
     # Fallback without pymatgen
@@ -145,29 +142,25 @@ def _normalize_to_atoms_or_string(input_value, return_atoms_only: bool = False):
         return input_value.copy()
 
     if isinstance(input_value, str):
-        try:
-            normalized = get_a_site_object(input_value)
-            if isinstance(normalized, Atoms):
-                return normalized
-            if isinstance(normalized, str):
-                if return_atoms_only:
-                    # For spacers, try to create Atoms from atomic elements
+        normalized = get_a_site_object(input_value)
+        if isinstance(normalized, Atoms):
+            return normalized
+        if isinstance(normalized, str):
+            if return_atoms_only:
+                # For spacers, first try to create Atoms from atomic elements
+                # If that fails, try SMILES conversion
+                try:
                     return _create_atomic_atoms(normalized)
-                else:
-                    # For A-sites, return atomic cations as strings
-                    return normalized
-        except (ValueError, ImportError):
-            pass
+                except ValueError:
+                    # Not an atomic element, try SMILES conversion
+                    return smiles_to_ase_atoms(input_value)
+            else:
+                # For A-sites, return atomic cations as strings
+                return normalized
 
         if return_atoms_only:
-            # Try SMILES conversion for spacers
-            try:
-                if smiles_to_ase_atoms is not None:
-                    return smiles_to_ase_atoms(input_value)
-                else:
-                    raise ValueError("RDKit not available for SMILES processing")
-            except Exception as e:
-                raise ValueError(f"Failed to parse spacer '{input_value}' as SMILES or abbreviation: {e}")
+            # Try SMILES conversion for spacers (when get_a_site_object returns None)
+            return smiles_to_ase_atoms(input_value)
         else:
             # For A-sites, return unrecognized strings as-is
             return input_value

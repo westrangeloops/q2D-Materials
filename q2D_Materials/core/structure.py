@@ -301,7 +301,7 @@ class q2DStructure(Atoms):
         ImportError
             If pymatgen is not available
         """
-        from q2D_Materials.utils.twist_monolayer import create_twisted_bilayer
+        from q2D_Materials.utils.other.twist_monolayer import create_twisted_bilayer
 
         mono2 = other if other is not None else self
         return create_twisted_bilayer(self, mono2, m, n, interlayer_distance, vacuum, **kwargs)

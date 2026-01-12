@@ -118,9 +118,10 @@ PREFERRED_NOTATIONS: Dict[str, str] = {
     "I4/mmm": "a0b+b+",
 }
 
+# Load from central data/tables directory
 _LOOKUP_TABLE_PATH = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
-    "q2D_Materials", "tables", "glazer_pattern_lookup.json"
+    "q2D_Materials", "data", "tables", "glazer_pattern_lookup.json"
 )
 
 

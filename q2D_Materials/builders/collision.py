@@ -7,11 +7,12 @@ from dataclasses import dataclass
 from typing import List, Tuple, Optional
 import numpy as np
 from ase import Atoms
-from ase.data import covalent_radii, vdw_radii
+from ase.data import vdw_radii
+from ..utils.properties.atomic_properties import get_covalent_radius
 from ase.optimize import FIRE
 from ase.constraints import FixAtoms
 
-from ..utils.geometry import _calculate_distances
+from ..utils.geometry.geometry import _calculate_distances
 from .primitives import (
     calculate_molecular_envelope,
     envelopes_overlap,
@@ -51,19 +52,8 @@ class CollisionDetector:
 
     def _get_min_distance(self, symbol1: str, symbol2: str, buffer: float = 0.8) -> float:
         """Calculate minimum allowed distance between two atoms."""
-        from ase.data import atomic_numbers
-
-        try:
-            atomic_num1 = atomic_numbers[symbol1]
-            r1 = covalent_radii[atomic_num1]
-        except KeyError:
-            r1 = 1.5
-        try:
-            atomic_num2 = atomic_numbers[symbol2]
-            r2 = covalent_radii[atomic_num2]
-        except KeyError:
-            r2 = 1.5
-
+        r1 = get_covalent_radius(symbol1, default=1.5)
+        r2 = get_covalent_radius(symbol2, default=1.5)
         return r1 + r2 + buffer
 
     def detect_collisions(
@@ -198,7 +188,8 @@ class CollisionDetector:
             atomic_num = atomic_numbers.get(symbol, 6)
             vdw = vdw_radii[atomic_num]
             if np.isnan(vdw):
-                vdw = covalent_radii[atomic_num] + 0.5
+                # Fallback: use covalent radius + 0.5 if vdw radius not available
+                vdw = get_covalent_radius(symbol, default=1.5) + 0.5
             radii.append(vdw)
         return np.array(radii)
 

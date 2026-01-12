@@ -203,7 +203,7 @@ class q2D_creator:
         ImportError
             If pymatgen is not available
         """
-        from q2D_Materials.utils.twist_monolayer import (
+        from q2D_Materials.utils.other.twist_monolayer import (
             create_twisted_bilayer,
             create_twisted_multilayer,
         )

@@ -333,13 +333,85 @@ if octahedra_nodes:
     print(f"\nMost connected octahedron: {most_connected[0]} ({most_connected[1]} connections)")
 ```
 
+## Molecular Graph Queries
+
+The graph query system also works with molecular graphs from SMILES strings, enabling pattern-based molecule analysis without 3D coordinate generation.
+
+### Pattern Matching on Molecular Graphs
+
+```python
+from q2D_Materials.analyzer import q2D_analyzer
+from q2D_Materials.utils.molecules.smiles_parser import smiles_to_graph
+
+# Create molecular graph directly from SMILES (no 3D coordinates)
+molecule_graph = smiles_to_graph('NCCCCN')
+
+# Pattern matching uses graph isomorphism (fast, geometry-independent)
+analyzer = q2D_analyzer()
+result = analyzer.analyze_molecule_as_dj_spacer(
+    'NCCCCN',
+    initial_pattern='NH2C',
+    final_pattern='NH2C'
+)
+
+print(f"Valid DJ spacer: {result.is_valid}")
+print(f"Valid paths: {len(result.valid_paths)}")
+```
+
+### Graph-Based Pattern Matching
+
+Molecule candidate analysis uses the same graph query principles:
+
+```python
+from q2D_Materials.utils.molecules.smiles_parser import smiles_to_graph
+from q2D_Materials.modifier.fragment import from_smiles
+import networkx as nx
+
+# Parse SMILES to graph (graph-based, no 3D coordinates)
+pattern_graph = from_smiles('[NH3+]C')
+molecule_graph = from_smiles('C[NH3+]CCCC[NH3+]C')
+
+# Use NetworkX subgraph isomorphism for pattern matching
+from networkx.algorithms import isomorphism
+
+matcher = isomorphism.GraphMatcher(
+    molecule_graph,
+    pattern_graph,
+    node_match=lambda n1, n2: n1.get('symbol') == n2.get('symbol')
+)
+
+matches = list(matcher.subgraph_isomorphisms_iter())
+print(f"Found {len(matches)} pattern matches")
+```
+
+### Shared Graph Utilities
+
+Both structural and molecular graphs use shared utilities:
+
+```python
+from q2D_Materials.analyzer.utils.graph_utils import (
+    find_shortest_path,
+    validate_path_continuity,
+    get_connected_components,
+    filter_nodes_by_attributes
+)
+
+# Works on any NetworkX graph (structural or molecular)
+path = find_shortest_path(graph, source_node, target_node)
+is_valid = validate_path_continuity(graph, path)
+components = get_connected_components(graph)
+carbon_nodes = filter_nodes_by_attributes(graph, symbol='C')
+```
+
 ## Tips for Graph Queries
 
-1. **Use node attributes** - Filter by `node_type`, `is_spacer`, `is_a_site`, etc.
+1. **Use node attributes** - Filter by `node_type`, `is_spacer`, `is_a_site`, `symbol`, etc.
 2. **Use edge attributes** - Filter by `edge_type` to find specific connections
 3. **Leverage NetworkX** - Use built-in algorithms (shortest_path, connected_components, etc.)
-4. **Build subgraphs** - Create subgraphs for focused analysis
-5. **Cache results** - Store frequently accessed node/edge lists
+4. **Use shared utilities** - Import from `graph_utils` for common operations
+5. **Build subgraphs** - Create subgraphs for focused analysis
+6. **Graph-based matching** - For molecules, use graph isomorphism instead of 3D coordinates
+7. **Cache results** - Store frequently accessed node/edge lists
 
-The graph structure provides a powerful foundation for custom structural analysis beyond the built-in analysis methods.
+The graph structure provides a powerful foundation for custom structural analysis beyond the built-in analysis methods. Both structural graphs (from crystal structures) and molecular graphs (from SMILES) use the same NetworkX-based query system for consistency and performance.
 

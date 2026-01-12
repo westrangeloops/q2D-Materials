@@ -2,12 +2,11 @@
 
 import numpy as np
 from ase import Atoms
-from ase.data import covalent_radii
 from typing import Union, List, Tuple, Dict, Optional, Any
 
 from .q_builder import QBuilderOutput
 from .templates import FloorSchema, flatten_floor_schema
-from .molecule_builder import (
+from ..utils.molecules.molecule_builder import (
     align_ase_molecule_for_perovskite,
     center_of_mass_correction,
     place_atoms_at_location,
@@ -17,7 +16,7 @@ from .molecule_builder import (
     get_molecule_length,
     com_to_origin
 )
-from ..utils.A_sites import get_ionic_radius, is_molecular_a_cation, get_a_site_object
+from ..utils.sites.A_sites import get_ionic_radius, is_molecular_a_cation, get_a_site_object
 from .optimizers import find_optimal_spacer_vectors_global
 from .spacer import count_nh3_groups, SpacerMolecule, _find_terminal_nitrogens
 from .collision import resolve_collisions
@@ -339,7 +338,8 @@ def _build_floor_slabs(
 
 def _add_atomic_site(structure: Atoms, symbol: str, position: np.ndarray) -> Atoms:
     """Add a single atomic ion to the structure."""
-    if symbol is None:
+    if symbol is None or symbol == 'M' or symbol.strip() == '':
+        # Skip placeholder symbols like 'M' or empty strings
         return structure
     atom = Atoms(symbol, positions=[np.array(position, dtype=float)])
     return add_atoms(structure, atom)
@@ -377,13 +377,12 @@ def populate_a_sites(structure: Atoms, slab: Dict[str, Any]) -> Atoms:
             structure = _place_a_molecule(structure, ion, position)
             continue
         if isinstance(ion, str):
-            try:
-                if is_molecular_a_cation(ion):
-                    mol = get_a_site_object(ion)
+            if is_molecular_a_cation(ion):
+                mol = get_a_site_object(ion)
+                # Only place molecule if get_a_site_object returned an Atoms object
+                if isinstance(mol, Atoms):
                     structure = _place_a_molecule(structure, mol, position)
                     continue
-            except (ImportError, ValueError):
-                pass
         structure = _add_atomic_site(structure, ion, position)
 
     for entry in slab.get("sites", {}).get('Ap', []):
@@ -395,13 +394,10 @@ def populate_a_sites(structure: Atoms, slab: Dict[str, Any]) -> Atoms:
             structure = _place_ap_molecule(structure, ion, position)
             continue
         if isinstance(ion, str):
-            try:
-                if is_molecular_a_cation(ion):
-                    mol = get_a_site_object(ion)
-                    structure = _place_ap_molecule(structure, mol, position)
-                    continue
-            except (ImportError, ValueError):
-                pass
+            if is_molecular_a_cation(ion):
+                mol = get_a_site_object(ion)
+                structure = _place_ap_molecule(structure, mol, position)
+                continue
         structure = _add_atomic_site(structure, ion, position)
 
     return structure
@@ -622,7 +618,6 @@ def populate_sharp(
         return structure
 
     from q2D_Materials.builders.spacer import place_double_spacer_between_positions
-    from ase.data import covalent_radii  # Import locally to avoid scoping issues
 
     # Get cell for PBC-aware calculations
     cell = structure.cell if structure.cell is not None else None

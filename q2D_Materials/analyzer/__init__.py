@@ -17,22 +17,21 @@ Example
 >>> rdf = analyzer.get_partial_rdf([["Pb", "I"]])
 """
 
-from .analyzer_class import q2D_analyzer
-from .cavity_detection import _identify_a_site_cations
-from .graph_construction import _graph_inorganic_ontology
-from .layer_identification import _identify_layers, _identify_slabs_by_continuity
-from .molecule_classification import (
+from .core.analyzer_class import q2D_analyzer
+from .detection.cavity_detection import _identify_a_site_cations
+from .core.graph_construction import _graph_inorganic_ontology
+from .detection.layer_identification import _identify_layers, _identify_slabs_by_continuity
+from .detection.molecule_classification import (
     _classify_molecules_by_continuity,
     _find_molecular_components,
 )
-from .network_analysis import _build_bx_network
-from .octahedral_detection import _count_octahedra, find_shared_atoms
-from .perovskite_constants import (
-    COVALENT_RADII,
+from .characterization.network_analysis import _build_bx_network
+from .detection.octahedral_detection import _count_octahedra, find_shared_atoms
+from .utils.perovskite_constants import (
     PEROVSKITE_BOND_RADII,
     get_bond_cutoff,
 )
-from .structure_classification import (
+from .core.structure_classification import (
     _infer_structure_type,
     _infer_structure_type_from_graph,
 )
@@ -40,7 +39,6 @@ from .structure_classification import (
 __all__ = [
     'q2D_analyzer',
     'PEROVSKITE_BOND_RADII',
-    'COVALENT_RADII',
     'get_bond_cutoff',
     '_count_octahedra',
     'find_shared_atoms',

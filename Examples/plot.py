@@ -670,3 +670,78 @@ if MATPLOTLIB_AVAILABLE:
     print("✓ Created salts_site_vectors.png showing S# site direction vectors")
 else:
     print("Matplotlib not available; skipping S# vectors visualization")
+
+# -----------------------------------------------------------------------------
+# Molecule Modifier Examples
+# -----------------------------------------------------------------------------
+print("\n" + "="*70)
+print("Generating Molecule Modifier Examples")
+print("="*70)
+
+from q2D_Materials.modifier import GraphView, from_smiles
+
+# Create base structure with spacer
+modifier_base = q2d.create_structure(
+    structure_type="bulk",
+    A_ions="MA",
+    B_ions="Pb",
+    X_ions="I",
+    template="cubic",
+    layer_sequence="DJ",
+    thickness=2,
+    spacer="[NH3+]CCCCCC[NH3+]",  # Diammonium hexane
+    xy_expansion=(1, 1),
+)
+
+# Analyze structure
+from q2D_Materials.analyzer import q2D_analyzer
+analyzer = q2D_analyzer(modifier_base)
+analyzer.analyze()
+
+# Create GraphView
+view = GraphView(analyzer)
+spacers = view.spacers.list()
+
+if len(spacers) > 0:
+    spacer = spacers[0]
+    
+    # Get molecule info
+    spacer_info = spacer.to_json()
+    carbon_indices = [
+        atom['index'] for atom in spacer_info['atoms']
+        if atom['symbol'] == 'C'
+    ]
+    
+    if len(carbon_indices) >= 3:
+        target_carbon = carbon_indices[2]
+        
+        # Save base structure
+        write(IMAGES / "modifier_base.png", modifier_base, rotation=rotation_iso, show_unit_cell=2)
+        print("✓ Created modifier_base.png")
+        
+        # Fragment modifications
+        fragments = [
+            ("[CH0]=C", "vinyl"),
+            ("CC(F)(F)F", "trifluoromethyl"),
+            ("[CH0]=O", "carbonyl"),
+        ]
+        
+        for smiles, name in fragments:
+            try:
+                fragment = from_smiles(smiles)
+                modified = spacer.replace(
+                    atom_index=target_carbon,
+                    fragment_graph=fragment,
+                    fragment_index=0,
+                )
+                filename = f"modifier_{name}.png"
+                write(IMAGES / filename, modified, rotation=rotation_iso, show_unit_cell=2)
+                print(f"✓ Created {filename}")
+            except Exception as e:
+                print(f"✗ Error creating modifier_{name}.png: {e}")
+    else:
+        print("✗ Not enough carbon atoms for modification example")
+else:
+    print("✗ No spacers found for modification example")
+
+print("="*70 + "\n")

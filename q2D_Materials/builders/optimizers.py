@@ -6,8 +6,9 @@ from typing import List, Set, Tuple, Optional, Dict
 import networkx as nx
 import numpy as np
 from ase import Atoms
-from ase.data import covalent_radii
 from ase.neighborlist import build_neighbor_list
+
+from ..utils.properties.atomic_properties import get_covalent_radius
 
 from .primitives import Vector3D, gram_schmidt, rodrigues_rotate
 
@@ -59,7 +60,8 @@ class KinematicChainSolver:
         self.G.add_nodes_from(range(self.num_atoms))
 
         # Get radii for connectivity checks
-        radii = [covalent_radii[z] for z in atoms.numbers]
+        symbols = atoms.get_chemical_symbols()
+        radii = [get_covalent_radius(symbol, default=1.5) for symbol in symbols]
 
         # Build neighbor list
         nl = build_neighbor_list(atoms, cutoffs=[r * cutoff_buffer for r in radii], self_interaction=False)
@@ -560,13 +562,13 @@ def _sequential_unfold(atoms: Atoms, torsion_info: Dict, n1_idx: int, n2_idx: in
         return result  # Nothing to unfold
     
     # Build connectivity graph
-    from ase.data import covalent_radii
     from ase.neighborlist import build_neighbor_list
     
     G = nx.Graph()
     G.add_nodes_from(range(len(atoms)))
     
-    radii = [covalent_radii[z] for z in atoms.numbers]
+    symbols = atoms.get_chemical_symbols()
+    radii = [get_covalent_radius(symbol, default=1.5) for symbol in symbols]
     nl = build_neighbor_list(atoms, cutoffs=[r * 1.2 for r in radii], self_interaction=False)
     
     for i in range(len(atoms)):
@@ -767,13 +769,13 @@ def _set_extended_conformation(atoms: Atoms, torsion_info: Dict,
         return result  # No rotatable torsions
     
     # Build connectivity graph to determine which atoms move with each rotation
-    from ase.data import covalent_radii
     from ase.neighborlist import build_neighbor_list
     
     G = nx.Graph()
     G.add_nodes_from(range(len(atoms)))
     
-    radii = [covalent_radii[z] for z in atoms.numbers]
+    symbols = atoms.get_chemical_symbols()
+    radii = [get_covalent_radius(symbol, default=1.5) for symbol in symbols]
     nl = build_neighbor_list(atoms, cutoffs=[r * 1.2 for r in radii], self_interaction=False)
     
     for i in range(len(atoms)):
@@ -837,13 +839,13 @@ def _identify_backbone_and_torsions(atoms: Atoms, n1_idx: int, n2_idx: int,
         - torsion_quads: list of (a, b, c, d) for each rotatable bond defining torsion angle
     """
     # Build connectivity graph (should already exist in KinematicChainSolver, but rebuild here)
-    from ase.data import covalent_radii
     from ase.neighborlist import build_neighbor_list
     
     G = nx.Graph()
     G.add_nodes_from(range(len(atoms)))
     
-    radii = [covalent_radii[z] for z in atoms.numbers]
+    symbols = atoms.get_chemical_symbols()
+    radii = [get_covalent_radius(symbol, default=1.5) for symbol in symbols]
     nl = build_neighbor_list(atoms, cutoffs=[r * 1.2 for r in radii], self_interaction=False)
     
     for i in range(len(atoms)):
@@ -1129,7 +1131,7 @@ def detect_bonds_pbc(atoms: Atoms, cell: Optional[np.ndarray] = None) -> List[Tu
     positions = atoms.get_positions()
 
     # Get covalent radii
-    radii = [covalent_radii[ase.data.atomic_numbers.get(e, 6)] for e in elements]  # Default to C
+    radii = [get_covalent_radius(e, default=1.5) for e in elements]
 
     # Define bondable pairs for filtering (same as in KinematicChainSolver)
     BONDABLE_PAIRS = KinematicChainSolver.BONDABLE_PAIRS

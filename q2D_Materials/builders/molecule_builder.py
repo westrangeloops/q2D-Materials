@@ -5,21 +5,15 @@ import numpy as np
 import pandas as pd
 from ase import Atoms
 
-# Try to import RDKit for SMILES support
-try:
-    from rdkit import Chem
-    from rdkit.Chem import AllChem
-    RDKIT_AVAILABLE = True
-except ImportError:
-    RDKIT_AVAILABLE = False
+# Import RDKit for SMILES support
+from rdkit import Chem
+from rdkit.Chem import AllChem
 
 
 # SMILES Conversion Functions
 
 def smiles_to_xyz(smiles: str, filename: str, optimize_geometry=True, max_attempts=5):
     """Convert a SMILES string to an XYZ file."""
-    if not RDKIT_AVAILABLE:
-        raise ImportError("RDKit is not installed. This functionality is unavailable.")
 
     mol = Chem.MolFromSmiles(smiles)
     if mol is None:
@@ -129,8 +123,6 @@ def smiles_to_xyz(smiles: str, filename: str, optimize_geometry=True, max_attemp
 
 def smiles_to_ase_atoms(smiles: str):
     """Convert a SMILES string directly to an ASE Atoms object."""
-    if not RDKIT_AVAILABLE:
-        raise ImportError("RDKit is required for SMILES conversion. Please install rdkit-pypi.")
     
     import tempfile
     import os
@@ -157,9 +149,6 @@ def smiles_to_ase_atoms(smiles: str):
 
 def validate_smiles(smiles: str) -> bool:
     """Validate a SMILES string without generating coordinates."""
-    if not RDKIT_AVAILABLE:
-        return False
-        
     try:
         mol = Chem.MolFromSmiles(smiles)
         return mol is not None
@@ -169,9 +158,6 @@ def validate_smiles(smiles: str) -> bool:
 
 def get_molecular_info(smiles: str) -> dict:
     """Get basic molecular information from SMILES."""
-    if not RDKIT_AVAILABLE:
-        raise ImportError("RDKit is not installed")
-        
     mol = Chem.MolFromSmiles(smiles)
     if mol is None:
         raise ValueError(f"Invalid SMILES: {smiles}")
