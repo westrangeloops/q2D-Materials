@@ -37,7 +37,7 @@
     "distinct_threshold": {
       "value": 20.0,
       "description": "Threshold for distinguishing different halide configurations in mixed halide octahedra.",
-      "used_in": ["molecular_analysis.py:match_mixed_halide_octa_dot"]
+      "used_in": ["a_site_analysis.py:match_mixed_halide_octa_dot"]
     }
   },
   
@@ -69,12 +69,12 @@
     "max_distance": {
       "value": 3.2,
       "description": "Maximum H...acceptor distance for hydrogen bond detection (in Angstroms).",
-      "used_in": ["molecular_analysis.py", "pymatgen_utils.py:detect_hydrogen_bonds"]
+      "used_in": ["a_site_analysis.py", "pymatgen_utils.py:detect_hydrogen_bonds"]
     },
     "min_angle": {
       "value": 120.0,
       "description": "Minimum D-H...A angle for hydrogen bond detection (in degrees). Currently defined but not actively used in detection.",
-      "used_in": ["molecular_analysis.py", "pymatgen_utils.py:detect_hydrogen_bonds"]
+      "used_in": ["a_site_analysis.py", "pymatgen_utils.py:detect_hydrogen_bonds"]
     }
   },
   

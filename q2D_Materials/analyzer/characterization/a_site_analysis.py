@@ -1,7 +1,7 @@
-"""Molecular analysis functions for organic A-sites and mixed halide octahedra.
+"""A-site analysis functions for organic A-sites and mixed halide octahedra.
 
-This module provides functions for analyzing organic A-site molecules and
-mixed halide configurations in perovskite structures.
+This module provides functions for analyzing and identifying organic A-site
+molecules and mixed halide configurations in perovskite structures.
 
 Parts of this code are from PDynA (https://github.com/WMD-group/PDynA):
 MIT License - Copyright (c) 2022 Xia Liang

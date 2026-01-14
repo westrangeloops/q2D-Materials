@@ -17,7 +17,7 @@ from ase.io import read
 from ase import Atoms
 
 from .graph_construction import _graph_inorganic_ontology
-from ..detection.octahedral_detection import _count_octahedra, find_shared_atoms, _classify_atoms
+from ..detection.octahedral_detection import _count_octahedra, find_shared_atoms
 from ..detection.layer_identification import _identify_layers
 from ..characterization.characterization import (
     _detect_glazer_pattern, 
@@ -110,11 +110,16 @@ class q2D_analyzer:
     
     def analyze(
         self,
-        cutoff_distance: float = 4.0,
+        cutoff_distance: float = None,
         min_tolerance: float = 0.2,
         step: float = 0.1,
         max_steps: int = 20,
         non_metal_symbols: Optional[List[str]] = None,
+        # NEW: Configurable detection parameters
+        octahedra_edges: List[int] = None,  # Valid edge counts (default: [6], can add 4)
+        octahedra_centers: Optional[List[str]] = None,  # Valid B-site atoms (default: auto-detect)
+        valid_halogen: Optional[List[str]] = None,  # Valid halogens (default: ['F','Cl','Br','I','O'])
+        valid_molecule: Optional[List[str]] = None,  # Valid molecule atoms (default: ['C','H','O','N','S'])
     ) -> "q2D_analyzer":
         """
         Run full structure analysis using graph-based approach.
@@ -129,7 +134,9 @@ class q2D_analyzer:
         Parameters
         ----------
         cutoff_distance : float, optional
-            Maximum distance for octahedral neighbors (default: 4.0 Å)
+            Maximum distance for octahedral neighbors. If None (default), uses
+            element-specific cutoffs from PEROVSKITE_BOND_RADII for accurate detection.
+            Set to explicit value (e.g., 4.0) to override automatic behavior.
         min_tolerance : float, optional
             Starting bond length tolerance (default: 0.2 Å)
         step : float, optional
@@ -139,6 +146,14 @@ class q2D_analyzer:
         non_metal_symbols : list of str, optional
             Symbols to exclude from octahedral centers
             (default: ['C', 'O', 'N', 'H', 'F', 'Cl', 'Br', 'I'])
+        octahedra_edges : list of int, optional
+            Valid edge counts for octahedra (default: [6], can include 4 for 2D structures)
+        octahedra_centers : list of str, optional
+            Valid B-site atoms (default: ['Pb', 'Sn'])
+        valid_halogen : list of str, optional
+            Valid halogen/X-site atoms (default: ['Cl', 'Br', 'I'])
+        valid_molecule : list of str, optional
+            Valid molecule atoms (default: ['C', 'H', 'O', 'N', 'S'])
 
         Returns
         -------
@@ -150,6 +165,16 @@ class q2D_analyzer:
 
         if non_metal_symbols is None:
             non_metal_symbols = ['C', 'O', 'N', 'H', 'F', 'Cl', 'Br', 'I']
+        
+        # Set defaults for configurable parameters
+        if octahedra_edges is None:
+            octahedra_edges = [6]  # Default: 6 edges, can add 4 for 2D structures
+        if octahedra_centers is None:
+            octahedra_centers = ['Pb', 'Sn']  # Default B-site atoms
+        if valid_halogen is None:
+            valid_halogen = ['Cl', 'Br', 'I']  # Default valid halogens
+        if valid_molecule is None:
+            valid_molecule = ['C', 'H', 'O', 'N', 'S']  # Default molecule atoms
 
         atom_positions = self.cell.get_positions()
         atom_symbols = self.cell.get_chemical_symbols()
@@ -164,7 +189,50 @@ class q2D_analyzer:
             step=step,
             max_steps=max_steps,
             non_metal_symbols=non_metal_symbols,
+            octahedra_edges=octahedra_edges,
+            octahedra_centers=octahedra_centers,
+            valid_halogen=valid_halogen,
+            valid_molecule=valid_molecule,
         )
+        
+        # CRITICAL: Verify graph integrity - ensure all atoms are present
+        # and that structural nodes (octahedra, layers) exist
+        n_atoms = len(atom_positions)
+        atom_nodes = [n for n, d in self._graph.nodes(data=True) if d.get('node_type') == 'atom']
+        octahedra_nodes = [n for n, d in self._graph.nodes(data=True) if d.get('node_type') == 'octahedron']
+        layer_nodes = [n for n in self._graph.nodes() if 'layer' in str(n).lower()]
+        total_nodes = len(self._graph.nodes())
+        is_critical = (total_nodes == n_atoms and n_atoms > 0)
+        
+        # Print to stderr for critical issues
+        if is_critical:
+            import sys
+            print(f"CRITICAL: Graph has {total_nodes} nodes for {n_atoms} atoms - no structural nodes!", file=sys.stderr)
+        
+        # Ensure all atoms are in the graph
+        if len(atom_nodes) < n_atoms:
+            # Add missing atoms
+            for i in range(n_atoms):
+                if f'atom_{i}' not in self._graph:
+                    node_data = {
+                        'node_type': 'atom',
+                        'vasp_index': i,
+                        'symbol': atom_symbols[i] if atom_symbols else 'Unknown',
+                        'direct_coordinates': atom_positions[i].tolist(),
+                    }
+                    self._graph.add_node(f'atom_{i}', **node_data)
+        
+        # CRITICAL: If graph has exactly N nodes for N atoms, structural analysis failed
+        # This is a fundamental issue - the graph should have MORE nodes (atoms + octahedra + layers)
+        final_total = len(self._graph.nodes())
+        final_atom_nodes = len([n for n, d in self._graph.nodes(data=True) if d.get('node_type') == 'atom'])
+        final_octahedra = len([n for n, d in self._graph.nodes(data=True) if d.get('node_type') == 'octahedron'])
+        final_layers = len([n for n in self._graph.nodes() if 'layer' in str(n).lower()])
+        
+        # Print to stderr for critical issues
+        if final_total == n_atoms and n_atoms > 0:
+            import sys
+            print(f"ERROR: Graph integrity failure - {n_atoms} atoms but only {final_total} nodes (no structural nodes!)", file=sys.stderr)
 
         self._classify_molecules_in_graph(cell_matrix)
         self._structure_type = self._infer_structure_type_from_graph()
@@ -317,6 +385,17 @@ class q2D_analyzer:
             If analyze() has not been called
         """
         self._ensure_analyzed()
+        
+        # CRITICAL: Verify graph integrity when accessed
+        # If graph has same nodes as atoms, structural analysis failed
+        n_atoms = len(self.cell)
+        total_nodes = len(self._graph.nodes())
+        atom_nodes = [n for n, d in self._graph.nodes(data=True) if d.get('node_type') == 'atom']
+        octahedra_nodes = [n for n, d in self._graph.nodes(data=True) if d.get('node_type') == 'octahedron']
+        layer_nodes = [n for n in self._graph.nodes() if 'layer' in str(n).lower()]
+        other_nodes = [n for n in self._graph.nodes() if n not in atom_nodes and n not in octahedra_nodes and n not in layer_nodes]
+        
+        
         return self._graph
 
     def get_octahedra(self) -> List[Dict]:
@@ -580,14 +659,13 @@ class q2D_analyzer:
         element_pairs: List[List[str]],
         max_dist: float = 10.0,
         npoints: Optional[int] = None,
-        mode: str = "pyrovskite",
         ss_norm: bool = False,
     ) -> Dict[str, np.ndarray]:
         """
         Get partial radial distribution functions for element pairs.
 
-        Computes RDFs for specified element pairs using either ASE's
-        binning method or gaussian kernel smoothing (pyrovskite mode).
+        Computes RDFs for specified element pairs using gaussian kernel smoothing
+        for smooth, publication-quality results.
 
         Parameters
         ----------
@@ -597,10 +675,7 @@ class q2D_analyzer:
         max_dist : float
             Maximum distance in Angstroms for RDF computation (default: 10.0)
         npoints : int, optional
-            Number of grid points. If None, uses max_dist * 10 for 'ase' mode
-            or max_dist * 50 for 'pyrovskite' mode
-        mode : str
-            'ase' or 'pyrovskite'. 'pyrovskite' uses gaussian kernel smoothing (default: 'pyrovskite')
+            Number of grid points. If None, automatically determined based on distance range
         ss_norm : bool
             Whether to apply structure-specific normalization (default: False)
 
@@ -612,29 +687,29 @@ class q2D_analyzer:
             - "{pair}_rdf": RDF values
         """
         self._ensure_analyzed()
-        return _calculate_partial_rdf(self, element_pairs, max_dist, npoints, mode, ss_norm)
+        return _calculate_partial_rdf(self, element_pairs, max_dist, npoints, ss_norm)
 
     def get_characterization(self) -> CharacterizationQuery:
         """
         Get a query builder for graph-based characterization analysis.
-        
+
         Provides a unified interface for:
         - Routing standard analyses (Glazer, RDF, B-X-B)
         - Querying the graph structure
         - Method chaining for complex queries
-        
+
         Returns
         -------
         CharacterizationQuery
             Query builder instance for characterization analysis
-        
+
         Examples
         --------
         >>> # Standard analysis routing
         >>> result = analyzer.get_characterization().glazer(tolerance=0.1).execute()
         >>> result = analyzer.get_characterization().rdf([["Pb", "I"]]).execute()
         >>> result = analyzer.get_characterization().bxb(include_bp=True).execute()
-        
+
         >>> # Graph queries with method chaining
         >>> result = (analyzer.get_characterization()
         ...          .octahedra()
@@ -643,6 +718,236 @@ class q2D_analyzer:
         """
         self._ensure_analyzed()
         return CharacterizationQuery(self)
+
+    def compute_delta(
+        self,
+        octahedra: Optional[List[str]] = None,
+        layer: Optional[str] = None,
+        layers: Optional[List[str]] = None,
+        group_by: Optional[str] = None,
+    ) -> Union[float, Dict[str, float]]:
+        """
+        Compute octahedral bond length distortion parameter (Δ).
+
+        Delta is the mean absolute deviation of B-X bond lengths from
+        the average bond length, normalized by the mean bond length:
+
+        Δ = (1/n) Σ |d_i - d_avg| / d_avg
+
+        Parameters
+        ----------
+        octahedra : list of str, optional
+            Specific octahedra IDs to include (e.g., ['octahedron_0', 'octahedron_1'])
+        layer : str, optional
+            Single layer ID to filter by (e.g., '0')
+        layers : list of str, optional
+            Multiple layer IDs to filter by (e.g., ['0', '1'])
+        group_by : str, optional
+            If 'layer', returns dict with per-layer results plus 'global' key
+
+        Returns
+        -------
+        float or dict
+            If group_by is None: Delta distortion parameter (float)
+            If group_by == 'layer': Dict with layer IDs as keys, each containing delta value,
+                                    plus 'global' key with overall delta
+            Returns None if no octahedra found.
+
+        Examples
+        --------
+        >>> analyzer = q2D_analyzer("structure.cif")
+        >>> analyzer.analyze()
+        >>> # Global distortion
+        >>> delta = analyzer.compute_delta()
+        >>> print(f"Bond length distortion: {delta:.4f}")
+        >>>
+        >>> # Per-layer analysis
+        >>> delta_by_layer = analyzer.compute_delta(group_by='layer')
+        >>> for layer_id, delta in delta_by_layer.items():
+        ...     print(f"Layer {layer_id}: Δ = {delta:.4f}")
+        >>>
+        >>> # Single layer
+        >>> delta_layer0 = analyzer.compute_delta(layer='0')
+        >>> print(f"Layer 0 distortion: {delta_layer0:.4f}")
+        """
+        from ..characterization.distortions import _compute_octahedral_distortions
+        self._ensure_analyzed()
+        result = _compute_octahedral_distortions(
+            self, octahedra=octahedra, layer=layer, layers=layers, group_by=group_by
+        )
+        if group_by == 'layer':
+            return {k: v['delta'] for k, v in result.items()}
+        return result['delta']
+
+    def compute_sigma(
+        self,
+        octahedra: Optional[List[str]] = None,
+        layer: Optional[str] = None,
+        layers: Optional[List[str]] = None,
+        group_by: Optional[str] = None,
+    ) -> Union[float, Dict[str, float]]:
+        """
+        Compute octahedral bond length variance parameter (σ²).
+
+        Sigma squared is the variance of B-X bond lengths, normalized
+        by the square of the mean bond length:
+
+        σ² = Var(d_i) / d_avg²
+
+        Parameters
+        ----------
+        octahedra : list of str, optional
+            Specific octahedra IDs to include
+        layer : str, optional
+            Single layer ID to filter by
+        layers : list of str, optional
+            Multiple layer IDs to filter by
+        group_by : str, optional
+            If 'layer', returns dict with per-layer results plus 'global' key
+
+        Returns
+        -------
+        float or dict
+            If group_by is None: Sigma squared distortion parameter (float)
+            If group_by == 'layer': Dict with layer IDs as keys
+            Returns None if no octahedra found.
+
+        Examples
+        --------
+        >>> analyzer = q2D_analyzer("structure.cif")
+        >>> analyzer.analyze()
+        >>> sigma = analyzer.compute_sigma()
+        >>> print(f"Bond length variance: {sigma:.6f}")
+        >>>
+        >>> # Per-layer analysis
+        >>> sigma_by_layer = analyzer.compute_sigma(group_by='layer')
+        >>> for layer_id, sigma in sigma_by_layer.items():
+        ...     print(f"Layer {layer_id}: σ² = {sigma:.6f}")
+        """
+        from ..characterization.distortions import _compute_octahedral_distortions
+        self._ensure_analyzed()
+        result = _compute_octahedral_distortions(
+            self, octahedra=octahedra, layer=layer, layers=layers, group_by=group_by
+        )
+        if group_by == 'layer':
+            return {k: v['sigma'] for k, v in result.items()}
+        return result['sigma']
+
+    def compute_lambda(
+        self,
+        octahedra: Optional[List[str]] = None,
+        layer: Optional[str] = None,
+        layers: Optional[List[str]] = None,
+        group_by: Optional[str] = None,
+    ) -> Union[float, Dict[str, float]]:
+        """
+        Compute octahedral bond angle distortion parameter (λ²).
+
+        Lambda squared is the variance of X-B-X bond angle deviations
+        from ideal angles (90° or 180°):
+
+        λ² = Var(min(|θ_i - 90°|, |θ_i - 180°|))
+
+        Parameters
+        ----------
+        octahedra : list of str, optional
+            Specific octahedra IDs to include
+        layer : str, optional
+            Single layer ID to filter by
+        layers : list of str, optional
+            Multiple layer IDs to filter by
+        group_by : str, optional
+            If 'layer', returns dict with per-layer results plus 'global' key
+
+        Returns
+        -------
+        float or dict
+            If group_by is None: Lambda squared distortion parameter (float)
+            If group_by == 'layer': Dict with layer IDs as keys
+            Returns None if no octahedra found.
+
+        Examples
+        --------
+        >>> analyzer = q2D_analyzer("structure.cif")
+        >>> analyzer.analyze()
+        >>> lambda_param = analyzer.compute_lambda()
+        >>> print(f"Bond angle variance: {lambda_param:.4f}")
+        >>>
+        >>> # Per-layer analysis
+        >>> lambda_by_layer = analyzer.compute_lambda(group_by='layer')
+        >>> for layer_id, lambda_val in lambda_by_layer.items():
+        ...     print(f"Layer {layer_id}: λ² = {lambda_val:.4f}")
+        """
+        from ..characterization.distortions import _compute_octahedral_distortions
+        self._ensure_analyzed()
+        result = _compute_octahedral_distortions(
+            self, octahedra=octahedra, layer=layer, layers=layers, group_by=group_by
+        )
+        if group_by == 'layer':
+            return {k: v['lambda'] for k, v in result.items()}
+        return result['lambda']
+
+    def get_octahedral_distortions(
+        self,
+        octahedra: Optional[List[str]] = None,
+        layer: Optional[str] = None,
+        layers: Optional[List[str]] = None,
+    ) -> Dict[str, Dict[str, Union[float, np.ndarray, str]]]:
+        """
+        Get detailed per-octahedron distortion metrics with layer information.
+
+        This method returns comprehensive distortion data for each octahedron,
+        including delta, sigma, lambda parameters, raw bond lengths and angles,
+        and layer assignment. Useful for detailed analysis and custom visualizations.
+
+        Parameters
+        ----------
+        octahedra : list of str, optional
+            Specific octahedra IDs to include (e.g., ['octahedron_0', 'octahedron_1'])
+        layer : str, optional
+            Single layer ID to filter by (e.g., '0')
+        layers : list of str, optional
+            Multiple layer IDs to filter by (e.g., ['0', '1'])
+
+        Returns
+        -------
+        dict
+            Octahedron ID -> metrics dict containing:
+            - 'delta': Bond length distortion (Δ)
+            - 'sigma': Bond length variance (σ²)
+            - 'lambda': Bond angle variance (λ²)
+            - 'bond_lengths': Array of B-X bond lengths
+            - 'bond_angles': Array of X-B-X angles
+            - 'mean_bond_length': Mean B-X bond length
+            - 'mean_angle': Mean X-B-X angle
+            - 'layer': Layer ID this octahedron belongs to
+            - 'central_atom_index': Index of B-site atom
+            - 'central_atom_symbol': Element symbol of B-site
+
+        Examples
+        --------
+        >>> analyzer = q2D_analyzer("structure.cif")
+        >>> analyzer.analyze()
+        >>>
+        >>> # Get all octahedra distortions
+        >>> oct_data = analyzer.get_octahedral_distortions()
+        >>> for oct_id, metrics in oct_data.items():
+        ...     print(f"{oct_id} (Layer {metrics['layer']}):")
+        ...     print(f"  Δ={metrics['delta']:.4f}, σ²={metrics['sigma']:.6f}")
+        >>>
+        >>> # Filter by layer
+        >>> layer0_oct = analyzer.get_octahedral_distortions(layer='0')
+        >>> print(f"Layer 0 has {len(layer0_oct)} octahedra")
+        >>>
+        >>> # Access specific octahedron
+        >>> oct0 = analyzer.get_octahedral_distortions(octahedra=['octahedron_0'])
+        >>> print(f"Bond lengths: {oct0['octahedron_0']['bond_lengths']}")
+        """
+        from ..characterization.distortions import _get_octahedral_distortions_detailed
+        self._ensure_analyzed()
+        return _get_octahedral_distortions_detailed(
+            self, octahedra=octahedra, layer=layer, layers=layers
+        )
 
     @property
     def structure_type(self) -> str:
@@ -657,6 +962,62 @@ class q2D_analyzer:
         self._ensure_analyzed()
         return self._structure_type
 
+    def analyze_spacer_molecules(self, spacer_type: str = "DJ") -> List:
+        """Analyze all spacer molecules in structure.
+
+        Computes penetration depth, compression, backbone, and side chains
+        for all spacer molecules detected in the structure.
+
+        Parameters
+        ----------
+        spacer_type : str, default="DJ"
+            Type of spacer to analyze ("DJ" or "RP")
+
+        Returns
+        -------
+        List[SpacerAnalysisResult]
+            List of analysis results, one per spacer molecule
+
+        Raises
+        ------
+        RuntimeError
+            If analyze() has not been called
+        ValueError
+            If no spacers found in structure
+
+        Examples
+        --------
+        >>> analyzer = q2D_analyzer("structure.cif")
+        >>> analyzer.analyze()
+        >>>
+        >>> # Analyze all spacers
+        >>> results = analyzer.analyze_spacer_molecules()
+        >>>
+        >>> for i, result in enumerate(results):
+        ...     print(f"Spacer {i}: compression={result.compression_factor:.2f}")
+        """
+        from q2D_Materials.analyzer.characterization.spacer_analysis import SpacerAnalysis
+        from q2D_Materials.modifier.graph_view import GraphView
+
+        self._ensure_analyzed()
+
+        # Create GraphView to access molecules
+        view = GraphView(self)
+
+        # Get spacers
+        spacers = view.spacers.list()
+
+        if not spacers:
+            raise ValueError("No spacers found in structure")
+
+        # Analyze each spacer
+        results = []
+        for spacer in spacers:
+            analyzer_inst = SpacerAnalysis(spacer, self, spacer_type=spacer_type)
+            results.append(analyzer_inst.compute())
+
+        return results
+
     def _ensure_analyzed(self) -> None:
         """Ensure analyze() has been called."""
         if not self._analyzed:
@@ -664,9 +1025,10 @@ class q2D_analyzer:
                 "Structure has not been analyzed. Call analyze() first."
             )
 
-    def analyze_molecule_as_dj_spacer(
+    def mol_validate(
         self,
         molecule: Union[Atoms, str],
+        spacer_type: str = "DJ",
         initial_pattern: Union[str, List[str]] = None,
         final_pattern: Union[str, List[str]] = None,
         min_chain_length: int = 2,
@@ -676,22 +1038,26 @@ class q2D_analyzer:
         allow_same_carbon: bool = False
     ):
         """
-        Analyze if molecule is suitable as DJ spacer using pattern matching.
+        Validate if molecule is suitable as DJ or RP spacer using pattern matching.
 
-        Checks for valid paths between terminal groups matching specified patterns.
-        Default patterns: 'NH2C' (supports both NH2 and NH3 groups via pattern matching)
+        DJ (Dion-Jacobson) spacers require 2 terminal groups with valid paths between them.
+        RP (Ruddlesden-Popper) spacers require at least 1 terminal group.
 
         Parameters
         ----------
         molecule : Atoms or str
             ASE Atoms object or SMILES string
+        spacer_type : str
+            Type of spacer: "DJ" or "RP" (default: "DJ")
         initial_pattern : str or List[str], optional
             SMILES pattern(s) for initial terminal (default: 'NH2C')
             Examples: '[NH3+]C', 'NH2C', ['[NH3+]C', 'NH2C']
         final_pattern : str or List[str], optional
             SMILES pattern(s) for final terminal (default: 'NH2C')
+            Ignored for RP spacers
         min_chain_length : int
-            Minimum atoms between terminal carbons (default: 2)
+            Minimum atoms between terminal carbons for DJ (default: 2)
+            Ignored for RP spacers
         allowed_backbone_elements : Set[str], optional
             Elements allowed in backbone path (default: {'C', 'N', 'O'})
         forbidden_backbone_elements : Set[str], optional
@@ -700,23 +1066,28 @@ class q2D_analyzer:
             Maximum ratio of non-carbon heavy atoms in backbone (default: 0.3)
         allow_same_carbon : bool
             Whether terminals can share the same carbon (default: False)
+            Ignored for RP spacers
 
         Returns
         -------
         SpacerCandidateResult
-            Analysis with validity, terminal groups, and paths
+            Analysis with validity, terminal groups, and paths (DJ only)
 
         Examples
         --------
         >>> analyzer = q2D_analyzer()
-        >>> result = analyzer.analyze_molecule_as_dj_spacer("NCCCCN")
+        >>> # Validate as DJ spacer
+        >>> result = analyzer.mol_validate("NCCCCN", spacer_type="DJ")
         >>> print(f"Valid: {result.is_valid}")
-        >>> print(f"Paths: {len(result.valid_paths)}")
+        >>> 
+        >>> # Validate as RP spacer
+        >>> result = analyzer.mol_validate("NCCCCC", spacer_type="RP")
+        >>> print(f"Valid: {result.is_valid}")
         """
         from ..characterization.molecule_candidates import analyze_molecule_candidate
         return analyze_molecule_candidate(
             molecule,
-            spacer_type="DJ",
+            spacer_type=spacer_type.upper(),
             initial_pattern=initial_pattern,
             final_pattern=final_pattern,
             min_chain_length=min_chain_length,
@@ -750,7 +1121,7 @@ class q2D_analyzer:
 
         Examples
         --------
-        >>> result = analyzer.analyze_molecule_as_dj_spacer("NCCN")
+        >>> result = analyzer.mol_validate("NCCN", spacer_type="DJ")
         >>> # If NH2 groups detected
         >>> modified = analyzer.convert_molecule_nh2_to_nh3(result.original_atoms)
         """
@@ -795,7 +1166,7 @@ class q2D_analyzer:
 
         Examples
         --------
-        >>> result = analyzer.analyze_molecule_as_dj_spacer("NCCCCN")
+        >>> result = analyzer.mol_validate("NCCCCN", spacer_type="DJ")
         >>> elongated = analyzer.elongate_dj_spacer(
         ...     result.original_atoms,
         ...     target_distance=12.0
@@ -803,44 +1174,6 @@ class q2D_analyzer:
         """
         from ...builders.optimizers import elongate_molecule
         return elongate_molecule(molecule, max_iterations=max_iterations, target_distance=target_distance)
-
-    def analyze_molecule_as_rp_spacer(
-        self,
-        molecule: Union[Atoms, str],
-        initial_pattern: Union[str, List[str]] = None
-    ):
-        """
-        Analyze if molecule is suitable as RP spacer using pattern matching.
-
-        RP (Ruddlesden-Popper) spacers are monofunctional, requiring at least
-        one terminal group matching the specified pattern.
-
-        Parameters
-        ----------
-        molecule : Atoms or str
-            ASE Atoms object or SMILES string
-        initial_pattern : str or List[str], optional
-            SMILES pattern(s) for terminal group (default: 'NH2C')
-            Examples: '[NH3+]C', 'NH2C', ['[NH3+]C', 'NH2C']
-
-        Returns
-        -------
-        SpacerCandidateResult
-            Analysis with validity, terminal groups
-
-        Examples
-        --------
-        >>> analyzer = q2D_analyzer()
-        >>> result = analyzer.analyze_molecule_as_rp_spacer("NCCCCC")
-        >>> print(f"Valid: {result.is_valid}")
-        >>> print(f"Terminal groups: {len(result.terminal_groups)}")
-        """
-        from ..characterization.molecule_candidates import analyze_molecule_candidate
-        return analyze_molecule_candidate(
-            molecule,
-            spacer_type="RP",
-            initial_pattern=initial_pattern
-        )
 
     def to_q2DStructure(self) -> q2DStructure:
         """

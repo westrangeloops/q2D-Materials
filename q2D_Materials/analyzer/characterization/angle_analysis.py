@@ -13,6 +13,11 @@ _calculate_bxb_angles
 from typing import Tuple, Optional
 import numpy as np
 from ..detection.octahedral_detection import find_shared_atoms
+from ..utils.geometry_helpers import (
+    apply_pbc_to_vector,
+    calculate_angle_between_vectors,
+    get_all_x_atoms_from_octahedron,
+)
 
 
 def _calculate_bxb_angles(
@@ -53,14 +58,10 @@ def _calculate_bxb_angles(
     atom_positions = analyzer.cell.get_positions()
     cell = np.array(analyzer.cell.get_cell())
 
-    # Build neighbor indices list for find_shared_atoms
+    # Build neighbor indices list for find_shared_atoms using shared utility
     neighbor_indices = []
     for oct in octahedra:
-        all_neighbors = (
-            oct.get("terminal_atoms", [])
-            + oct.get("interlayer_atoms", [])
-            + oct.get("intralayer_atoms", [])
-        )
+        all_neighbors = get_all_x_atoms_from_octahedron(oct)
         neighbor_indices.append(all_neighbors)
 
     # Find shared atoms between octahedra
@@ -103,30 +104,21 @@ def _calculate_bxb_angles(
             b_j_pos = atom_positions[b_j_idx]
             x_pos = atom_positions[x_idx]
 
-            # Calculate vectors with PBC
+            # Calculate vectors with PBC using shared utility
             vec_xi = x_pos - b_i_pos
-            vec_xi = vec_xi - np.round(vec_xi @ np.linalg.inv(cell).T) @ cell
+            vec_xi = apply_pbc_to_vector(vec_xi, cell)
 
             vec_xj = x_pos - b_j_pos
-            vec_xj = vec_xj - np.round(vec_xj @ np.linalg.inv(cell).T) @ cell
+            vec_xj = apply_pbc_to_vector(vec_xj, cell)
 
-            # Calculate angle
-            norm_xi = np.linalg.norm(vec_xi)
-            norm_xj = np.linalg.norm(vec_xj)
-
-            if norm_xi > 1e-6 and norm_xj > 1e-6:
-                cos_angle = np.dot(vec_xi, vec_xj) / (norm_xi * norm_xj)
-                cos_angle = np.clip(cos_angle, -1.0, 1.0)
-                angle = np.arccos(cos_angle) * 180.0 / np.pi
-                bxb_angles.append(angle)
+            # Calculate angle using shared utility
+            angle = calculate_angle_between_vectors(vec_xi, vec_xj, cell=cell, apply_pbc=False)
+            bxb_angles.append(angle)
 
             # Check for B-X-Bp angles if needed
             if include_bp and b_j_idx in bp_site_indices:
-                if norm_xi > 1e-6 and norm_xj > 1e-6:
-                    cos_angle = np.dot(vec_xi, vec_xj) / (norm_xi * norm_xj)
-                    cos_angle = np.clip(cos_angle, -1.0, 1.0)
-                    angle = np.arccos(cos_angle) * 180.0 / np.pi
-                    bxbp_angles.append(angle)
+                angle_bp = calculate_angle_between_vectors(vec_xi, vec_xj, cell=cell, apply_pbc=False)
+                bxbp_angles.append(angle_bp)
 
     bxb_array = np.array(bxb_angles) if bxb_angles else None
     bxbp_array = np.array(bxbp_angles) if bxbp_angles else None

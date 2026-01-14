@@ -2,14 +2,22 @@
 
 # 19. Molecule Modifier — Fragment Replacement in Perovskite Structures
 
-The `q2D_Materials.modifier` module provides a graph-based API for identifying and modifying molecular fragments in perovskite structures. It allows you to replace specific atoms in spacer molecules or A-site cations with custom molecular fragments using SMILES notation.
+The `q2D_Materials.modifier` module provides a graph-based API for identifying and modifying molecular fragments in perovskite structures. It allows you to modify molecules using RDKit for chemistry operations, or replace specific atoms with custom molecular fragments using SMILES notation.
+
+**Two Approaches Available**:
+1. **RDKit API** (`to_rdkit()`, `update_from_rdkit()`): For complex chemistry operations - modifications done outside with RDKit, then passed back with automatic coordinate preservation
+2. **Fragment Replacement** (`replace()` method): For simple atom→fragment swaps - convenient API for basic replacements
+
+Both approaches use RDKit under the hood and preserve coordinates appropriately.
 
 ## Overview
 
 The modifier module works by:
 1. **Analyzing the structure** to build a graph representation
 2. **Identifying molecules** (spacers and A-site cations) as subgraphs
-3. **Replacing atoms** in molecules with fragments specified via SMILES strings
+3. **Modifying molecules** using either:
+   - RDKit API: Convert to RDKit Mol, modify externally, update back
+   - Fragment replacement: Replace atoms with fragments specified via SMILES strings
 4. **Reconstructing the full structure** with the modified molecules
 
 ## Key Concepts
@@ -25,7 +33,9 @@ Each molecule is represented as a `MoleculeGraph` object with:
 - `original_indices` - Atom indices in the original structure
 - `smiles` - SMILES representation of the molecule
 - `to_json()` - Detailed molecular information
-- `replace()` - Method to replace an atom with a fragment
+- `to_rdkit()` - Convert to RDKit Mol for chemistry operations (NEW)
+- `update_from_rdkit()` - Update molecule from modified RDKit Mol (NEW)
+- `replace()` - Method to replace an atom with a fragment (convenient for simple replacements)
 
 ### Fragment Specification
 Fragments are specified using **SMILES notation** with **explicit attachment points**:
@@ -97,7 +107,84 @@ for atom in spacer_info['atoms']:
           f"is_attachment: {atom['is_attachment']}")
 ```
 
-### Step 4: Replace Atom with Fragment
+### Step 4: Modify Molecule - Two Approaches
+
+The modifier provides **two approaches** for molecular modifications, both using RDKit under the hood:
+
+#### Approach 1: RDKit API (Recommended for Complex Operations)
+
+**Use this for**: Complex chemistry operations, reactions, bond modifications, adding functional groups
+
+The RDKit API allows you to do modifications outside with RDKit, then pass the modified molecule back:
+
+**RDKit Workflow**: Convert → Modify → Update back with coordinate preservation
+
+```python
+from rdkit.Chem import AllChem
+
+# Convert molecule to RDKit Mol
+rdkit_mol = spacer.to_rdkit()
+
+# Perform any RDKit operations
+# Example: Add hydrogens
+rdkit_mol = AllChem.AddHs(rdkit_mol)
+
+# Example: Modify with RDKit (add methyl group, change bonds, etc.)
+# ... perform RDKit modifications ...
+
+# Update molecule back with coordinate preservation
+# Only changed atoms are recalculated; unchanged atoms preserve original coordinates
+# Requires at least 2 atoms to be conserved
+modified_structure = spacer.update_from_rdkit(rdkit_mol, validate=True)
+
+# Save modified structure
+write("modified_structure.vasp", modified_structure, format="vasp")
+```
+
+**Key Features**:
+- Full access to RDKit's chemistry toolkit
+- Automatically preserves coordinates of unchanged atoms
+- Requires at least 2 atoms to be conserved (for coordinate mapping)
+- Best for complex chemistry operations
+
+#### Approach 2: Fragment Replacement Method (Convenient for Simple Replacements)
+
+**Use this for**: Simple atom replacements, swapping one atom with a fragment
+
+For simple atom replacements, you can use the `replace()` method:
+
+```python
+from q2D_Materials.modifier import from_smiles
+
+# Create fragment from SMILES (uses RDKit internally)
+fragment = from_smiles("[CH0]=C")  # Vinyl group with explicit attachment point
+
+# Replace the carbon atom with the fragment
+modified_structure = spacer.replace(
+    atom_index=target_carbon,
+    fragment_graph=fragment,
+    fragment_index=0,  # Use first atom of fragment as attachment
+)
+
+# Save modified structure
+write("modified_structure.vasp", modified_structure, format="vasp")
+```
+
+**Key Features**:
+- Convenient for simple atom→fragment swaps
+- Handles geometry-aware positioning automatically
+- Uses RDKit internally (`from_smiles()` uses RDKit)
+- No need to manually edit RDKit Mol objects
+
+**When to use which approach**:
+- **RDKit API**: Complex modifications (reactions, multiple bond changes, adding groups)
+- **replace() method**: Simple atom replacements (swap C with [CH0]=C, etc.)
+
+Both approaches use RDKit under the hood and preserve coordinates appropriately.
+
+### Step 4b: Detailed Examples
+
+#### Example: Using RDKit API for Fragment Replacement
 
 ```python
 # Find carbon atoms in the spacer
@@ -280,9 +367,11 @@ The following images show examples of molecule modification:
 - If molecules are not detected, they cannot be accessed via GraphView
 
 ### 7. RDKit Dependency
-- SMILES conversion requires **RDKit** to be installed
-- Fragment validation requires RDKit
+- **RDKit is now required** for all SMILES parsing and molecular operations
+- SMILES conversion uses RDKit (no custom parser)
+- Fragment validation uses RDKit
 - Install with: `pip install rdkit-pypi`
+- The new `to_rdkit()` and `update_from_rdkit()` methods provide full RDKit integration
 
 ### 8. Hydrogen Handling
 - Hydrogen distribution follows valence rules
@@ -290,16 +379,136 @@ The following images show examples of molecule modification:
 - Other cases may keep some hydrogens if valence allows
 
 ### 9. Complex Fragments
-- Very large or complex fragments may have geometry issues
-- Bond detection relies on distance-based heuristics
-- Some edge cases in bond order detection may occur
+- RDKit handles complex molecules robustly
+- Bond detection uses RDKit's chemical knowledge
+- For very large molecules (>1000 atoms), coordinate mapping may be slower
 
 ### 10. Periodic Boundary Conditions
 - PBC is handled, but complex cases with multiple unit cells may need careful testing
 
+## Two Approaches for Molecular Modifications
+
+The modifier module provides **two complementary approaches** for modifying molecules:
+
+### Approach 1: RDKit API (Recommended for Complex Operations)
+
+The RDKit API provides full access to RDKit's chemistry operations. Modifications are done outside with RDKit, then passed back:
+
+#### Basic RDKit Workflow
+
+```python
+from rdkit.Chem import AllChem
+from q2D_Materials.modifier import GraphView
+
+# Get molecule
+view = GraphView(analyzer)
+molecule = view.molecules.list()[0]
+
+# Convert to RDKit Mol
+rdkit_mol = molecule.to_rdkit()
+
+# Perform any RDKit operations
+rdkit_mol = AllChem.AddHs(rdkit_mol)  # Add hydrogens
+# ... any other RDKit modifications ...
+
+# Update back with coordinate preservation
+# Only changed atoms are recalculated; unchanged atoms preserve coordinates
+# Requires at least 2 atoms to be conserved
+modified_structure = molecule.update_from_rdkit(rdkit_mol, validate=True)
+```
+
+**Use this approach when**:
+- Performing complex chemistry operations
+- Using RDKit reactions
+- Modifying multiple bonds or atoms
+- Adding functional groups via RDKit's chemistry toolkit
+
+### Approach 2: Fragment Replacement Method (Convenient for Simple Replacements)
+
+The `replace()` method provides a convenient way to swap atoms with fragments:
+
+```python
+from q2D_Materials.modifier import GraphView, from_smiles
+
+# Get molecule
+view = GraphView(analyzer)
+molecule = view.molecules.list()[0]
+
+# Create fragment from SMILES (uses RDKit internally)
+fragment = from_smiles("[CH0]=C")  # Vinyl group
+
+# Replace atom with fragment
+modified_structure = molecule.replace(
+    atom_index=target_atom_index,
+    fragment_graph=fragment,
+    fragment_index=0
+)
+```
+
+**Use this approach when**:
+- Simply replacing one atom with a fragment
+- You want automatic geometry-aware positioning
+- You prefer a simpler API for basic replacements
+
+**Both approaches**:
+- Use RDKit under the hood
+- Preserve coordinates appropriately
+- Handle geometry correctly
+- Are fully supported
+
+### Coordinate Preservation
+
+The `update_from_rdkit()` method:
+- **Detects only changed atoms** - unchanged atoms preserve original coordinates
+- **Requires ≥2 conserved atoms** - fails if user changes everything
+- **Validates automatically** - RDKit structures are already validated
+
+### Example: Adding Functional Groups
+
+```python
+from rdkit import Chem
+from rdkit.Chem import AllChem
+
+molecule = view.molecules.list()[0]
+rdkit_mol = molecule.to_rdkit()
+
+# Example: Add methyl group (requires RDKit reaction)
+# ... RDKit operations ...
+
+modified = molecule.update_from_rdkit(rdkit_mol)
+```
+
+### Error Handling
+
+```python
+try:
+    modified = molecule.update_from_rdkit(rdkit_mol)
+except ValueError as e:
+    if "less than 2 atoms conserved" in str(e):
+        print("Error: Too many atoms changed. Need at least 2 conserved atoms.")
+    else:
+        print(f"Error: {e}")
+```
+
 ## Best Practices
 
-1. **Always use explicit SMILES notation**:
+1. **Choose the right approach for your use case**:
+   ```python
+   # Use RDKit API for complex chemistry operations
+   rdkit_mol = molecule.to_rdkit()
+   # ... modify with RDKit (reactions, multiple changes, etc.) ...
+   modified = molecule.update_from_rdkit(rdkit_mol)
+   
+   # Use replace() for simple atom replacements
+   fragment = from_smiles("[CH0]=C")
+   modified = molecule.replace(atom_index, fragment_graph)
+   ```
+   
+   **Guidelines**:
+   - **RDKit API**: Complex modifications, reactions, multiple bond changes
+   - **replace() method**: Simple atom→fragment swaps
+
+2. **Always use explicit SMILES notation** (for `replace()` method):
    ```python
    # Good
    fragment = from_smiles("[CH0]=C")
@@ -334,7 +543,67 @@ The following images show examples of molecule modification:
    - Start with small, well-defined fragments
    - Verify results before using complex fragments
 
-## Complete Example
+## Complete Example: RDKit-Based Workflow (Recommended)
+
+```python
+from q2D_Materials.core.creator import q2D_creator
+from q2D_Materials.analyzer import q2D_analyzer
+from q2D_Materials.modifier import GraphView
+from rdkit import Chem
+from rdkit.Chem import AllChem
+from ase.io import write
+
+# 1. Create structure
+creator = q2D_creator()
+structure = creator.create_structure(
+    structure_type="bulk",
+    A_ions="MA", B_ions="Pb", X_ions="I",
+    template="cubic",
+    layer_sequence="DJ",
+    thickness=2,
+    spacer="[NH3+]CCCCCC[NH3+]",
+    xy_expansion=(1, 1),
+)
+
+# 2. Analyze structure
+analyzer = q2D_analyzer(structure)
+analyzer.analyze()
+
+# 3. Access molecules
+view = GraphView(analyzer)
+spacers = view.spacers.list()
+
+if len(spacers) == 0:
+    raise ValueError("No spacers found in structure")
+
+spacer = spacers[0]
+
+# 4. Convert to RDKit for modifications
+rdkit_mol = spacer.to_rdkit()
+
+# 5. Perform RDKit operations
+# Example: Add hydrogens
+rdkit_mol = AllChem.AddHs(rdkit_mol)
+
+# Example: Any other RDKit modifications
+# ... modify molecule with RDKit ...
+
+# 6. Update back with coordinate preservation
+# Only changed atoms are recalculated; unchanged atoms preserve coordinates
+# Requires at least 2 atoms to be conserved
+try:
+    modified_structure = spacer.update_from_rdkit(rdkit_mol, validate=True)
+except ValueError as e:
+    if "less than 2 atoms conserved" in str(e):
+        print("Error: Too many atoms changed. Need at least 2 conserved atoms.")
+    raise
+
+# 7. Save result
+write("modified.vasp", modified_structure, format="vasp")
+print(f"Modified structure saved: {len(modified_structure)} atoms")
+```
+
+## Complete Example: Fragment Replacement with replace() Method
 
 ```python
 from q2D_Materials.core.creator import q2D_creator
@@ -420,7 +689,9 @@ molecule = view.spacers[0]
 
 **Methods:**
 - `molecule.to_json()` - Return detailed molecule information as dict
-- `molecule.replace(atom_index, fragment_graph, fragment_index=0)` - Replace atom with fragment
+- `molecule.to_rdkit()` - Convert to RDKit Mol for chemistry operations (NEW)
+- `molecule.update_from_rdkit(mol, validate=True)` - Update from modified RDKit Mol (NEW)
+- `molecule.replace(atom_index, fragment_graph, fragment_index=0)` - Replace atom with fragment (convenient for simple replacements)
 - `molecule.smiles` - SMILES representation (property)
 
 **Properties:**
@@ -432,7 +703,7 @@ molecule = view.spacers[0]
 ```python
 from_smiles(smiles: str, validate: bool = True) -> nx.Graph
 ```
-Convert SMILES string to NetworkX graph.
+Convert SMILES string to NetworkX graph using RDKit (no 3D coordinates).
 
 ```python
 validate_fragment(smiles: str, fragment_index: int = 0) -> Tuple[bool, str]
@@ -453,8 +724,9 @@ Convert ASE Atoms object to SMILES string (requires RDKit).
 
 ### "Fragment validation failed"
 - Use explicit SMILES notation: `[CH0]=C` not `C=C`
-- Check that SMILES is valid
-- Ensure RDKit is installed
+- Check that SMILES is valid (RDKit will validate)
+- Ensure RDKit is installed: `pip install rdkit-pypi`
+- Invalid SMILES will raise `ValueError` with clear error message
 
 ### "Invalid replacement: ..."
 - Check valence compatibility

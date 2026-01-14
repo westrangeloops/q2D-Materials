@@ -7,7 +7,11 @@ from typing import Optional, Tuple
 from ase import Atoms
 
 from q2D_Materials.utils.molecules.molecule_builder import validate_smiles
-from q2D_Materials.utils.molecules.smiles_parser import smiles_to_graph as direct_smiles_to_graph
+from q2D_Materials.utils.molecules.graph_converter import (
+    rdkit_to_graph,
+    graph_to_rdkit,
+    validate_smiles as validate_smiles_rdkit
+)
 from q2D_Materials.utils.properties.atomic_properties import get_covalent_radius
 
 logger = logging.getLogger(__name__)
@@ -98,8 +102,12 @@ def validate_fragment(smiles: str, fragment_index: int = 0) -> Tuple[bool, str]:
         return False, f"Invalid SMILES string: {smiles}"
     
     try:
-        # Use fast direct SMILES parsing (no 3D coordinates needed)
-        mol_graph = direct_smiles_to_graph(smiles, add_positions=False)
+        # Use RDKit for SMILES parsing (no 3D coordinates needed)
+        validate_smiles_rdkit(smiles)
+        mol = Chem.MolFromSmiles(smiles)
+        if mol is None:
+            return False, f"RDKit could not parse SMILES string: {smiles}"
+        mol_graph = rdkit_to_graph(mol, coords=None)
         fragment_nodes = list(mol_graph.nodes())
         
         if fragment_index >= len(fragment_nodes):
@@ -127,9 +135,9 @@ def validate_fragment(smiles: str, fragment_index: int = 0) -> Tuple[bool, str]:
 
 
 def from_smiles(smiles: str, validate: bool = True) -> nx.Graph:
-    """Convert SMILES string to NetworkX graph using graph-based parsing.
+    """Convert SMILES string to NetworkX graph using RDKit.
 
-    Uses fast direct SMILES parsing without 3D coordinate generation.
+    Uses RDKit for SMILES parsing without 3D coordinate generation.
     Pattern matching is based solely on element symbols and neighbor connectivity,
     making it fast, accurate, and geometry-independent.
 
@@ -153,7 +161,7 @@ def from_smiles(smiles: str, validate: bool = True) -> nx.Graph:
     Raises
     ------
     ValueError
-        If validation fails and validate=True
+        If validation fails and validate=True, or if SMILES is invalid
     """
     if validate:
         is_valid, message = validate_fragment(smiles, fragment_index=0)
@@ -164,10 +172,14 @@ def from_smiles(smiles: str, validate: bool = True) -> nx.Graph:
                 f"(e.g., [CH0]=C for vinyl group with explicit attachment point)."
             )
     
-    # Direct SMILES parsing (no 3D coordinates - graph-based only)
-    mol_graph = direct_smiles_to_graph(smiles, add_positions=False)
-    
-    # Ensure 'symbol' attribute exists for all nodes
+    # Use RDKit for SMILES parsing (no 3D coordinates - graph-based only)
+    validate_smiles_rdkit(smiles)
+    mol = Chem.MolFromSmiles(smiles)
+    if mol is None:
+        raise ValueError(f"RDKit could not parse SMILES string: {smiles}")
+    mol_graph = rdkit_to_graph(mol, coords=None)
+
+    # Ensure 'symbol' attribute exists for all nodes (should already be set by rdkit_to_graph)
     for node in mol_graph.nodes():
         if 'symbol' not in mol_graph.nodes[node]:
             # Fallback: try to get from other attributes

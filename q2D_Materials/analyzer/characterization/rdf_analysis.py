@@ -78,11 +78,12 @@ def _calculate_partial_rdf(
     element_pairs: List[List[str]],
     max_dist: float = 10.0,
     npoints: Optional[int] = None,
-    mode: str = "pyrovskite",
     ss_norm: bool = False,
 ) -> Dict[str, np.ndarray]:
     """
     Compute partial radial distribution functions for element pairs.
+
+    Uses gaussian kernel smoothing for smooth RDFs suitable for perovskite structures.
 
     Parameters
     ----------
@@ -93,10 +94,7 @@ def _calculate_partial_rdf(
     max_dist : float
         Maximum distance in Angstroms for RDF computation
     npoints : int, optional
-        Number of grid points. If None, uses max_dist * 10 for 'ase' mode
-        or max_dist * 50 for 'pyrovskite' mode
-    mode : str
-        'ase' or 'pyrovskite'. 'pyrovskite' uses gaussian kernel smoothing
+        Number of grid points. If None, uses max_dist * 50
     ss_norm : bool
         Whether to apply structure-specific normalization
 
@@ -105,9 +103,6 @@ def _calculate_partial_rdf(
     dict
         Dictionary with keys like "PbI_x", "PbI_rdf" for each pair
     """
-    from ase.geometry.analysis import Analysis
-    from ase.neighborlist import natural_cutoffs
-
     atoms = analyzer.cell
 
     # Set up supercell if needed
@@ -121,61 +116,47 @@ def _calculate_partial_rdf(
 
     plottable_rdfs = {}
 
-    if mode == "ase":
-        if npoints is None:
-            npoints = int(max_dist * 10)
-        ana = Analysis(tmp_atoms)
-        for pair in element_pairs:
-            rdf_data = ana.get_rdf(max_dist, npoints, elements=pair, return_dists=True)
-            pair_key = "".join(pair)
-            plottable_rdfs[pair_key + "_x"] = rdf_data[0][1]
-            plottable_rdfs[pair_key + "_rdf"] = rdf_data[0][0]
+    if npoints is None:
+        npoints = int(max_dist * 50)
 
-    elif mode == "pyrovskite":
-        if npoints is None:
-            npoints = int(max_dist * 50)
+    # Get all distances
+    dm = tmp_atoms.get_all_distances(mic=True)
+    curr_max = 0
 
-        # Get all distances
-        dm = tmp_atoms.get_all_distances(mic=True)
-        curr_max = 0
+    for pair in element_pairs:
+        pair_dists = []
+        i_indices = np.where(tmp_atoms.symbols == pair[0])[0]
+        phi = len(i_indices)
 
-        for pair in element_pairs:
-            pair_dists = []
-            i_indices = np.where(tmp_atoms.symbols == pair[0])[0]
-            phi = len(i_indices)
+        for i in i_indices:
+            for j in np.where(tmp_atoms.symbols == pair[1])[0]:
+                if i != j:
+                    pair_dists.append(dm[i, j])
 
-            for i in i_indices:
-                for j in np.where(tmp_atoms.symbols == pair[1])[0]:
-                    if i != j:
-                        pair_dists.append(dm[i, j])
+        # Smooth with gaussian kernel
+        this_xs, this_spectra = _gaussian_kernel_discrete_spectrum(
+            pair_dists,
+            smearing=0.05,
+            gridpoints=npoints,
+            v_min=0,
+            v_max=max_dist,
+        )
 
-            # Smooth with gaussian kernel
-            this_xs, this_spectra = _gaussian_kernel_discrete_spectrum(
-                pair_dists,
-                smearing=0.05,
-                gridpoints=npoints,
-                v_min=0,
-                v_max=max_dist,
-            )
+        if ss_norm:
+            this_spectra *= phi
 
-            if ss_norm:
-                this_spectra *= phi
+        pair_key = "".join(pair)
+        plottable_rdfs[pair_key + "_x"] = this_xs
+        plottable_rdfs[pair_key + "_rdf"] = this_spectra
 
-            pair_key = "".join(pair)
-            plottable_rdfs[pair_key + "_x"] = this_xs
-            plottable_rdfs[pair_key + "_rdf"] = this_spectra
+        if curr_max < np.max(this_spectra):
+            curr_max = np.max(this_spectra)
 
-            if curr_max < np.max(this_spectra):
-                curr_max = np.max(this_spectra)
-
-        # Normalize all RDFs by maximum
-        for pair in element_pairs:
-            pair_key = "".join(pair)
-            if pair_key + "_rdf" in plottable_rdfs:
-                plottable_rdfs[pair_key + "_rdf"] /= curr_max
-
-    else:
-        raise ValueError("Mode must be 'pyrovskite' or 'ase'.")
+    # Normalize all RDFs by maximum
+    for pair in element_pairs:
+        pair_key = "".join(pair)
+        if pair_key + "_rdf" in plottable_rdfs:
+            plottable_rdfs[pair_key + "_rdf"] /= curr_max
 
     return plottable_rdfs
 

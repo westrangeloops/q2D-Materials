@@ -17,6 +17,22 @@ from q2D_Materials.utils.properties.atomic_properties import (
     classify_neighbors,
     get_valence
 )
+from q2D_Materials.utils.molecules.graph_converter import (
+    graph_to_rdkit,
+    rdkit_to_graph,
+    map_coordinates,
+    transfer_coordinates,
+    validate_conserved_atoms
+)
+
+try:
+    from rdkit.Chem import AllChem
+    from rdkit.Chem import rdDistGeom
+    RDKIT_EMBEDDING_AVAILABLE = True
+except ImportError:
+    RDKIT_EMBEDDING_AVAILABLE = False
+    AllChem = None
+    rdDistGeom = None
 
 if TYPE_CHECKING:
     from .graph_view import GraphView
@@ -111,6 +127,193 @@ class MoleculeGraph:
             ],
             "atoms": atoms_info,
         }
+
+    def to_rdkit(self):
+        """Convert to RDKit Mol for chemistry operations.
+        
+        Returns
+        -------
+        rdkit.Chem.Mol
+            RDKit molecule object with coordinates preserved
+        """
+        return graph_to_rdkit(self.graph, preserve_coords=True)
+    
+    @classmethod
+    def from_rdkit(
+        cls,
+        mol,
+        original_indices: List[int],
+        attachment_points: List[int],
+        molecule_type: str,
+        molecule_index: int,
+        parent_view: 'GraphView',
+        coords: Optional[np.ndarray] = None
+    ):
+        """Create MoleculeGraph from RDKit Mol.
+        
+        Parameters
+        ----------
+        mol : rdkit.Chem.Mol
+            RDKit molecule object
+        original_indices : List[int]
+            Atom indices in the original structure
+        attachment_points : List[int]
+            Atoms connected to the inorganic framework
+        molecule_type : str
+            'spacer' or 'a_site'
+        molecule_index : int
+            Index of this molecule in the list
+        parent_view : GraphView
+            Reference to parent GraphView
+        coords : np.ndarray, optional
+            Alternative coordinate source
+            
+        Returns
+        -------
+        MoleculeGraph
+            New MoleculeGraph instance
+        """
+        graph = rdkit_to_graph(mol, coords=coords)
+        
+        # Convert graph to Atoms for atoms_object
+        from q2D_Materials.utils.molecules.graph_converter import graph_to_atoms
+        atoms_object = graph_to_atoms(graph, validate_geometry=False)
+        
+        return cls(
+            graph=graph,
+            original_indices=original_indices,
+            attachment_points=attachment_points,
+            molecule_type=molecule_type,
+            molecule_index=molecule_index,
+            atoms_object=atoms_object,
+            parent_view=parent_view
+        )
+    
+    def update_from_rdkit(self, mol, validate: bool = True) -> Atoms:
+        """Update molecule from modified RDKit Mol, preserve coordinates of unchanged atoms.
+        
+        Only new atoms/fragments are recalculated. Unchanged atoms preserve original coordinates.
+        Requires at least 2 atoms to be conserved for reconstruction.
+        
+        Parameters
+        ----------
+        mol : rdkit.Chem.Mol
+            Modified RDKit molecule object (should have explicit hydrogens via AddHs())
+        validate : bool, default=True
+            Validate that at least 2 atoms are conserved (always True, kept for API compatibility)
+            
+        Returns
+        -------
+        Atoms
+            Complete modified structure (all atoms, not just this molecule)
+            
+        Raises
+        ------
+        ValueError
+            If less than 2 atoms are conserved
+            
+        Notes
+        -----
+        The RDKit molecule should have explicit hydrogens added (via AddHs()) before
+        calling this method to ensure all atoms, including terminal groups, are present.
+        """
+        # Ensure explicit hydrogens are present (RDKit uses implicit by default)
+        # But first sanitize if needed
+        from rdkit import Chem
+        from rdkit.Chem import rdmolops
+        
+        if mol.GetNumAtoms() > 0:
+            # Check if hydrogens are explicit FIRST (before sanitization)
+            has_explicit_h = any(atom.GetSymbol() == 'H' for atom in mol.GetAtoms())
+            
+            if not has_explicit_h:
+                # Sanitize first (required before AddHs)
+                try:
+                    Chem.SanitizeMol(mol)
+                except Exception:
+                    try:
+                        Chem.SanitizeMol(mol, sanitizeOps=Chem.SanitizeFlags.SANITIZE_ALL ^ Chem.SanitizeFlags.SANITIZE_PROPERTIES)
+                    except Exception:
+                        pass  # Continue anyway
+                
+                # Add explicit hydrogens if not present
+                mol = rdmolops.AddHs(mol)
+            else:
+                # Already has explicit hydrogens, just sanitize
+                try:
+                    Chem.SanitizeMol(mol)
+                except Exception:
+                    try:
+                        Chem.SanitizeMol(mol, sanitizeOps=Chem.SanitizeFlags.SANITIZE_ALL ^ Chem.SanitizeFlags.SANITIZE_PROPERTIES)
+                    except Exception:
+                        pass  # Continue anyway
+        
+        new_graph = rdkit_to_graph(mol)
+        
+        # Map coordinates from old to new - detects only changed atoms
+        mapping = map_coordinates(self.graph, new_graph)
+        
+        # Validate: at least 2 atoms must be conserved
+        validate_conserved_atoms(mapping, min_conserved=2)
+        
+        # Transfer coordinates for conserved atoms
+        new_graph = transfer_coordinates(self.graph, new_graph, mapping)
+        
+        # Generate coordinates for new atoms that don't have them
+        # New atoms (not in mapping) need coordinates generated
+        atoms_without_coords = []
+        for node_idx in new_graph.nodes():
+            if new_graph.nodes[node_idx].get('position') is None:
+                atoms_without_coords.append(node_idx)
+        
+        if atoms_without_coords:
+            # Generate 3D coordinates for new atoms using RDKit embedding
+            if RDKIT_EMBEDDING_AVAILABLE:
+                # Convert graph back to RDKit for coordinate generation
+                # First, we need to preserve existing coordinates in the RDKit mol
+                temp_mol = graph_to_rdkit(new_graph, preserve_coords=True)
+                
+                # Check if we already have a conformer (from preserved coords)
+                if temp_mol.GetNumConformers() == 0:
+                    # No conformer yet, generate one
+                    try:
+                        AllChem.EmbedMolecule(temp_mol, randomSeed=42)
+                        try:
+                            AllChem.MMFFOptimizeMolecule(temp_mol)
+                        except Exception:
+                            pass  # MMFF failed, but embedding succeeded
+                    except Exception:
+                        # Fallback to distance geometry
+                        try:
+                            rdDistGeom.EmbedMolecule(temp_mol)
+                        except Exception:
+                            pass  # Continue anyway
+                else:
+                    # We have a conformer, but need to optimize positions for new atoms
+                    # RDKit will handle this automatically when we update the conformer
+                    try:
+                        AllChem.MMFFOptimizeMolecule(temp_mol)
+                    except Exception:
+                        pass  # Optimization failed, but conformer exists
+                
+                # Convert back to graph with coordinates (preserves existing, adds new)
+                new_graph = rdkit_to_graph(temp_mol, coords=None)
+        
+        # Convert back to Atoms (RDKit structure already validated)
+        from q2D_Materials.utils.molecules.graph_converter import graph_to_atoms
+        new_atoms = graph_to_atoms(new_graph, validate_geometry=False)
+        
+        # Update internal state
+        self.graph = new_graph
+        self.atoms_object = new_atoms
+        self._smiles = None  # Reset cached SMILES
+        
+        # Reconstruct full structure
+        return reconstruct_structure(
+            original_structure=self.parent_view.full_structure,
+            old_molecule_indices=self.original_indices,
+            new_molecule_atoms=new_atoms
+        )
 
     def replace(
         self,
@@ -490,30 +693,68 @@ class MoleculeGraph:
         return full_structure
 
     def _graph_to_atoms(self, graph: nx.Graph) -> Optional[Atoms]:
-        """Convert a graph to Atoms object, extracting positions if available."""
+        """Convert a graph to Atoms object using graph converter.
+        
+        If coordinates are missing, generates them using RDKit 3D embedding.
+        This is needed for fragments from SMILES strings that don't have coordinates.
+        """
         if len(graph.nodes()) == 0:
             return None
 
-        symbols = []
-        positions = []
-
-        for node in sorted(graph.nodes()):
-            node_data = graph.nodes[node]
-            symbol = node_data.get('symbol', 'C')
-            pos = node_data.get('position', np.array([0.0, 0.0, 0.0]))
-
-            symbols.append(symbol)
-            if isinstance(pos, np.ndarray):
-                positions.append(pos)
-            elif isinstance(pos, (list, tuple)):
-                positions.append(np.array(pos))
-            else:
-                positions.append(np.array([0.0, 0.0, 0.0]))
-
-        if len(positions) == 0:
-            return None
-
-        return Atoms(symbols=symbols, positions=positions)
+        # Check if coordinates are present
+        has_coords = all(
+            graph.nodes[node].get('position') is not None
+            for node in graph.nodes()
+        )
+        
+        if not has_coords:
+            # Generate coordinates using RDKit 3D embedding
+            from q2D_Materials.utils.molecules.graph_converter import graph_to_rdkit, rdkit_to_graph
+            
+            if not RDKIT_EMBEDDING_AVAILABLE:
+                raise ValueError(
+                    "RDKit embedding is required to generate coordinates for fragment graphs. "
+                    "Please install RDKit with AllChem support."
+                )
+            
+            # Convert graph to RDKit Mol
+            mol = graph_to_rdkit(graph, preserve_coords=False)
+            
+            # Sanitize molecule (calculates implicit valence, etc.)
+            from rdkit import Chem
+            try:
+                Chem.SanitizeMol(mol)
+            except Exception:
+                # If sanitization fails, try to fix it
+                try:
+                    Chem.SanitizeMol(mol, sanitizeOps=Chem.SanitizeFlags.SANITIZE_ALL ^ Chem.SanitizeFlags.SANITIZE_PROPERTIES)
+                except Exception:
+                    pass  # Continue anyway
+            
+            # Generate 3D coordinates using RDKit's ETKDG method
+            try:
+                AllChem.EmbedMolecule(mol, randomSeed=42)
+                try:
+                    AllChem.MMFFOptimizeMolecule(mol)
+                except Exception:
+                    # MMFF optimization failed, but embedding succeeded
+                    pass
+            except Exception:
+                # Fallback to basic distance geometry embedding
+                try:
+                    rdDistGeom.EmbedMolecule(mol)
+                except Exception:
+                    raise ValueError(
+                        "Failed to generate 3D coordinates for fragment. "
+                        "RDKit embedding failed. Fragment may be too complex or invalid."
+                    )
+            
+            # Convert back to graph with coordinates
+            graph = rdkit_to_graph(mol, coords=None)
+        
+        # Use graph converter
+        from q2D_Materials.utils.molecules.graph_converter import graph_to_atoms
+        return graph_to_atoms(graph, validate_geometry=False)
 
     def _filter_fragment_atoms(
         self,
@@ -558,6 +799,46 @@ class MoleculeGraph:
         filtered_positions = [positions[i] for i in atoms_indices_to_keep]
 
         return Atoms(symbols=filtered_symbols, positions=filtered_positions)
+
+    def analyze_spacer(self, analyzer=None):
+        """Analyze DJ spacer properties.
+
+        Computes penetration depth, compression, backbone, and side chains
+        for this spacer molecule.
+
+        Parameters
+        ----------
+        analyzer : q2D_analyzer, optional
+            Full analyzer instance for accessing halogen positions.
+            If not provided, uses parent_view.analyzer if available.
+            Penetration depth requires analyzer context.
+
+        Returns
+        -------
+        SpacerAnalysisResult
+            Complete analysis with all metrics
+
+        Examples
+        --------
+        >>> from q2D_Materials.analyzer import q2D_analyzer
+        >>> from q2D_Materials.modifier import GraphView
+        >>>
+        >>> analyzer = q2D_analyzer("structure.cif")
+        >>> analyzer.analyze()
+        >>> view = GraphView(analyzer)
+        >>>
+        >>> spacer = view.spacers[0]
+        >>> analysis = spacer.analyze_spacer()
+        >>> print(f"Compression: {analysis.compression_factor:.2f}")
+        """
+        from q2D_Materials.analyzer.characterization.spacer_analysis import SpacerAnalysis
+
+        # Use provided analyzer or try to get from parent_view
+        if analyzer is None and hasattr(self.parent_view, 'analyzer'):
+            analyzer = getattr(self.parent_view, 'analyzer', None)
+
+        spacer_analyzer = SpacerAnalysis(self, analyzer)
+        return spacer_analyzer.compute()
 
 
 class MoleculesList:

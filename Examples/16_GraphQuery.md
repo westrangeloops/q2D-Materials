@@ -17,6 +17,8 @@ analyzer.analyze()
 graph = analyzer.get_graph()
 ```
 
+![Graph Structure Overview](images/graph_structure_overview.png)
+
 ## Basic Graph Queries
 
 ### Count Node Types
@@ -55,6 +57,8 @@ for node in octahedra_nodes[:3]:
             print(f"  Shares {len(shared)} atoms with {v}")
 ```
 
+![Octahedra Connectivity Network](images/graph_octahedra_network.png)
+
 ### Filter Nodes by Attributes
 
 ```python
@@ -70,6 +74,8 @@ a_site_atoms = [n for n, d in graph.nodes(data=True)
 
 print(f"Found {len(a_site_atoms)} A-site atoms")
 ```
+
+![Layer-Based Graph Organization](images/graph_layer_structure.png)
 
 ## Graph Traversal
 
@@ -341,12 +347,8 @@ The graph query system also works with molecular graphs from SMILES strings, ena
 
 ```python
 from q2D_Materials.analyzer import q2D_analyzer
-from q2D_Materials.utils.molecules.smiles_parser import smiles_to_graph
 
-# Create molecular graph directly from SMILES (no 3D coordinates)
-molecule_graph = smiles_to_graph('NCCCCN')
-
-# Pattern matching uses graph isomorphism (fast, geometry-independent)
+# Pattern matching uses RDKit SMARTS (fast, geometry-independent)
 analyzer = q2D_analyzer()
 result = analyzer.analyze_molecule_as_dj_spacer(
     'NCCCCN',
@@ -358,30 +360,25 @@ print(f"Valid DJ spacer: {result.is_valid}")
 print(f"Valid paths: {len(result.valid_paths)}")
 ```
 
-### Graph-Based Pattern Matching
+### Graph-Based Pattern Matching with RDKit
 
-Molecule candidate analysis uses the same graph query principles:
+Molecule candidate analysis uses RDKit SMARTS for pattern matching:
 
 ```python
-from q2D_Materials.utils.molecules.smiles_parser import smiles_to_graph
 from q2D_Materials.modifier.fragment import from_smiles
-import networkx as nx
+from q2D_Materials.analyzer.characterization.smarts_validator import find_smarts_matches
 
-# Parse SMILES to graph (graph-based, no 3D coordinates)
+# Parse SMILES to graph using RDKit (graph-based, no 3D coordinates)
 pattern_graph = from_smiles('[NH3+]C')
 molecule_graph = from_smiles('C[NH3+]CCCC[NH3+]C')
 
-# Use NetworkX subgraph isomorphism for pattern matching
-from networkx.algorithms import isomorphism
-
-matcher = isomorphism.GraphMatcher(
-    molecule_graph,
-    pattern_graph,
-    node_match=lambda n1, n2: n1.get('symbol') == n2.get('symbol')
-)
-
-matches = list(matcher.subgraph_isomorphisms_iter())
+# Use RDKit SMARTS for pattern matching (more robust than NetworkX isomorphism)
+matches = find_smarts_matches(molecule_graph, '[NH3+]C')
 print(f"Found {len(matches)} pattern matches")
+
+# Each match contains mapping from RDKit indices to NetworkX indices
+for match in matches:
+    print(f"Match: {match['mapping']}")
 ```
 
 ### Shared Graph Utilities

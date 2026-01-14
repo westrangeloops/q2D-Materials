@@ -1,56 +1,236 @@
 {
-  "_description": "Typical valence values for common elements in molecular structures",
+  "_description": "Typical valence values and oxidation states for common elements in molecular structures",
   "_note": "These are the most common valence states. Some elements can have variable valency.",
-  "_units": "number of bonds",
+  "_units": {
+    "valence": "number of bonds",
+    "oxidation_state": "charge in perovskite structures"
+  },
 
-  "H": 1,
-  "He": 0,
+  "H": {
+    "valence": 1,
+    "oxidation_state": 0
+  },
+  "He": {
+    "valence": 0,
+    "oxidation_state": 0
+  },
 
-  "Li": 1,
-  "Be": 2,
-  "B": 3,
-  "C": 4,
-  "N": 3,
-  "O": 2,
-  "F": 1,
-  "Ne": 0,
+  "Li": {
+    "valence": 1,
+    "oxidation_state": 1
+  },
+  "Be": {
+    "valence": 2,
+    "oxidation_state": 2
+  },
+  "B": {
+    "valence": 3,
+    "oxidation_state": 3
+  },
+  "C": {
+    "valence": 4,
+    "oxidation_state": 0
+  },
+  "N": {
+    "valence": 3,
+    "oxidation_state": 0
+  },
+  "O": {
+    "valence": 2,
+    "oxidation_state": -2
+  },
+  "F": {
+    "valence": 1,
+    "oxidation_state": -1
+  },
+  "Ne": {
+    "valence": 0,
+    "oxidation_state": 0
+  },
 
-  "Na": 1,
-  "Mg": 2,
-  "Al": 3,
-  "Si": 4,
-  "P": 5,
-  "S": 6,
-  "Cl": 1,
-  "Ar": 0,
+  "Na": {
+    "valence": 1,
+    "oxidation_state": 1
+  },
+  "Mg": {
+    "valence": 2,
+    "oxidation_state": 2
+  },
+  "Al": {
+    "valence": 3,
+    "oxidation_state": 3
+  },
+  "Si": {
+    "valence": 4,
+    "oxidation_state": 4
+  },
+  "P": {
+    "valence": 5,
+    "oxidation_state": 5
+  },
+  "S": {
+    "valence": 6,
+    "oxidation_state": -2
+  },
+  "Cl": {
+    "valence": 1,
+    "oxidation_state": -1
+  },
+  "Ar": {
+    "valence": 0,
+    "oxidation_state": 0
+  },
 
-  "K": 1,
-  "Ca": 2,
-  "Ga": 3,
-  "Ge": 4,
-  "As": 5,
-  "Se": 6,
-  "Br": 1,
-  "Kr": 0,
+  "K": {
+    "valence": 1,
+    "oxidation_state": 1
+  },
+  "Ca": {
+    "valence": 2,
+    "oxidation_state": 2
+  },
+  "Ga": {
+    "valence": 3,
+    "oxidation_state": 3
+  },
+  "Ge": {
+    "valence": 4,
+    "oxidation_state": 2
+  },
+  "As": {
+    "valence": 5,
+    "oxidation_state": 5
+  },
+  "Se": {
+    "valence": 6,
+    "oxidation_state": -2
+  },
+  "Br": {
+    "valence": 1,
+    "oxidation_state": -1
+  },
+  "Kr": {
+    "valence": 0,
+    "oxidation_state": 0
+  },
 
-  "Rb": 1,
-  "Sr": 2,
-  "In": 3,
-  "Sn": 4,
-  "Sb": 5,
-  "Te": 6,
-  "I": 1,
-  "Xe": 0,
+  "Rb": {
+    "valence": 1,
+    "oxidation_state": 1
+  },
+  "Sr": {
+    "valence": 2,
+    "oxidation_state": 2
+  },
+  "In": {
+    "valence": 3,
+    "oxidation_state": 3
+  },
+  "Sn": {
+    "valence": 4,
+    "oxidation_state": 2
+  },
+  "Sb": {
+    "valence": 5,
+    "oxidation_state": 5
+  },
+  "Te": {
+    "valence": 6,
+    "oxidation_state": -2
+  },
+  "I": {
+    "valence": 1,
+    "oxidation_state": -1
+  },
+  "Xe": {
+    "valence": 0,
+    "oxidation_state": 0
+  },
 
-  "Cs": 1,
-  "Ba": 2,
+  "Cs": {
+    "valence": 1,
+    "oxidation_state": 1
+  },
+  "Ba": {
+    "valence": 2,
+    "oxidation_state": 2
+  },
+
+  "Pb": {
+    "valence": 4,
+    "oxidation_state": 2
+  },
+  "Ti": {
+    "valence": 4,
+    "oxidation_state": 4
+  },
+  "Zr": {
+    "valence": 4,
+    "oxidation_state": 4
+  },
+  "Hf": {
+    "valence": 4,
+    "oxidation_state": 4
+  },
+  "V": {
+    "valence": 5,
+    "oxidation_state": 3
+  },
+  "Nb": {
+    "valence": 5,
+    "oxidation_state": 5
+  },
+  "Ta": {
+    "valence": 5,
+    "oxidation_state": 5
+  },
+  "Cr": {
+    "valence": 6,
+    "oxidation_state": 3
+  },
+  "Mo": {
+    "valence": 6,
+    "oxidation_state": 6
+  },
+  "W": {
+    "valence": 6,
+    "oxidation_state": 6
+  },
+  "Mn": {
+    "valence": 7,
+    "oxidation_state": 2
+  },
+  "Fe": {
+    "valence": 6,
+    "oxidation_state": 2
+  },
+  "Co": {
+    "valence": 6,
+    "oxidation_state": 2
+  },
+  "Ni": {
+    "valence": 6,
+    "oxidation_state": 2
+  },
+  "Cu": {
+    "valence": 4,
+    "oxidation_state": 2
+  },
+  "Zn": {
+    "valence": 4,
+    "oxidation_state": 2
+  },
 
   "_comments": {
-    "N": "Typically 3 (sp3, sp2, sp) but can form 4 bonds in ammonium",
-    "O": "Typically 2 (sp3, sp2) but can have 1 in radicals or peroxides",
+    "N": "Typically 3 (sp3, sp2, sp) but can form 4 bonds in ammonium. Oxidation state 0 in organic molecules.",
+    "O": "Typically 2 (sp3, sp2) but can have 1 in radicals or peroxides. Oxidation state -2 in perovskites.",
     "S": "Can have valency 2, 4, or 6 depending on oxidation state",
     "P": "Can have valency 3 or 5",
-    "C": "Always 4 in organic molecules (sp3, sp2, sp)",
-    "Halogens": "Typically 1 in organic compounds"
+    "C": "Always 4 in organic molecules (sp3, sp2, sp). Oxidation state 0 in organic molecules.",
+    "Halogens": "Typically 1 in organic compounds. Oxidation state -1 in perovskites.",
+    "B-site": "B-site elements (Pb, Sn, Ti, etc.) have oxidation states +2 to +6 depending on element",
+    "X-site": "X-site elements (I, Br, Cl, O) have oxidation states -1 or -2",
+    "A-site": "A-site elements (Cs, Rb, K) have oxidation state +1",
+    "Organic": "Organic elements (C, N, H) have oxidation state 0"
   }
 }

@@ -14,6 +14,8 @@ from typing import Dict, Optional, Tuple, List, Union
 _COVALENT_RADII_CACHE: Optional[Dict[str, float]] = None
 _COVALENT_RADII_BOND_ORDER_CACHE: Optional[Dict[str, Dict[str, Optional[float]]]] = None
 _ATOMIC_VALENCE_CACHE: Optional[Dict[str, int]] = None
+_ATOMIC_VALENCE_DATA_CACHE: Optional[Dict[str, Dict[str, Union[int, float]]]] = None
+_OXIDATION_STATE_CACHE: Optional[Dict[str, float]] = None
 
 
 def get_covalent_radii() -> Dict[str, float]:
@@ -189,6 +191,31 @@ def estimate_bond_order(
     return 1
 
 
+def _load_atomic_valence_data() -> Dict[str, Dict[str, Union[int, float]]]:
+    """Load atomic valence data (including oxidation states) from JSON.
+
+    Returns
+    -------
+    dict
+        Dictionary mapping element symbols to dict with 'valence' and 'oxidation_state'
+    """
+    global _ATOMIC_VALENCE_DATA_CACHE
+
+    if _ATOMIC_VALENCE_DATA_CACHE is None:
+        # Load from central data/tables directory
+        # Path: q2D_Materials/utils/properties/atomic_properties.py -> q2D_Materials/data/tables/
+        data_dir = Path(__file__).parent.parent.parent / "data" / "tables"
+        valence_file = data_dir / "atomic_valence.json"
+
+        with open(valence_file, 'r') as f:
+            data = json.load(f)
+
+        # Filter out metadata keys starting with underscore
+        _ATOMIC_VALENCE_DATA_CACHE = {k: v for k, v in data.items() if not k.startswith('_')}
+
+    return _ATOMIC_VALENCE_DATA_CACHE
+
+
 def get_atomic_valences() -> Dict[str, int]:
     """Get typical valence values for common elements.
 
@@ -200,18 +227,61 @@ def get_atomic_valences() -> Dict[str, int]:
     global _ATOMIC_VALENCE_CACHE
 
     if _ATOMIC_VALENCE_CACHE is None:
-        # Load from central data/tables directory
-        # Path: q2D_Materials/utils/properties/atomic_properties.py -> q2D_Materials/data/tables/
-        data_dir = Path(__file__).parent.parent.parent / "data" / "tables"
-        valence_file = data_dir / "atomic_valence.json"
-
-        with open(valence_file, 'r') as f:
-            data = json.load(f)
-
-        # Filter out metadata keys starting with underscore
-        _ATOMIC_VALENCE_CACHE = {k: v for k, v in data.items() if not k.startswith('_')}
+        data = _load_atomic_valence_data()
+        # Extract just valence values, handling both old format (int) and new format (dict)
+        _ATOMIC_VALENCE_CACHE = {}
+        for element, value in data.items():
+            if isinstance(value, dict):
+                _ATOMIC_VALENCE_CACHE[element] = value.get('valence', 4)
+            else:
+                # Backward compatibility with old format
+                _ATOMIC_VALENCE_CACHE[element] = value
 
     return _ATOMIC_VALENCE_CACHE
+
+
+def get_oxidation_states() -> Dict[str, float]:
+    """Get typical oxidation states for common elements in perovskite structures.
+
+    Returns
+    -------
+    dict
+        Dictionary mapping element symbols to typical oxidation state
+    """
+    global _OXIDATION_STATE_CACHE
+
+    if _OXIDATION_STATE_CACHE is None:
+        data = _load_atomic_valence_data()
+        # Extract oxidation states, handling both old format (int) and new format (dict)
+        _OXIDATION_STATE_CACHE = {}
+        for element, value in data.items():
+            if isinstance(value, dict):
+                _OXIDATION_STATE_CACHE[element] = value.get('oxidation_state', 0.0)
+            else:
+                # Backward compatibility: infer oxidation state from valence for old format
+                # This is a fallback - new format should always be used
+                _OXIDATION_STATE_CACHE[element] = 0.0
+
+    return _OXIDATION_STATE_CACHE
+
+
+def get_oxidation_state(element: str, default: float = 0.0) -> float:
+    """Get typical oxidation state for an element in perovskite structures.
+
+    Parameters
+    ----------
+    element : str
+        Element symbol (e.g., 'Pb', 'I', 'Cs')
+    default : float, default=0.0
+        Default oxidation state if element not found
+
+    Returns
+    -------
+    float
+        Typical oxidation state for this element in perovskites
+    """
+    oxidation_states = get_oxidation_states()
+    return oxidation_states.get(element, default)
 
 
 def get_valence(element: str, default: int = 4) -> int:
@@ -619,7 +689,7 @@ def extract_fragment_bond_vectors(
     hybridization = fragment_graph.nodes[attach_node].get('hybridization', 'unknown')
     if hybridization == 'unknown':
         # Determine from number of neighbors
-        num_neighbors = len(neighbor_pos_indices)
+        num_neighbors = len(neighbors)
         hybridization, _ = determine_hybridization(num_neighbors)
     
     return bond_vectors, hybridization

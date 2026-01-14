@@ -26,8 +26,12 @@ def _detect_bonds_from_distances(
     symbols: List[str],
     positions: np.ndarray,
     tolerance: float = 0.45,
+    cell: Optional[np.ndarray] = None,
 ) -> List[Tuple[int, int, float]]:
     """Detect covalent bonds from atomic positions using covalent radii.
+    
+    Enforces chemical constraints: Hydrogen atoms can only have one bond
+    (the shortest/closest one).
     
     Parameters
     ----------
@@ -37,12 +41,16 @@ def _detect_bonds_from_distances(
         Atomic positions (N, 3)
     tolerance : float, default=0.45
         Additional tolerance beyond sum of covalent radii
+    cell : np.ndarray, optional
+        3x3 unit cell matrix for PBC-aware distance calculations
         
     Returns
     -------
     list of tuple (int, int, float)
         Each tuple contains (atom_i, atom_j, bond_length)
     """
+    from ...utils.geometry.geometry import _calculate_distances
+    
     bonds = []
     n_atoms = len(symbols)
     
@@ -51,13 +59,46 @@ def _detect_bonds_from_distances(
             # Skip H-H bonds
             if symbols[i] == 'H' and symbols[j] == 'H':
                 continue
-                
-            distance = np.linalg.norm(positions[i] - positions[j])
+            
+            # Use PBC-aware distance if cell is provided
+            if cell is not None:
+                distance = _calculate_distances(positions[i], positions[j:j+1], cell)[0]
+            else:
+                distance = np.linalg.norm(positions[i] - positions[j])
             
             if are_atoms_bonded(distance, symbols[i], symbols[j], tolerance):
                 bonds.append((i, j, distance))
     
-    return bonds
+    # Post-process: Ensure H atoms only have one bond (keep shortest)
+    h_bonds_by_atom = {}
+    non_h_bonds = []
+    
+    for i, j, dist in bonds:
+        if symbols[i] == 'H':
+            if i not in h_bonds_by_atom:
+                h_bonds_by_atom[i] = []
+            h_bonds_by_atom[i].append((i, j, dist))
+        elif symbols[j] == 'H':
+            if j not in h_bonds_by_atom:
+                h_bonds_by_atom[j] = []
+            h_bonds_by_atom[j].append((i, j, dist))
+        else:
+            # Neither atom is H, keep as-is
+            non_h_bonds.append((i, j, dist))
+    
+    # For each H atom, keep only the shortest bond
+    valid_h_bonds = []
+    for h_idx, h_bond_list in h_bonds_by_atom.items():
+        if h_bond_list:
+            # Sort by distance (shortest first)
+            h_bond_list.sort(key=lambda x: x[2])
+            # Keep only the shortest bond
+            valid_h_bonds.append(h_bond_list[0])
+    
+    # Combine non-H bonds with validated H bonds
+    final_bonds = non_h_bonds + valid_h_bonds
+    
+    return final_bonds
 
 
 def extract_molecular_components(
@@ -104,8 +145,11 @@ def extract_molecular_components(
     organic_symbols = list(organic_symbols)
     organic_positions = np.array(organic_positions)
 
-    # Detect bonds using covalent radii
-    bonds = _detect_bonds_from_distances(organic_symbols, organic_positions)
+    # Get cell for PBC-aware distance calculations
+    cell = np.array(atoms.get_cell()) if atoms.cell is not None and np.any(atoms.pbc) else None
+
+    # Detect bonds using covalent radii with PBC support
+    bonds = _detect_bonds_from_distances(organic_symbols, organic_positions, cell=cell)
     
     # Build graph from bonds
     nx_graph = nx.Graph()
@@ -158,8 +202,11 @@ def get_covalent_bonds(
     mol_symbols = [atoms[i].symbol for i in indices_to_use]
     mol_positions = np.array([atoms[i].position for i in indices_to_use])
     
-    # Detect bonds using covalent radii
-    bonds = _detect_bonds_from_distances(mol_symbols, mol_positions)
+    # Get cell for PBC-aware distance calculations
+    cell = np.array(atoms.get_cell()) if atoms.cell is not None and np.any(atoms.pbc) else None
+    
+    # Detect bonds using covalent radii with PBC support
+    bonds = _detect_bonds_from_distances(mol_symbols, mol_positions, cell=cell)
     
     # Map back to original indices
     mol_idx_to_orig = {i: orig_idx for i, orig_idx in enumerate(indices_to_use)}
@@ -227,8 +274,11 @@ def build_molecular_graph(
     mol_symbols = [atoms[i].symbol for i in included_indices]
     mol_positions = np.array([atoms[i].position for i in included_indices])
     
-    # Detect bonds using covalent radii
-    bonds = _detect_bonds_from_distances(mol_symbols, mol_positions)
+    # Get cell for PBC-aware distance calculations
+    cell = np.array(atoms.get_cell()) if atoms.cell is not None and np.any(atoms.pbc) else None
+    
+    # Detect bonds using covalent radii with PBC support
+    bonds = _detect_bonds_from_distances(mol_symbols, mol_positions, cell=cell)
     
     # Map molecule indices to local indices
     mol_idx_to_local = {i: local_idx for i, local_idx in enumerate(included_indices)}

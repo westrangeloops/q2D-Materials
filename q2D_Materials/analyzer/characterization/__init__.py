@@ -27,7 +27,7 @@ from .characterization import (
     get_subgraph,
 )
 from .network_analysis import _build_bx_network
-from .molecular_analysis import (
+from .a_site_analysis import (
     centmass_organic,
     centmass_organic_vec,
     find_b_cage_and_disp,
@@ -40,6 +40,18 @@ from .molecule_candidates import (
     convert_nh2_to_nh3,
     SpacerCandidateResult,
     TerminalGroup,
+)
+from .smarts_validator import (
+    find_smarts_matches,
+    validate_smarts_pattern,
+)
+from .spacer_analysis import (
+    SpacerAnalysis,
+    SpacerAnalysisResult,
+    BackboneQuery,
+)
+from .distortions import (
+    _compute_octahedral_distortions,
 )
 
 __all__ = [
@@ -74,5 +86,11 @@ __all__ = [
     'convert_nh2_to_nh3',
     'SpacerCandidateResult',
     'TerminalGroup',
+    'find_smarts_matches',
+    'validate_smarts_pattern',
+    'SpacerAnalysis',
+    'SpacerAnalysisResult',
+    'BackboneQuery',
+    '_compute_octahedral_distortions',
 ]
 

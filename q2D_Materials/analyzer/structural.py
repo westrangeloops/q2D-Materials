@@ -91,8 +91,8 @@ from .octahedral_processing.resolve_octahedra import (
     _refit_octahedral_network,
 )
 
-# Import molecular analysis
-from .characterization.molecular_analysis import (
+# Import A-site analysis
+from .characterization.a_site_analysis import (
     centmass_organic,
     centmass_organic_vec,
     find_b_cage_and_disp,

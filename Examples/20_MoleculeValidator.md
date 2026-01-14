@@ -6,6 +6,10 @@ Check if molecules are suitable as DJ (Dion-Jacobson) or RP (Ruddlesden-Popper) 
 
 **New in v2.2**: Pattern-based validation with configurable SMILES patterns for terminal groups. Backbone element validation filters out molecules with unwanted elements (P, S, metals, etc.)
 
+**Updated**: 
+- Unified API: Use `mol_validate()` with `spacer_type="DJ"` or `spacer_type="RP"` parameter
+- Now uses RDKit for all SMILES parsing and pattern matching (no custom parser). RDKit provides robust SMARTS pattern matching and better chemical validation.
+
 ## Quick Start
 
 ```python
@@ -14,21 +18,23 @@ from q2D_Materials.analyzer import q2D_analyzer
 analyzer = q2D_analyzer()
 
 # Check DJ spacer (needs 2 terminal NH2/NH3 groups)
-result = analyzer.analyze_molecule_as_dj_spacer("NCCCCN")
+result = analyzer.mol_validate("NCCCCN", spacer_type="DJ")
 print(f"Valid: {result.is_valid}")  # True
 
 # Check RP spacer (needs 1+ terminal NH2/NH3 group)
-result = analyzer.analyze_molecule_as_rp_spacer("NCCCCC")
+result = analyzer.mol_validate("NCCCCC", spacer_type="RP")
 print(f"Valid: {result.is_valid}")  # True
 ```
 
 ## Simple Examples
 
+![Valid DJ Spacer Structure](images/validator_dj_spacer.png)
+
 ### Basic Check
 
 ```python
 analyzer = q2D_analyzer()
-result = analyzer.analyze_molecule_as_dj_spacer("NCCCCN")
+result = analyzer.mol_validate("NCCCCN", spacer_type="DJ")
 
 if result.is_valid:
     print(f"✓ Valid! {len(result.terminal_groups)} terminals, {len(result.valid_paths)} paths")
@@ -42,13 +48,25 @@ else:
 analyzer = q2D_analyzer()
 
 # Molecule with 2 terminals (works for both)
-dj = analyzer.analyze_molecule_as_dj_spacer("NCCCCN")  # True
-rp = analyzer.analyze_molecule_as_rp_spacer("NCCCCN")  # True
+dj = analyzer.mol_validate("NCCCCN", spacer_type="DJ")  # True
+rp = analyzer.mol_validate("NCCCCN", spacer_type="RP")  # True
 
 # Molecule with 1 terminal (only RP)
-dj = analyzer.analyze_molecule_as_dj_spacer("NCCCCC")  # False
-rp = analyzer.analyze_molecule_as_rp_spacer("NCCCCC")  # True
+dj = analyzer.mol_validate("NCCCCC", spacer_type="DJ")  # False
+rp = analyzer.mol_validate("NCCCCC", spacer_type="RP")  # True
+
+# Small molecule with 1 terminal (RP spacer) - works with both SMILES and Atoms
+from q2D_Materials.utils import smiles_to_ase_atoms
+
+# Using SMILES
+rp_smiles = analyzer.mol_validate("C[NH3+]", spacer_type="RP", initial_pattern='[NH3+]C')  # True
+
+# Using Atoms object - now works correctly!
+atoms = smiles_to_ase_atoms("C[NH3+]")
+rp_atoms = analyzer.mol_validate(atoms, spacer_type="RP", initial_pattern='[NH3+]C')  # True
 ```
+
+![Valid RP Spacer Structure](images/validator_rp_spacer.png)
 
 ### From Files
 
@@ -57,13 +75,13 @@ from ase.io import read
 analyzer = q2D_analyzer()
 
 molecule = read("spacer.xyz")
-result = analyzer.analyze_molecule_as_dj_spacer(molecule)
+result = analyzer.mol_validate(molecule, spacer_type="DJ")
 ```
 
 ## Understanding Results
 
 ```python
-result = analyzer.analyze_molecule_as_dj_spacer("NCCCCN")
+result = analyzer.mol_validate("NCCCCN", spacer_type="DJ")
 
 # Basic info
 result.is_valid          # True/False
@@ -85,6 +103,8 @@ atoms = result.original_atoms  # ASE Atoms object
 
 ## Pattern-Based Matching
 
+![SMARTS Pattern Matching Visualization](images/validator_pattern_matching.png)
+
 ### Custom Terminal Patterns
 
 The new pattern-based API allows you to specify custom SMILES patterns for terminal groups:
@@ -93,22 +113,25 @@ The new pattern-based API allows you to specify custom SMILES patterns for termi
 analyzer = q2D_analyzer()
 
 # Use ammonium pattern [NH3+]C
-result = analyzer.analyze_molecule_as_dj_spacer(
+result = analyzer.mol_validate(
     molecule,
+    spacer_type="DJ",
     initial_pattern='[NH3+]C',
     final_pattern='[NH3+]C'
 )
 
 # Use multiple patterns (matches any of them)
-result = analyzer.analyze_molecule_as_dj_spacer(
+result = analyzer.mol_validate(
     molecule,
+    spacer_type="DJ",
     initial_pattern=['NH2C', '[NH3+]C'],
     final_pattern=['NH2C', '[NH3+]C']
 )
 
 # Asymmetric spacers (different initial and final patterns)
-result = analyzer.analyze_molecule_as_dj_spacer(
+result = analyzer.mol_validate(
     molecule,
+    spacer_type="DJ",
     initial_pattern='[NH3+]C',
     final_pattern='NH2C'
 )
@@ -122,7 +145,7 @@ result = analyzer.analyze_molecule_as_dj_spacer(
 from q2D_Materials.analyzer.characterization.molecule_candidates import convert_nh2_to_nh3
 
 analyzer = q2D_analyzer()
-result = analyzer.analyze_molecule_as_dj_spacer("NCCN", initial_pattern='NH2C')
+result = analyzer.mol_validate("NCCN", spacer_type="DJ", initial_pattern='NH2C')
 
 # Convert NH2 to NH3 (requires nitrogen index)
 # Note: With pattern-based API, you may need to identify N indices from pattern matches
@@ -130,14 +153,14 @@ from q2D_Materials.analyzer.characterization.molecule_candidates import clean_mo
 
 # Use clean_molecule to automatically convert all NH2 to NH3
 modified = clean_molecule(result.original_atoms, convert_nh2_to_nh3_flag=True)
-from ase.io import write
-write("spacer_nh3.xyz", modified)
+    from ase.io import write
+    write("spacer_nh3.xyz", modified)
 ```
 
 ### Elongate DJ Spacers
 
 ```python
-result = analyzer.analyze_molecule_as_dj_spacer("NCCN")
+result = analyzer.mol_validate("NCCN", spacer_type="DJ")
 
 # Elongate to target distance
 elongated = analyzer.elongate_dj_spacer(
@@ -163,9 +186,9 @@ candidates = {
 }
 
 valid_dj = [name for name, smiles in candidates.items() 
-            if analyzer.analyze_molecule_as_dj_spacer(smiles).is_valid]
+            if analyzer.mol_validate(smiles, spacer_type="DJ").is_valid]
 valid_rp = [name for name, smiles in candidates.items() 
-            if analyzer.analyze_molecule_as_rp_spacer(smiles).is_valid]
+            if analyzer.mol_validate(smiles, spacer_type="RP").is_valid]
 
 print(f"Valid DJ: {valid_dj}")
 print(f"Valid RP: {valid_rp}")
@@ -180,7 +203,7 @@ from ase.io import write
 analyzer = q2D_analyzer()
 
 # 1. Analyze
-result = analyzer.analyze_molecule_as_dj_spacer("NCCCCN")
+result = analyzer.mol_validate("NCCCCN", spacer_type="DJ")
 if not result.is_valid:
     exit()
 
@@ -202,7 +225,7 @@ from q2D_Materials.modifier import from_smiles
 
 analyzer = q2D_analyzer()
 molecule = from_smiles("NCCCCN")
-result = analyzer.analyze_molecule_as_dj_spacer(molecule)
+result = analyzer.mol_validate(molecule, spacer_type="DJ")
 ```
 
 ## Advanced Examples
@@ -217,7 +240,7 @@ molecules = ["NCCCCN", "C[NH3+]", "NCCN"]
 # Find molecules with exactly 2 NH3 groups
 dj_with_2_nh3 = []
 for smiles in molecules:
-    result = analyzer.analyze_molecule_as_dj_spacer(smiles)
+    result = analyzer.mol_validate(smiles, spacer_type="DJ")
     if result.is_valid:
         nh3_count = sum(1 for g in result.terminal_groups if g.group_type == "NH3")
         if nh3_count == 2:
@@ -228,8 +251,8 @@ for smiles in molecules:
 
 ```python
 def is_good_dj_spacer(smiles, min_path_length=3):
-    result = analyzer.analyze_molecule_as_dj_spacer(
-        smiles, min_chain_length=min_path_length
+    result = analyzer.mol_validate(
+        smiles, spacer_type="DJ", min_chain_length=min_path_length
     )
     if not result.is_valid or len(result.valid_paths) == 0:
         return False
@@ -244,8 +267,9 @@ for smiles in ["NCCCCN", "NCCN", "NCCCCCCN"]:
 
 ```python
 # Validate with custom patterns
-result = analyzer.analyze_molecule_as_dj_spacer(
+result = analyzer.mol_validate(
     molecule,
+    spacer_type="DJ",
     initial_pattern='[NH3+]C',
     final_pattern='[NH3+]C',
     min_chain_length=3,
@@ -254,6 +278,46 @@ result = analyzer.analyze_molecule_as_dj_spacer(
     max_non_carbon_ratio=0.2
 )
 ```
+
+### Understanding SMARTS Pattern Matching
+
+The validation system uses RDKit's SMARTS (SMILES Arbitrary Target Specification) pattern matching to identify terminal groups. Here's how it works:
+
+**How SMARTS Matching Works**:
+1. **Pattern Matching**: RDKit searches for subgraph matches of your pattern in the molecule
+2. **Anchor Detection**: For each match, the system identifies "anchor" atoms—atoms in the match that connect to the rest of the molecule
+3. **Terminal Group Filtering**: Only matches with appropriate anchor configuration are kept:
+   - **Single anchor**: Pattern matches a terminal group attached to a backbone (e.g., `[NH3+]C` in `CC[NH3+]`)
+   - **No anchors**: Pattern matches the entire molecule (e.g., `[NH3+]C` matching `C[NH3+]`)
+   - **Multiple anchors**: Pattern matches most of the molecule (e.g., `[NH3+]C` matching both C and N in `C[NH3+]`)
+
+**Example: Small Molecules**:
+```python
+# For C[NH3+] (Methylammonium), the pattern [NH3+]C matches both C and N
+# Both atoms have external neighbors (H atoms), so both become anchors
+# The system automatically selects Carbon as the anchor for validation
+result = analyzer.mol_validate("C[NH3+]", spacer_type="RP", initial_pattern='[NH3+]C')
+print(result.is_valid)  # True - correctly identified as RP spacer
+```
+
+**SMARTS Syntax Examples**:
+```python
+# Basic patterns
+'[NH3+]C'      # Ammonium bonded to carbon
+'NH2C'         # Amine (NH2) bonded to carbon
+'[NH2]C'       # Explicit NH2 group (RDKit notation)
+
+# Advanced SMARTS syntax
+'[NH3+;D1]'    # Ammonium with degree 1 (terminal only)
+'[N;+1]C'      # Charged nitrogen (+1) bonded to carbon
+'[NH2,NH3+]C'  # Match either NH2 or NH3+ (not valid SMARTS, use list instead)
+```
+
+**Important Notes**:
+- Patterns are matched as subgraphs, so `[NH3+]C` will match both `C[NH3+]` and `CC[NH3+]`
+- Anchor detection ensures only terminal groups are identified (not internal matches)
+- For small molecules where the pattern matches the entire molecule, Carbon is automatically selected as the anchor
+- Both SMILES strings and Atoms objects now produce consistent results for SMARTS pattern matching
 
 ### Integration with Structure Creation
 
@@ -265,7 +329,7 @@ analyzer = q2D_analyzer()
 creator = q2D_creator()
 
 spacer_smiles = "C(CC[NH3+])C[NH3+]"  # 1,4-butanediammonium
-result = analyzer.analyze_molecule_as_dj_spacer(spacer_smiles)
+result = analyzer.mol_validate(spacer_smiles, spacer_type="DJ")
 
 if result.is_valid:
     # Prepare spacer
@@ -315,12 +379,13 @@ from q2D_Materials.analyzer import q2D_analyzer
 analyzer = q2D_analyzer()
 
 # Use defaults (allows only C, N, O in backbone)
-result = analyzer.analyze_molecule_as_dj_spacer("NCCCCN")
+result = analyzer.mol_validate("NCCCCN", spacer_type="DJ")
 print(result.is_valid)  # True
 
 # Molecule with phosphorus (P) in backbone - REJECTED
-result = analyzer.analyze_molecule_as_dj_spacer(
+result = analyzer.mol_validate(
     molecule_with_P,
+    spacer_type="DJ",
     forbidden_backbone_elements={'P', 'Si', 'B', 'Se', 'I', 'As', 'Ge', 'Sn', 'Pb', 'Bi', 'Al', 'Ti', 'Fe', 'Cu', 'Zn'}
 )
 print(result.is_valid)  # False
@@ -335,8 +400,9 @@ print(result.reason)    # "No valid backbone path found between pattern matches"
 analyzer = q2D_analyzer()
 
 # Strict: only C and N in backbone
-result = analyzer.analyze_molecule_as_dj_spacer(
+result = analyzer.mol_validate(
     "NCCCCN",
+    spacer_type="DJ",
     allowed_backbone_elements={'C', 'N'}
 )
 ```
@@ -345,8 +411,9 @@ result = analyzer.analyze_molecule_as_dj_spacer(
 
 ```python
 # Explicitly forbid phosphorus and sulfur
-result = analyzer.analyze_molecule_as_dj_spacer(
+result = analyzer.mol_validate(
     molecule,
+    spacer_type="DJ",
     forbidden_backbone_elements={'P', 'S', 'Si'}
 )
 ```
@@ -355,8 +422,9 @@ result = analyzer.analyze_molecule_as_dj_spacer(
 
 ```python
 # Require at least 80% carbon in backbone (excluding H, N)
-result = analyzer.analyze_molecule_as_dj_spacer(
+result = analyzer.mol_validate(
     molecule,
+    spacer_type="DJ",
     max_non_carbon_ratio=0.2  # Max 20% non-carbon
 )
 ```
@@ -365,8 +433,9 @@ result = analyzer.analyze_molecule_as_dj_spacer(
 
 ```python
 # Use ammonium pattern with strict backbone validation
-result = analyzer.analyze_molecule_as_dj_spacer(
+result = analyzer.mol_validate(
     molecule,
+    spacer_type="DJ",
     initial_pattern='[NH3+]C',
     final_pattern='[NH3+]C',
     allowed_backbone_elements={'C', 'N', 'O'},
@@ -399,8 +468,9 @@ for pkl_file in os.listdir("spacer_molecules/"):
 
     molecule = read(f"spacer_molecules/{pkl_file}")
 
-    result = analyzer.analyze_molecule_as_dj_spacer(
+    result = analyzer.mol_validate(
         molecule,
+        spacer_type="DJ",
         allowed_backbone_elements=ALLOWED_ELEMENTS,
         forbidden_backbone_elements=FORBIDDEN_ELEMENTS,
         max_non_carbon_ratio=MAX_NON_CARBON
@@ -435,8 +505,9 @@ for filename, reason in rejected_molecules:
 # Formula: C28H34N10O23P3
 # Has 2 valid NH2 groups, but path goes through phosphorus
 
-result = analyzer.analyze_molecule_as_dj_spacer(
+result = analyzer.mol_validate(
     nucleotide_molecule,
+    spacer_type="DJ",
     forbidden_backbone_elements={'P', 'Si', 'B', 'Se', 'I', 'As', 'Ge', 'Sn', 'Pb', 'Bi', 'Al', 'Ti', 'Fe', 'Cu', 'Zn'}
 )
 # Result: is_valid=False
@@ -462,8 +533,9 @@ class SpacerValidator:
             self.carbon_ratio = 0.4
 
     def validate_dj(self, molecule, initial_pattern=None, final_pattern=None):
-        return self.analyzer.analyze_molecule_as_dj_spacer(
+        return self.analyzer.mol_validate(
             molecule,
+            spacer_type="DJ",
             initial_pattern=initial_pattern,
             final_pattern=final_pattern,
             allowed_backbone_elements=self.allowed,
@@ -509,9 +581,11 @@ result = analyze_molecule_candidate(
 
 **RP Spacers**: Monofunctional, need 1+ terminal group matching specified pattern bonded to carbon. Pattern: `{pattern} - C`. Example: `C[NH3+]` (Methylammonium).
 
-**Pattern-Based Matching**: Uses SMILES pattern matching to identify terminal groups. Default patterns: `'NH2C'` (matches both NH2 and NH3 groups). Custom patterns: `'[NH3+]C'` for ammonium, `'NH2C'` for amine.
+**Pattern-Based Matching**: Uses RDKit SMARTS pattern matching to identify terminal groups. Default patterns: `'NH2C'` (matches both NH2 and NH3 groups). Custom patterns: `'[NH3+]C'` for ammonium, `'NH2C'` for amine. RDKit provides robust chemical pattern matching.
 
-**Terminal Groups**: Detected via SMILES pattern matching. Common patterns: `'NH2C'` (amine), `'[NH3+]C'` (ammonium).
+**Terminal Groups**: Detected via RDKit SMARTS pattern matching. Common patterns: `'NH2C'` (amine), `'[NH3+]C'` (ammonium). For advanced patterns, use SMARTS syntax (e.g., `'[NH3+;D1]'` for terminal ammonium with degree 1).
+
+**Anchor Detection**: After SMARTS pattern matching, the system identifies "anchor" atoms—atoms in the matched pattern that connect to the rest of the molecule (the backbone). For small molecules where the pattern matches the entire molecule (e.g., `C[NH3+]` matching `[NH3+]C`), the system automatically selects the Carbon atom as the anchor. This ensures that simple molecules like Methylammonium (`C[NH3+]`) are correctly validated as RP spacers, even when using Atoms objects.
 
 ## Common Patterns
 
@@ -526,11 +600,30 @@ result = analyze_molecule_candidate(
 - Works standalone—no structure needed
 - Accepts SMILES, ASE Atoms, or file paths
 - Use backbone element validation to filter out unwanted chemical elements
+- **RDKit is required** - All SMILES parsing uses RDKit for robust chemical validation
 
 **Common issues**:
-- Invalid SMILES → check syntax
+- Invalid SMILES → RDKit will raise `ValueError` with clear error message
 - No pattern matches → molecule doesn't match specified terminal patterns
 - No valid path (DJ) → terminals not connected via carbon backbone
 - Valid structure but rejected → check if backbone contains forbidden elements (P, S, metals)
 - Molecule has pattern matches but no valid paths → try adjusting `allowed_backbone_elements` or `forbidden_backbone_elements` if defaults are too strict
 - Pattern not found → try different patterns like `'[NH3+]C'` for ammonium groups
+- RDKit import error → Install RDKit: `pip install rdkit-pypi`
+- SMILES vs Atoms mismatch → Both SMILES strings and Atoms objects should now produce consistent results for most molecules (see known limitation for 5-membered ring nitrogen compounds)
+
+**Known Limitation - 5-Membered Ring Nitrogen Compounds**:
+- Molecules containing 5-membered aromatic rings with charged nitrogen (e.g., imidazolium `C[N+]1=CSC=C1`,
+  thiazolium `C1=CSC=[NH+]1`) may fail validation when using ASE Atoms objects due to charge inference issues.
+- **Workaround**: Use SMILES strings directly instead of Atoms objects for these molecules:
+  ```python
+  # ✅ Works: Use SMILES directly
+  result = analyzer.mol_validate("C[N+]1=CSC=C1", spacer_type="DJ", initial_pattern='[NH3+]C')
+  
+  # ❌ May fail: Using Atoms object
+  atoms = smiles_to_ase_atoms("C[N+]1=CSC=C1")
+  result = analyzer.mol_validate(atoms, spacer_type="DJ", initial_pattern='[NH3+]C')
+  ```
+- Affected molecule types: imidazolium (MIC1, MIC2, MIC3), thiazolium (ThA), and similar 5-membered ring structures.
+
+**Note**: As of v2.2, validation with Atoms objects now works correctly for simple molecules like `C[NH3+]` (Methylammonium) and other small molecules. The anchor detection logic has been improved to handle cases where the pattern matches the entire molecule or most of it.

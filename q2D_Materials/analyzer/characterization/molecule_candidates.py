@@ -5,7 +5,7 @@ DJ (Dion-Jacobson) or RP (Ruddlesden-Popper) spacers based on pattern matching
 with user-defined SMILES patterns.
 """
 
-from typing import Union, Optional, List, Tuple, Set, Dict
+from typing import Union, Optional, List, Tuple, Set, Dict, Any
 from dataclasses import dataclass
 import numpy as np
 import networkx as nx
@@ -15,9 +15,22 @@ from collections import Counter
 
 from ..utils.pymatgen_utils import build_molecular_graph
 from ..utils.graph_utils import find_shortest_path, validate_path_continuity, get_connected_components
-from ...utils.molecules.smiles_parser import smiles_to_graph as direct_smiles_to_graph
+from ...utils.molecules.graph_converter import (
+    graph_to_rdkit,
+    rdkit_to_graph,
+    validate_smiles,
+    atoms_to_graph
+)
 from ...builders.optimizers import elongate_molecule
 from ...modifier.fragment import from_smiles, validate_fragment
+from .smarts_validator import find_smarts_matches
+
+try:
+    from rdkit import Chem
+    RDKIT_AVAILABLE = True
+except ImportError:
+    RDKIT_AVAILABLE = False
+    Chem = None
 
 # Default allowed elements in backbone path (between terminal groups)
 # Users can customize via API parameters
@@ -31,8 +44,9 @@ DEFAULT_MAX_NON_CARBON_RATIO: float = 0.3
 
 # Default SMILES patterns for terminal groups
 # Users can customize via API parameters
-DEFAULT_INITIAL_PATTERN: str = 'NH2C'  # NH2 bonded to carbon
-DEFAULT_FINAL_PATTERN: str = 'NH2C'   # NH2 bonded to carbon
+# Note: RDKit requires explicit notation, so [NH2]C instead of NH2C
+DEFAULT_INITIAL_PATTERN: str = '[NH2]C'  # NH2 bonded to carbon
+DEFAULT_FINAL_PATTERN: str = '[NH2]C'   # NH2 bonded to carbon
 
 @dataclass
 class TerminalGroup:
@@ -89,137 +103,170 @@ class SpacerCandidateResult:
 # PATTERN MATCHING FUNCTIONS (Pattern-Based Validation)
 # ============================================================================
 
-def _find_attachment_carbon(pattern_graph: nx.Graph) -> Optional[int]:
+def _parse_pattern(pattern_smarts: str) -> Any:
     """
-    Identify carbon attachment point in SMILES pattern.
-
-    Searches for carbon atom in the pattern graph. For patterns like 'NH2C',
-    '[NH3+]C', returns the carbon node index.
+    Parse SMARTS pattern into RDKit molecule.
 
     Parameters
     ----------
-    pattern_graph : nx.Graph
-        NetworkX graph from from_smiles()
+    pattern_smarts : str
+        SMARTS string defining the terminal pattern
 
     Returns
     -------
-    Optional[int]
-        Carbon node index, or None if no carbon found
+    Chem.Mol
+        RDKit molecule object for the pattern
     """
-    for node in pattern_graph.nodes():
-        symbol = pattern_graph.nodes[node].get('symbol', '')
-        if symbol == 'C':
-            return node
-    return None
-
-
-def _parse_pattern(pattern_smiles: str) -> Tuple[nx.Graph, Optional[int]]:
-    """
-    Convert SMILES pattern to graph and identify attachment carbon.
-
-    Uses fast direct SMILES parsing (no 3D coordinates needed for pattern matching).
-
-    Examples:
-        '[NH3+]C' → graph with N-C bond, returns C index
-        'NH2C' → graph with N-C bond, returns C index
-        '[NH3+]' → graph with just N, returns None (no carbon)
-
-    Parameters
-    ----------
-    pattern_smiles : str
-        SMILES string defining the terminal pattern
-
-    Returns
-    -------
-    Tuple[nx.Graph, Optional[int]]
-        (pattern_graph, carbon_attachment_index)
-
-    Raises
-    ------
-    ValueError
-        If SMILES pattern is invalid
-    """
+    if not RDKIT_AVAILABLE:
+        raise ImportError("RDKit is required for pattern parsing")
+    
     try:
-        # Use fast direct SMILES parsing (no 3D coordinates needed)
-        pattern_graph = direct_smiles_to_graph(pattern_smiles, add_positions=False)
-
-        # Find the carbon atom (attachment point)
-        carbon_idx = _find_attachment_carbon(pattern_graph)
-
-        return pattern_graph, carbon_idx
-
+        pattern_mol = Chem.MolFromSmarts(pattern_smarts)
+        if pattern_mol is None:
+            raise ValueError(f"RDKit could not parse SMARTS pattern: {pattern_smarts}")
+        return pattern_mol
     except Exception as e:
-        raise ValueError(f"Invalid SMILES pattern '{pattern_smiles}': {e}")
+        raise ValueError(f"Invalid SMARTS pattern '{pattern_smarts}': {e}")
 
 
 def _find_pattern_matches(
     molecule_graph: nx.Graph,
-    pattern_graph: nx.Graph,
-    pattern_carbon_idx: Optional[int],
-    atoms: Optional[Atoms] = None
+    pattern_mol: Any
 ) -> List[Dict]:
     """
-    Find all subgraph matches using NetworkX isomorphism.
+    Find all subgraph matches using RDKit SMARTS matching.
 
-    Uses subgraph isomorphism to find all occurrences of the pattern
-    in the molecule. Nodes are matched by chemical symbol from graph attributes.
-    Graph-based matching is fast, accurate, and geometry-independent.
+    Workflow:
+    1. Graph -> RDKit Mol (ASE -> Graph done by caller)
+    2. Patch charges/topology on RDKit Mol (Geometric/Topological analysis)
+    3. SMARTS matching on RDKit Mol
+    4. Map matches back to Graph indices
+
+    Identifies "anchor" atoms dynamically: an anchor is an atom in the matched
+    pattern that connects to the rest of the molecule (the backbone).
+    
+    **Terminal Group Filtering**: Only matches with exactly one anchor atom are
+    returned. This ensures the pattern represents a terminal group attached to
+    a backbone, rather than a substructure within the backbone.
 
     Parameters
     ----------
     molecule_graph : nx.Graph
         Full molecular connectivity graph (graph-based, no 3D coordinates needed)
-    pattern_graph : nx.Graph
-        Pattern subgraph to match
-    pattern_carbon_idx : Optional[int]
-        Index of carbon in pattern (None if pattern has no carbon)
-    atoms : Atoms, optional
-        ASE Atoms object (deprecated - symbols now come from graph nodes)
-        Kept for backward compatibility but not used
+    pattern_mol : Chem.Mol
+        RDKit molecule object for the SMARTS pattern
 
     Returns
     -------
     List[Dict]
-        List of matches: [{'mapping': {pattern_idx: mol_idx}, 'carbon_idx': mol_carbon_idx}, ...]
-        If pattern has no carbon, carbon_idx is None
+        List of matches: [{'mapping': {pattern_idx: mol_idx}, 'anchor_idx': mol_anchor_idx}, ...]
     """
-    # Define node matching function: match by chemical symbol from graph nodes
-    def node_match(mol_node_data, pat_node_data):
-        # Get symbol from graph node attributes (graph-based matching)
-        mol_symbol = mol_node_data.get('symbol', '')
-        pat_symbol = pat_node_data.get('symbol', '')
-        
-        # Also match charge if present (for patterns like [NH3+])
-        mol_charge = mol_node_data.get('charge', 0)
-        pat_charge = pat_node_data.get('charge', 0)
-        
-        # Match symbol and charge
-        return mol_symbol == pat_symbol and mol_charge == pat_charge
+    if not RDKIT_AVAILABLE:
+        raise ImportError("RDKit is required for pattern matching")
+    
+    # Convert molecule graph to RDKit Mol
+    mol = graph_to_rdkit(molecule_graph, preserve_coords=False)
+    
+    # PATCH: Fix N charges if missing (common issue when converting from Atoms without charge inference)
+    # Ammonium nitrogens (N bonded to 4 atoms) should have +1 charge
+    if mol is not None:
+        for atom in mol.GetAtoms():
+            if atom.GetSymbol() == 'N' and atom.GetFormalCharge() == 0:
+                # If N has 4 neighbors (e.g. 1 C and 3 H), it should be N+
+                if atom.GetDegree() == 4:
+                    atom.SetFormalCharge(1)
 
-    # Use NetworkX GraphMatcher for subgraph isomorphism
-    matcher = isomorphism.GraphMatcher(
-        molecule_graph,
-        pattern_graph,
-        node_match=node_match
-    )
+    # Sanitize molecules before pattern matching (required for RDKit)
+    try:
+        Chem.SanitizeMol(mol)
+    except:
+        pass  # Some molecules may fail sanitization, but we can still try matching
+    
+    # Find matches using RDKit
+    # GetSubstructMatches returns tuples of (mol_atom_idx, ...) matching pattern atoms
+    matches_rdkit = mol.GetSubstructMatches(pattern_mol)
+    
+    # Get or create mapping dictionaries from graphs
+    # If graph was built from Atoms (not SMILES), the mapping won't exist, so create it
+    mol_rdkit_to_nx = molecule_graph.graph.get('rdkit_to_nx', {})
+    if not mol_rdkit_to_nx:
+        # Create mapping by sorting nodes the same way graph_to_rdkit does
+        sorted_mol_nodes = sorted(molecule_graph.nodes())
+        mol_rdkit_to_nx = {rdkit_idx: nx_idx for rdkit_idx, nx_idx in enumerate(sorted_mol_nodes)}
+        # Store it in the graph for future use
+        molecule_graph.graph['rdkit_to_nx'] = mol_rdkit_to_nx
 
     matches = []
-    for mapping in matcher.subgraph_isomorphisms_iter():
-        # mapping: molecule_node → pattern_node (from NetworkX)
-        # To find the molecule carbon, find which molecule node maps to pattern carbon
-        mol_carbon_idx = None
-        if pattern_carbon_idx is not None:
-            # Find molecule node that maps to pattern carbon node
-            for mol_node, pat_node in mapping.items():
-                if pat_node == pattern_carbon_idx:
-                    mol_carbon_idx = mol_node
+    for rdkit_match in matches_rdkit:
+        # Convert match to set of NX indices
+        match_nx_indices = set()
+        mapping = {}
+        
+        for pat_idx, mol_rdkit_idx in enumerate(rdkit_match):
+            mol_nx_idx_mapped = mol_rdkit_to_nx.get(mol_rdkit_idx)
+            if mol_nx_idx_mapped is not None:
+                match_nx_indices.add(mol_nx_idx_mapped)
+                mapping[pat_idx] = mol_nx_idx_mapped
+        
+        # Identify anchors: atoms in the match that have neighbors NOT in the match
+        anchors = []
+        for mol_nx_idx in match_nx_indices:
+            for neighbor in molecule_graph.neighbors(mol_nx_idx):
+                if neighbor not in match_nx_indices:
+                    anchors.append(mol_nx_idx)
+                    break  # Found one external neighbor, this atom is an anchor
+        
+        # Filter for terminal groups: must have exactly one anchor connecting to backbone
+        if len(anchors) == 1:
+            matches.append({
+                'mapping': mapping,
+                'anchor_idx': anchors[0]
+            })
+        elif len(anchors) == 0:
+            # Match covers the entire molecule (e.g. MA matching [NH3+]C)
+            # Try to find a Carbon atom to serve as the anchor
+            anchor = None
+            for mol_idx in match_nx_indices:
+                if molecule_graph.nodes[mol_idx].get('symbol') == 'C':
+                    anchor = mol_idx
                     break
-
-        matches.append({
-            'mapping': mapping,
-            'carbon_idx': mol_carbon_idx
-        })
-
+            
+            # If no Carbon, use the first atom
+            if anchor is None and match_nx_indices:
+                anchor = sorted(list(match_nx_indices))[0]
+                
+            if anchor is not None:
+                matches.append({
+                    'mapping': mapping,
+                    'anchor_idx': anchor
+                })
+        else:
+            # Multiple anchors: pattern matches entire molecule or most of it
+            # (e.g. C[NH3+] where both C and N have external neighbors)
+            # Select Carbon as anchor if present, otherwise use first anchor
+            anchor = None
+            for mol_idx in anchors:
+                if molecule_graph.nodes[mol_idx].get('symbol') == 'C':
+                    anchor = mol_idx
+                    break
+            
+            # If no Carbon in anchors, try to find Carbon in match
+            if anchor is None:
+                for mol_idx in match_nx_indices:
+                    if molecule_graph.nodes[mol_idx].get('symbol') == 'C':
+                        anchor = mol_idx
+                        break
+            
+            # If still no Carbon, use first anchor
+            if anchor is None and anchors:
+                anchor = anchors[0]
+                
+            if anchor is not None:
+                matches.append({
+                    'mapping': mapping,
+                    'anchor_idx': anchor
+                })
+    
     return matches
 
 
@@ -228,7 +275,6 @@ def _find_valid_paths_pattern_based(
     initial_matches: List[Dict],
     final_matches: List[Dict],
     min_length: int,
-    atoms: Optional[Atoms] = None,
     allowed_backbone_elements: Optional[Set[str]] = None,
     forbidden_backbone_elements: Optional[Set[str]] = None,
     max_non_carbon_ratio: Optional[float] = None,
@@ -283,11 +329,13 @@ def _find_valid_paths_pattern_based(
     # Get symbols from graph nodes (graph-based matching - no Atoms object needed)
     # Create a mapping from node index to symbol
     node_to_symbol = {node: graph.nodes[node].get('symbol', 'C') for node in graph.nodes()}
+    
+    # atoms parameter is deprecated - symbols come from graph nodes
 
     for init_match in initial_matches:
         for final_match in final_matches:
-            c1 = init_match['carbon_idx']
-            c2 = final_match['carbon_idx']
+            c1 = init_match['anchor_idx']
+            c2 = final_match['anchor_idx']
 
             # Skip if either pattern has no carbon
             if c1 is None or c2 is None:
@@ -392,22 +440,25 @@ def analyze_molecule_candidate(
     >>> analyzer = q2D_analyzer()
     >>>
     >>> # Basic usage with NH2 groups
-    >>> result = analyzer.analyze_molecule_as_dj_spacer(
+    >>> result = analyzer.mol_validate(
     ...     "NCCCCN",
+    ...     spacer_type="DJ",
     ...     initial_pattern='NH2C',
     ...     final_pattern='NH2C'
     ... )
     >>>
     >>> # Ammonium terminals
-    >>> result = analyzer.analyze_molecule_as_dj_spacer(
+    >>> result = analyzer.mol_validate(
     ...     molecule,
+    ...     spacer_type="DJ",
     ...     initial_pattern='[NH3+]C',
     ...     final_pattern='[NH3+]C'
     ... )
     >>>
     >>> # Multiple final patterns
-    >>> result = analyzer.analyze_molecule_as_dj_spacer(
+    >>> result = analyzer.mol_validate(
     ...     molecule,
+    ...     spacer_type="DJ",
     ...     initial_pattern='[NH3+]C',
     ...     final_pattern=['[NH3+]C', 'NH2C']
     ... )
@@ -434,8 +485,12 @@ def analyze_molecule_candidate(
     # Convert SMILES to graph directly (no 3D coordinates needed for pattern matching)
     if isinstance(molecule, str):
         try:
-            # Use direct SMILES parsing - fast, graph-based, no 3D coordinates
-            graph = direct_smiles_to_graph(molecule, add_positions=False)
+            # Use RDKit for SMILES parsing - fast, graph-based, no 3D coordinates
+            validate_smiles(molecule)
+            mol = Chem.MolFromSmiles(molecule)
+            if mol is None:
+                raise ValueError(f"RDKit could not parse SMILES: {molecule}")
+            graph = rdkit_to_graph(mol, coords=None)
             # Create empty Atoms object for result (not needed for graph-based matching)
             atoms = Atoms()
         except Exception as e:
@@ -449,11 +504,11 @@ def analyze_molecule_candidate(
                 graph=nx.Graph()
             )
     else:
-        # If Atoms object provided, build graph from it (for backward compatibility)
+        # If Atoms object provided, convert to graph using unified converter
+        # This ensures both SMILES and Atoms inputs produce graphs with sequential node indices
         atoms = molecule
         try:
-            indices = list(range(len(atoms)))
-            graph = build_molecular_graph(atoms, set(), indices)
+            graph = atoms_to_graph(atoms, preserve_coords=True)
         except Exception as e:
             return SpacerCandidateResult(
                 spacer_type=spacer_type,
@@ -470,15 +525,15 @@ def analyze_molecule_candidate(
         # Find all initial pattern matches
         all_initial_matches = []
         for pat in initial_patterns:
-            pat_graph, pat_carbon_idx = _parse_pattern(pat)
-            matches = _find_pattern_matches(graph, pat_graph, pat_carbon_idx, None)
+            pat_mol = _parse_pattern(pat)
+            matches = _find_pattern_matches(graph, pat_mol)
             all_initial_matches.extend(matches)
 
         # Find all final pattern matches
         all_final_matches = []
         for pat in final_patterns:
-            pat_graph, pat_carbon_idx = _parse_pattern(pat)
-            matches = _find_pattern_matches(graph, pat_graph, pat_carbon_idx, None)
+            pat_mol = _parse_pattern(pat)
+            matches = _find_pattern_matches(graph, pat_mol)
             all_final_matches.extend(matches)
 
     except ValueError as e:
@@ -524,7 +579,6 @@ def analyze_molecule_candidate(
             all_initial_matches,
             all_final_matches,
             min_chain_length,
-            atoms,
             allowed_backbone_elements,
             forbidden_backbone_elements,
             max_non_carbon_ratio,
@@ -533,8 +587,8 @@ def analyze_molecule_candidate(
 
         if len(valid_paths) == 0:
             # Check if we have distinct terminals (for better error message)
-            initial_carbons = {m['carbon_idx'] for m in all_initial_matches if m['carbon_idx'] is not None}
-            final_carbons = {m['carbon_idx'] for m in all_final_matches if m['carbon_idx'] is not None}
+            initial_carbons = {m['anchor_idx'] for m in all_initial_matches if m['anchor_idx'] is not None}
+            final_carbons = {m['anchor_idx'] for m in all_final_matches if m['anchor_idx'] is not None}
             distinct_terminals = len(initial_carbons | final_carbons)
             
             if distinct_terminals < 2:
@@ -565,7 +619,7 @@ def analyze_molecule_candidate(
 
     elif spacer_type == "RP":
         # RP spacers need at least one match with carbon
-        matches_with_carbon = [m for m in all_initial_matches if m['carbon_idx'] is not None]
+        matches_with_carbon = [m for m in all_initial_matches if m['anchor_idx'] is not None]
         if len(matches_with_carbon) == 0:
             return SpacerCandidateResult(
                 spacer_type=spacer_type,
@@ -669,9 +723,8 @@ def convert_nh2_to_nh3(atoms: Atoms, n_index: int) -> Atoms:
     symbols = atoms.get_chemical_symbols()
     positions = atoms.get_positions()
 
-    # Build graph to find H neighbors
-    indices = list(range(len(atoms)))
-    graph = build_molecular_graph(atoms, set(), indices)
+    # Build graph to find H neighbors using unified converter
+    graph = atoms_to_graph(atoms, preserve_coords=True)
 
     # Find H atoms bonded to N
     n_pos = positions[n_index]
@@ -769,9 +822,8 @@ def clean_molecule(
     symbols = atoms.get_chemical_symbols()
     positions = atoms.get_positions()
 
-    # Build molecular graph
-    indices = list(range(len(atoms)))
-    graph = build_molecular_graph(atoms, set(), indices)
+    # Build molecular graph using unified converter
+    graph = atoms_to_graph(atoms, preserve_coords=True)
 
     # Find all connected components using shared graph utilities
     components = get_connected_components(graph)
@@ -789,8 +841,8 @@ def clean_molecule(
             component_matches = 0
             for pattern in patterns:
                 try:
-                    pat_graph, pat_carbon_idx = _parse_pattern(pattern)
-                    matches = _find_pattern_matches(subgraph, pat_graph, pat_carbon_idx, atoms)
+                    pat_mol = _parse_pattern(pattern)
+                    matches = _find_pattern_matches(subgraph, pat_mol)
                     component_matches += len(matches)
                 except:
                     continue
@@ -815,20 +867,19 @@ def clean_molecule(
     if convert_nh2_to_nh3_flag:
         # Find all NH2 pattern matches
         try:
-            # Rebuild graph for cleaned atoms
-            indices = list(range(len(cleaned_atoms)))
-            graph = build_molecular_graph(cleaned_atoms, set(), indices)
+            # Rebuild graph for cleaned atoms using unified converter
+            graph = atoms_to_graph(cleaned_atoms, preserve_coords=True)
 
             # Search for NH2 groups using fast direct parsing
-            pat_graph, pat_carbon_idx = _parse_pattern('NH2C')
-            matches = _find_pattern_matches(graph, pat_graph, pat_carbon_idx, cleaned_atoms)
+            pat_mol = _parse_pattern('[NH2]C')
+            matches = _find_pattern_matches(graph, pat_mol)
 
             # Find nitrogen indices from matches
             nh2_nitrogen_indices = set()
             for match in matches:
                 # Find nitrogen node in the match mapping
-                for pat_node, mol_node in match['mapping'].items():
-                    if pat_graph.nodes[pat_node].get('symbol') == 'N':
+                for pat_idx, mol_node in match['mapping'].items():
+                    if pat_mol.GetAtomWithIdx(pat_idx).GetSymbol() == 'N':
                         nh2_nitrogen_indices.add(mol_node)
 
             # Convert each NH2 to NH3 (process in reverse to maintain indices)

@@ -17,6 +17,10 @@ from scipy.spatial.transform import Rotation
 from ...utils.geometry.geometry import _calculate_distances
 from ..detection.octahedral_detection import find_shared_atoms
 from ...builders.glazer_notation import get_space_group_from_notation, get_conventional_pattern
+from ..utils.geometry_helpers import (
+    apply_pbc_to_vector,
+    get_all_x_atoms_from_octahedron,
+)
 
 # Default tolerance constants for Glazer pattern detection
 DEFAULT_TOLERANCE = 0.1
@@ -53,6 +57,9 @@ def _apply_pbc_to_vectors(vectors: np.ndarray, cell: np.ndarray, inv_cell: np.nd
     """
     Apply periodic boundary conditions to vectors.
     
+    This is a wrapper around the shared apply_pbc_to_vector utility that accepts
+    pre-computed inv_cell for performance in Glazer detection.
+    
     Parameters
     ----------
     vectors : np.ndarray
@@ -60,26 +67,14 @@ def _apply_pbc_to_vectors(vectors: np.ndarray, cell: np.ndarray, inv_cell: np.nd
     cell : np.ndarray
         Cell matrix (3, 3)
     inv_cell : np.ndarray
-        Inverse cell matrix (3, 3)
+        Inverse cell matrix (3, 3) - pre-computed for performance
     
     Returns
     -------
     np.ndarray
         Vectors with PBC applied, same shape as input
     """
-    if vectors.ndim == 2:
-        # Shape (N, 3)
-        vec_frac = vectors @ inv_cell.T
-        vec_frac -= np.round(vec_frac)
-        return vec_frac @ cell
-    else:
-        # Shape (N, M, 3)
-        original_shape = vectors.shape
-        vec_flat = vectors.reshape(-1, 3)
-        vec_frac = vec_flat @ inv_cell.T
-        vec_frac -= np.round(vec_frac)
-        vec_wrapped = vec_frac @ cell
-        return vec_wrapped.reshape(original_shape)
+    return apply_pbc_to_vector(vectors, cell, inv_cell=inv_cell)
 
 
 def _build_benv_matrix(
@@ -438,21 +433,18 @@ def _get_reference_axes(atom_positions: np.ndarray, cell: np.ndarray, octahedra:
             continue
 
         b_pos = atom_positions[b_idx]
-        x_indices = (oct_data.get("terminal_atoms", []) +
-                     oct_data.get("interlayer_atoms", []) +
-                     oct_data.get("intralayer_atoms", []))
+        x_indices = get_all_x_atoms_from_octahedron(oct_data)
 
         if len(x_indices) < 3:
             continue
 
-        # Get bond vectors with PBC
+        # Get bond vectors with PBC using shared utility
         inv_cell = np.linalg.inv(cell)
         bond_vectors = []
         for x_idx in x_indices:
             v = atom_positions[x_idx] - b_pos
-            v_frac = v @ inv_cell.T
-            v_frac -= np.round(v_frac)
-            bond_vectors.append(v_frac @ cell)
+            v = apply_pbc_to_vector(v, cell, inv_cell=inv_cell)
+            bond_vectors.append(v)
 
         # Check alignment of bonds with cell directions
         # For a non-rotated cell, at least one bond should align well with each cell axis
@@ -632,21 +624,15 @@ def _detect_glazer_pattern(
 
         b_pos = atom_positions[b_idx]
 
-        # Get all X neighbors
-        x_indices = (
-            oct_data.get("terminal_atoms", [])
-            + oct_data.get("interlayer_atoms", [])
-            + oct_data.get("intralayer_atoms", [])
-        )
+        # Get all X neighbors using shared utility
+        x_indices = get_all_x_atoms_from_octahedron(oct_data)
 
-        # Vectors to neighbors
+        # Vectors to neighbors with PBC using shared utility
         vectors = []
         for x_idx in x_indices:
             v = atom_positions[x_idx] - b_pos
-            # Apply PBC - find min image in fractional coords
-            v_frac = v @ inv_cell.T
-            v_frac -= np.round(v_frac)
-            v = v_frac @ cell
+            # Apply PBC using shared utility
+            v = apply_pbc_to_vector(v, cell, inv_cell=inv_cell)
             vectors.append(v)
 
         # Project vectors onto reference axes to identify them
@@ -693,14 +679,10 @@ def _detect_glazer_pattern(
 
     # 2. Analyze patterns and phases
     
-    # Build neighbor indices for find_shared_atoms
+    # Build neighbor indices for find_shared_atoms using shared utility
     neighbor_indices = []
     for oct in octahedra:
-        all_neighbors = (
-            oct.get("terminal_atoms", [])
-            + oct.get("interlayer_atoms", [])
-            + oct.get("intralayer_atoms", [])
-        )
+        all_neighbors = get_all_x_atoms_from_octahedron(oct)
         neighbor_indices.append(all_neighbors)
 
     shared_atoms = find_shared_atoms(neighbor_indices)
