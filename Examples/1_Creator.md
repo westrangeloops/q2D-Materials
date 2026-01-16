@@ -94,5 +94,5 @@ Numbers in parentheses are absolute distances in Å. Gaps without numbers use th
 
 Regenerate the storyboard images any time:
 ```bash
-nix develop -c python3 Examples/plot.py
+python3 Examples/plot.py
 ```

@@ -185,6 +185,41 @@ def query_atoms(analyzer: "q2D_analyzer", **filters: Any) -> List[Dict[str, Any]
     return results
 
 
+def query_cavities(analyzer: "q2D_analyzer", **filters: Any) -> List[Dict[str, Any]]:
+    """
+    Query cavity nodes with attribute filters.
+    
+    A cavity is the cuboctahedral cage formed by 8 corner-sharing
+    octahedra that typically contains an A-site cation.
+    
+    Parameters
+    ----------
+    analyzer : q2D_analyzer
+        Analyzer instance with analyzed structure
+    **filters
+        Attribute filters (e.g., contains_a_site=True, chirality='R')
+    
+    Returns
+    -------
+    List[Dict[str, Any]]
+        List of dictionaries with 'node' and 'data' keys for each matching cavity
+    
+    Examples
+    --------
+    >>> # Get all cavities with A-sites
+    >>> cavities = query_cavities(analyzer, contains_a_site=True)
+    >>> for cav in cavities:
+    ...     print(f"{cav['node']}: {cav['data']['a_site_type']}")
+    """
+    graph = analyzer.get_graph()
+    results = []
+    for node, data in graph.nodes(data=True):
+        if data.get('node_type') == 'cavity':
+            if all(data.get(k) == v for k, v in filters.items()):
+                results.append({'node': node, 'data': data})
+    return results
+
+
 def get_octahedron_neighbors(
     analyzer: "q2D_analyzer", octahedron_id: str, edge_type: Optional[str] = None
 ) -> List[Dict[str, Any]]:
@@ -198,7 +233,7 @@ def get_octahedron_neighbors(
     octahedron_id : str
         Node ID of the octahedron (e.g., 'octahedron_0')
     edge_type : str, optional
-        Filter by edge type (e.g., 'shares_atoms', 'contains')
+        Filter by edge type (e.g., 'contains', 'bonded_to')
     
     Returns
     -------
@@ -327,7 +362,7 @@ class CharacterizationQuery:
     >>> # Graph queries with method chaining
     >>> result = (analyzer.get_characterization()
     ...          .octahedra()
-    ...          .neighbors(edge_type='shares_atoms')
+    ...          .neighbors(edge_type='contains')
     ...          .to_list())
     """
     
@@ -381,6 +416,134 @@ class CharacterizationQuery:
         results = query_layers(self.analyzer, **filters)
         self._current_nodes = [r['node'] for r in results]
         self._query_type = 'graph'
+        return self
+    
+    def cavities(self, **filters: Any) -> "CharacterizationQuery":
+        """
+        Query cavity nodes with filters.
+        
+        A cavity is the cuboctahedral cage formed by 8 corner-sharing
+        octahedra that typically contains an A-site cation.
+        
+        Parameters
+        ----------
+        **filters
+            Attribute filters (e.g., contains_a_site=True, chirality='R')
+        
+        Returns
+        -------
+        CharacterizationQuery
+            Self for method chaining
+        
+        Examples
+        --------
+        >>> # Get all cavities containing A-sites
+        >>> cavities = (analyzer.get_characterization()
+        ...             .cavities(contains_a_site=True)
+        ...             .to_list())
+        """
+        graph = self.analyzer.get_graph()
+        results = []
+        for node, data in graph.nodes(data=True):
+            if data.get('node_type') == 'cavity':
+                if all(data.get(k) == v for k, v in filters.items()):
+                    results.append(node)
+        self._current_nodes = results
+        self._query_type = 'graph'
+        return self
+    
+    def containing_a_site(self, formula: Optional[str] = None) -> "CharacterizationQuery":
+        """
+        Filter to cavities containing A-sites.
+        
+        Parameters
+        ----------
+        formula : str, optional
+            Filter by A-site formula (e.g., 'CH6N' for MA)
+        
+        Returns
+        -------
+        CharacterizationQuery
+            Self for method chaining
+        
+        Examples
+        --------
+        >>> # Get cavities containing MA (methylammonium)
+        >>> ma_cavities = (analyzer.get_characterization()
+        ...                .cavities()
+        ...                .containing_a_site(formula='CH6N')
+        ...                .to_list())
+        """
+        if self._current_nodes is None:
+            # Start from all cavities
+            self.cavities()
+        
+        graph = self.analyzer.get_graph()
+        filtered = []
+        
+        for node in self._current_nodes:
+            if not node.startswith('cavity_'):
+                continue
+            data = graph.nodes[node]
+            
+            if not data.get('contains_a_site', False):
+                continue
+            
+            if formula is not None:
+                # Check if any A-site has matching formula
+                a_site_indices = data.get('a_site_indices', [])
+                formula_match = False
+                for atom_idx in a_site_indices:
+                    atom_node = f'atom_{atom_idx}'
+                    if graph.has_node(atom_node):
+                        atom_data = graph.nodes[atom_node]
+                        a_formula = atom_data.get('a_site_formula', '')
+                        if a_formula == formula:
+                            formula_match = True
+                            break
+                if not formula_match:
+                    continue
+            
+            filtered.append(node)
+        
+        self._current_nodes = filtered
+        return self
+    
+    def corners(self) -> "CharacterizationQuery":
+        """
+        Get corner octahedra of currently selected cavities.
+        
+        Returns
+        -------
+        CharacterizationQuery
+            Self for method chaining
+        
+        Examples
+        --------
+        >>> # Get all octahedra that form cavity corners
+        >>> corner_octs = (analyzer.get_characterization()
+        ...                .cavities()
+        ...                .corners()
+        ...                .to_list())
+        """
+        if self._current_nodes is None:
+            raise ValueError("No nodes selected. Call cavities() first.")
+        
+        graph = self.analyzer.get_graph()
+        all_corners = []
+        
+        for node in self._current_nodes:
+            if not node.startswith('cavity_'):
+                continue
+            
+            for neighbor in graph.neighbors(node):
+                if neighbor.startswith('octahedron_'):
+                    edge_data = graph[node][neighbor]
+                    if edge_data.get('edge_type') == 'cavity_corner':
+                        if neighbor not in all_corners:
+                            all_corners.append(neighbor)
+        
+        self._current_nodes = all_corners
         return self
     
     def neighbors(self, edge_type: Optional[str] = None) -> "CharacterizationQuery":
@@ -577,6 +740,7 @@ __all__ = [
     'query_octahedra',
     'query_layers',
     'query_atoms',
+    'query_cavities',
     'get_octahedron_neighbors',
     'get_layer_octahedra',
     'find_paths',

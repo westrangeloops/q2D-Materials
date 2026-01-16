@@ -31,6 +31,7 @@ app.add_middleware(
 # Define directories
 BACKEND_DIR = Path(__file__).parent
 PARENT_DIR = BACKEND_DIR.parent
+PROJECT_ROOT = PARENT_DIR.parent
 
 # --- State Management (In-Memory) ---
 state = {
@@ -563,6 +564,170 @@ def download_structure(job_id: str):
         }
     )
 
+# --- Cavity Data Storage (In-Memory) ---
+cavity_cache = {}  # job_id -> {cavity_index -> cavity_data}
+
+@app.post("/api/vasp/analyze")
+async def analyze_vasp_file(file: UploadFile = File(...)):
+    """
+    Analyze a VASP file and generate interactive graph visualization.
+    
+    Parameters
+    ----------
+    file : UploadFile
+        VASP structure file (.vasp, POSCAR, or CONTCAR)
+    
+    Returns
+    -------
+    dict
+        {status, message, graph_data, cavities, html_content, error_details}
+    """
+    try:
+        # Read uploaded file - validate file format
+        filename = file.filename
+        # Extract just the filename part (in case of path)
+        filename_lower = filename.lower()
+        is_valid = (
+            filename_lower.endswith('.vasp') or 
+            filename_lower == 'poscar' or 
+            filename_lower == 'contcar' or
+            'poscar' in filename_lower or
+            'contcar' in filename_lower or
+            filename_lower.endswith('.poscar') or
+            filename_lower.endswith('.contcar')
+        )
+        if not is_valid:
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "status": "error",
+                    "message": f"File must be .vasp, POSCAR, or CONTCAR format. Got: {filename}"
+                }
+            )
+        
+        vasp_content = (await file.read()).decode('utf-8')
+        
+        # Import the graph processing module
+        from q2D_Materials.visual_tools.graph_background import process_vasp_file
+        
+        # Process the file (ASE will validate the VASP format)
+        result = process_vasp_file(
+            vasp_content,
+            analyze_params={},
+            include_cavities=True,
+            cavity_metrics=True,
+            filename=filename
+        )
+        
+        # Store analyzer for cavity queries
+        if result['status'] == 'success':
+            job_id = str(uuid.uuid4())
+            # We'll need to recreate analyzer for cavity queries - store VASP content instead
+            cavity_cache[job_id] = {
+                'vasp_content': vasp_content,
+                'cavities': result.get('cavities', [])
+            }
+            result['job_id'] = job_id
+        
+        # Return result
+        if result['status'] == 'success':
+            return JSONResponse(content=result)
+        else:
+            return JSONResponse(
+                status_code=400,
+                content=result
+            )
+    
+    except Exception as e:
+        import traceback
+        print(f"VASP analysis error: {e}")
+        print(traceback.format_exc())
+        return JSONResponse(
+            status_code=500,
+            content={
+                "status": "error",
+                "message": "Unexpected error during VASP analysis",
+                "error_details": str(e)
+            }
+        )
+
+@app.get("/api/cavity/{job_id}/{cavity_index}")
+def get_cavity_subgraph(job_id: str, cavity_index: int):
+    """
+    Get subgraph data for a specific cavity.
+    
+    Parameters
+    ----------
+    job_id : str
+        The job ID from the initial VASP analysis
+    cavity_index : int
+        Zero-based index of the cavity to retrieve
+    
+    Returns
+    -------
+    dict
+        {status, message, nodes, edges, cavity_data, error_details}
+    """
+    try:
+        if job_id not in cavity_cache:
+            return JSONResponse(
+                status_code=404,
+                content={"detail": f"Job {job_id} not found"}
+            )
+        
+        cache_data = cavity_cache[job_id]
+        cavities_meta = cache_data.get('cavities', [])
+        
+        if cavity_index >= len(cavities_meta):
+            return JSONResponse(
+                status_code=404,
+                content={"detail": f"Cavity {cavity_index} not found"}
+            )
+        
+        # Recreate analyzer from cached VASP content
+        from q2D_Materials.visual_tools.graph_background import get_cavity_subgraph as get_cavity_func
+        from q2D_Materials.analyzer import q2D_analyzer
+        from ase.io import read
+        import tempfile
+        
+        # Write VASP to temp file and read with ASE
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.vasp', delete=False) as f:
+            f.write(cache_data['vasp_content'])
+            temp_path = f.name
+        
+        try:
+            structure = read(temp_path)
+            analyzer = q2D_analyzer(source=structure)
+            analyzer.analyze()
+            
+            # Get cavity subgraph
+            result = get_cavity_func(analyzer, cavity_index)
+            
+            if result['status'] == 'success':
+                return JSONResponse(content=result)
+            else:
+                return JSONResponse(
+                    status_code=400,
+                    content=result
+                )
+        finally:
+            import os
+            os.unlink(temp_path)
+    
+    except Exception as e:
+        import traceback
+        print(f"Cavity retrieval error: {e}")
+        print(traceback.format_exc())
+        return JSONResponse(
+            status_code=500,
+            content={
+                "status": "error",
+                "message": "Error retrieving cavity subgraph",
+                "error_details": str(e)
+            }
+        )
+
+
 @app.get("/render/3d")
 def render_3d_view(angle: float = 45.0, elev: float = 30.0, spacing: float = 3.0):
     """
@@ -873,6 +1038,18 @@ def render_3d_view(angle: float = 45.0, elev: float = 30.0, spacing: float = 3.0
 LOGOS_DIR = PARENT_DIR / "Logos"
 if LOGOS_DIR.exists():
     app.mount("/Logos", StaticFiles(directory=str(LOGOS_DIR)), name="logos")
+
+# Mount lib directory for external libraries (vis.js, etc.)
+# Check both project root and package root for lib
+LIB_DIR = PROJECT_ROOT / "lib"
+if not LIB_DIR.exists():
+    LIB_DIR = PARENT_DIR / "lib"
+
+if LIB_DIR.exists():
+    print(f"Mounting lib from: {LIB_DIR}")
+    app.mount("/lib", StaticFiles(directory=str(LIB_DIR)), name="lib")
+else:
+    print(f"WARNING: lib directory not found at {PROJECT_ROOT}/lib or {PARENT_DIR}/lib")
 
 # Mount visual_tools directory for CSS and other static assets
 app.mount("/static", StaticFiles(directory=str(BACKEND_DIR)), name="visual_tools_static")

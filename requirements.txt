@@ -40,3 +40,7 @@ python-multipart>=0.0.6  # Required for FastAPI file uploads
 
 # CineMol
 cinemol
+
+# Graph
+grand-cypher
+grandiso>=2.2.0

@@ -46,5 +46,5 @@ mono2 = q2d.create_structure(
 
 Regenerate the frames:
 ```bash
-nix develop -c python3 Examples/plot.py
+python3 Examples/plot.py
 ```

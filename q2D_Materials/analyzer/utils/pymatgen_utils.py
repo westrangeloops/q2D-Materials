@@ -28,10 +28,9 @@ def _detect_bonds_from_distances(
     tolerance: float = 0.45,
     cell: Optional[np.ndarray] = None,
 ) -> List[Tuple[int, int, float]]:
-    """Detect covalent bonds from atomic positions using covalent radii.
+    """Detect covalent bonds from atomic positions (wrapper for unified API).
     
-    Enforces chemical constraints: Hydrogen atoms can only have one bond
-    (the shortest/closest one).
+    Now uses the unified detect_bonds() function from atomic_properties.
     
     Parameters
     ----------
@@ -49,56 +48,21 @@ def _detect_bonds_from_distances(
     list of tuple (int, int, float)
         Each tuple contains (atom_i, atom_j, bond_length)
     """
-    from ...utils.geometry.geometry import _calculate_distances
+    from ...utils.properties.atomic_properties import detect_bonds
     
-    bonds = []
-    n_atoms = len(symbols)
+    # Use unified bond detection
+    bonds_with_order = detect_bonds(
+        symbols,
+        positions,
+        tolerance=tolerance,
+        cell=cell,
+        pbc=True if cell is not None else None,
+        enforce_hydrogen_rules=True,
+        estimate_bond_orders=False,
+    )
     
-    for i in range(n_atoms):
-        for j in range(i + 1, n_atoms):
-            # Skip H-H bonds
-            if symbols[i] == 'H' and symbols[j] == 'H':
-                continue
-            
-            # Use PBC-aware distance if cell is provided
-            if cell is not None:
-                distance = _calculate_distances(positions[i], positions[j:j+1], cell)[0]
-            else:
-                distance = np.linalg.norm(positions[i] - positions[j])
-            
-            if are_atoms_bonded(distance, symbols[i], symbols[j], tolerance):
-                bonds.append((i, j, distance))
-    
-    # Post-process: Ensure H atoms only have one bond (keep shortest)
-    h_bonds_by_atom = {}
-    non_h_bonds = []
-    
-    for i, j, dist in bonds:
-        if symbols[i] == 'H':
-            if i not in h_bonds_by_atom:
-                h_bonds_by_atom[i] = []
-            h_bonds_by_atom[i].append((i, j, dist))
-        elif symbols[j] == 'H':
-            if j not in h_bonds_by_atom:
-                h_bonds_by_atom[j] = []
-            h_bonds_by_atom[j].append((i, j, dist))
-        else:
-            # Neither atom is H, keep as-is
-            non_h_bonds.append((i, j, dist))
-    
-    # For each H atom, keep only the shortest bond
-    valid_h_bonds = []
-    for h_idx, h_bond_list in h_bonds_by_atom.items():
-        if h_bond_list:
-            # Sort by distance (shortest first)
-            h_bond_list.sort(key=lambda x: x[2])
-            # Keep only the shortest bond
-            valid_h_bonds.append(h_bond_list[0])
-    
-    # Combine non-H bonds with validated H bonds
-    final_bonds = non_h_bonds + valid_h_bonds
-    
-    return final_bonds
+    # Convert to old format (without bond order)
+    return [(i, j, dist) for i, j, dist, _ in bonds_with_order]
 
 
 def extract_molecular_components(
@@ -176,23 +140,27 @@ def extract_molecular_components(
     return molecules
 
 
-def get_covalent_bonds(
+def get_molecular_connections(
     atoms: Atoms,
     atom_indices: Optional[Set[int]] = None,
 ) -> List[Tuple[int, int, float]]:
-    """Get covalent bonds using custom bond detection with covalent radii.
+    """Get molecular connections using covalent radii-based distance heuristics.
+
+    This function detects connectivity within molecules based on interatomic
+    distances and covalent radii. It does NOT determine actual bonding - only
+    which atoms are connected within molecular structures.
 
     Parameters
     ----------
     atoms : ase.Atoms
         The structure to analyze
     atom_indices : set of int, optional
-        If provided, only consider bonds among these atoms
+        If provided, only consider connections among these atoms
 
     Returns
     -------
     list of tuple (int, int, float)
-        Each tuple contains (atom_i, atom_j, bond_length)
+        Each tuple contains (atom_i, atom_j, distance)
     """
     indices_to_use = list(atom_indices) if atom_indices is not None else list(range(len(atoms)))
 

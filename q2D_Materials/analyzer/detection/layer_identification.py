@@ -115,8 +115,9 @@ def _identify_layers(
 ) -> tuple:
     """Identify layers by Z-coordinate grouping of octahedra centers.
 
-    Replaces edge-sharing based approach which failed for cubic perovskites
-    where all connections are corner-sharing (1 shared atom).
+    For bulk structures where topology-based classification fails (all atoms
+    appear equatorial), this function uses Z-coordinate clustering to first
+    identify layers, then reclassifies atoms based on layer connections.
 
     Parameters
     ----------
@@ -160,13 +161,13 @@ def _identify_layers(
             "octahedra_geometries is required for layer identification. "
             "Geometric classification must be performed first."
         )
-    
+
     x_atom_classifications = {}
-    
+
     # Aggregate roles of each atom across all octahedra
     atom_roles = {}
     atom_connected_octs = {}
-    
+
     for oct_idx, geom in enumerate(octahedra_geometries):
         if not geom:
             continue
@@ -176,51 +177,133 @@ def _identify_layers(
                 atom_connected_octs[atom_idx] = []
             atom_roles[atom_idx].add(role)
             atom_connected_octs[atom_idx].append(oct_idx)
-    
-    # Determine final type based on geometric rules
+
+    # Check if this is a bulk structure (all atoms classified as equatorial)
+    # by checking if there are any terminal atoms
+    has_terminal_atoms = False
     for atom_idx, roles in atom_roles.items():
         connected = atom_connected_octs[atom_idx]
-        n_octahedra = len(connected)
-        
-        # Rule 1.2: Intralayer = equatorial in ANY octahedron
-        if 'equatorial' in roles:
-            atype = 'intralayer'
-        # Rule 1.2: Interlayer = axial in MULTIPLE octahedra (shared axials connect layers)
-        elif any(r in ['axial_top', 'axial_bottom'] for r in roles) and n_octahedra > 1:
-            atype = 'interlayer'
-        # Rule 1.2: Terminal = axial in EXACTLY ONE octahedron
-        elif any(r in ['axial_top', 'axial_bottom'] for r in roles) and n_octahedra == 1:
-            atype = 'axial'  # Terminal axial
-        else:
-            atype = 'unknown'
-            
-        x_atom_classifications[atom_idx] = {
-            'type': atype,
-            'connected_octahedra': connected,
-            'z_coord': atom_positions[atom_idx][2] if atom_positions is not None else 0.0
-        }
+        if any(r in ['axial_top', 'axial_bottom', 'axial_terminal'] for r in roles) and len(connected) == 1:
+            has_terminal_atoms = True
+            break
 
-    # 2. Identify Layers via Graph Connectivity (Equatorial connections)
-    # Build a graph where nodes are octahedra
-    # Edges exist if they share an 'intralayer' (equatorial) atom
-    oct_graph = nx.Graph()
-    oct_graph.add_nodes_from(range(n_octahedra))
-    
-    for (oct_i, oct_j), shared in shared_atoms.items():
-        # Check if any shared atom is intralayer
-        is_intralayer_connection = False
-        for atom_idx in shared:
-            if atom_idx in x_atom_classifications:
-                if x_atom_classifications[atom_idx]['type'] == 'intralayer':
-                    is_intralayer_connection = True
-                    break
-        
-        if is_intralayer_connection:
-            oct_graph.add_edge(oct_i, oct_j)
+    is_bulk = not has_terminal_atoms
+
+    # For bulk structures: use Z-coordinate clustering to identify layers FIRST
+    # Then reclassify atoms based on layer connections
+    if is_bulk and atom_positions is not None and center_atom_indices is not None:
+        # Get Z-coordinates of octahedra centers
+        z_coords = np.array([atom_positions[center_atom_indices[i]][2] for i in range(n_octahedra)])
+
+        # Cluster by Z-coordinate using simple binning
+        # Expected layer spacing is roughly 2 * B-X distance (~6-7 Angstrom)
+        z_sorted_indices = np.argsort(z_coords)
+        z_sorted = z_coords[z_sorted_indices]
+
+        # Find layer boundaries using gaps in Z
+        if len(z_sorted) > 1:
+            z_diffs = np.diff(z_sorted)
+            median_diff = np.median(z_diffs) if len(z_diffs) > 0 else 1.0
+            # Gaps larger than 2x median indicate layer boundary
+            gap_threshold = max(median_diff * 2.0, 2.0)
+
+            layer_boundaries = [0]
+            for i, diff in enumerate(z_diffs):
+                if diff > gap_threshold:
+                    layer_boundaries.append(i + 1)
+            layer_boundaries.append(len(z_sorted))
+
+            # Assign octahedra to Z-based layers
+            z_layer_assignment = {}
+            for layer_id in range(len(layer_boundaries) - 1):
+                start_idx = layer_boundaries[layer_id]
+                end_idx = layer_boundaries[layer_id + 1]
+                for i in range(start_idx, end_idx):
+                    oct_idx = z_sorted_indices[i]
+                    z_layer_assignment[oct_idx] = layer_id
+        else:
+            z_layer_assignment = {0: 0}
+
+        # Now reclassify atoms based on Z-layer connections
+        for atom_idx, roles in atom_roles.items():
+            connected = atom_connected_octs[atom_idx]
+
+            # Get layers this atom connects
+            connected_layers = set(z_layer_assignment.get(oct_idx, 0) for oct_idx in connected)
+
+            if len(connected_layers) > 1:
+                # Connects multiple Z-layers -> interlayer
+                atype = 'interlayer'
+            elif len(connected) > 1:
+                # Shared within same layer -> intralayer
+                atype = 'intralayer'
+            else:
+                # Only in one octahedron -> terminal (shouldn't happen in bulk)
+                atype = 'axial'
+
+            x_atom_classifications[atom_idx] = {
+                'type': atype,
+                'connected_octahedra': connected,
+                'z_coord': atom_positions[atom_idx][2] if atom_positions is not None else 0.0
+            }
+
+        # Build layer connectivity using Z-layer assignment
+        oct_graph = nx.Graph()
+        oct_graph.add_nodes_from(range(n_octahedra))
+
+        for (oct_i, oct_j), shared in shared_atoms.items():
+            # Only connect if in same Z-layer
+            if z_layer_assignment.get(oct_i, 0) == z_layer_assignment.get(oct_j, 0):
+                oct_graph.add_edge(oct_i, oct_j)
+
+        components = list(nx.connected_components(oct_graph))
+    else:
+        # Original logic for slab structures with clear axial/equatorial distinction
+        # Determine final type based on geometric rules
+        for atom_idx, roles in atom_roles.items():
+            connected = atom_connected_octs[atom_idx]
+            n_octs_sharing = len(connected)
+
+            # Rule 1.2: Intralayer = equatorial in ANY octahedron
+            if 'equatorial' in roles:
+                atype = 'intralayer'
+            # Rule 1.2: Interlayer = axial in MULTIPLE octahedra (shared axials connect layers)
+            elif any(r in ['axial_top', 'axial_bottom'] for r in roles) and n_octs_sharing > 1:
+                atype = 'interlayer'
+            # Rule 1.2: Terminal = axial in EXACTLY ONE octahedron
+            elif any(r in ['axial_top', 'axial_bottom'] for r in roles) and n_octs_sharing == 1:
+                atype = 'axial'  # Terminal axial
+            else:
+                atype = 'unknown'
+
+            x_atom_classifications[atom_idx] = {
+                'type': atype,
+                'connected_octahedra': connected,
+                'z_coord': atom_positions[atom_idx][2] if atom_positions is not None else 0.0
+            }
+
+        # 2. Identify Layers via Graph Connectivity (Equatorial connections)
+        # Build a graph where nodes are octahedra
+        # Edges exist if they share an 'intralayer' (equatorial) atom
+        oct_graph = nx.Graph()
+        oct_graph.add_nodes_from(range(n_octahedra))
+
+        for (oct_i, oct_j), shared in shared_atoms.items():
+            # Check if any shared atom is intralayer
+            is_intralayer_connection = False
+            for atom_idx in shared:
+                if atom_idx in x_atom_classifications:
+                    if x_atom_classifications[atom_idx]['type'] == 'intralayer':
+                        is_intralayer_connection = True
+                        break
+
+            if is_intralayer_connection:
+                oct_graph.add_edge(oct_i, oct_j)
+
+        components = list(nx.connected_components(oct_graph))
 
     # Find connected components -> Layers
     layers = {}
-    components = list(nx.connected_components(oct_graph))
     
     # Calculate average Z for each component to sort them
     comp_z_coords = []

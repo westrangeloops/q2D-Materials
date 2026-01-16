@@ -2,7 +2,7 @@
 
 from .pymatgen_utils import (
     extract_molecular_components,
-    get_covalent_bonds,
+    get_molecular_connections,
     build_molecular_graph,
     detect_hydrogen_bonds,
 )
@@ -27,7 +27,7 @@ from .clifford_embedding import (
 
 __all__ = [
     'extract_molecular_components',
-    'get_covalent_bonds',
+    'get_molecular_connections',
     'build_molecular_graph',
     'detect_hydrogen_bonds',
     'PEROVSKITE_BOND_RADII',

@@ -18,7 +18,6 @@ Example
 """
 
 from .core.analyzer_class import q2D_analyzer
-from .detection.cavity_detection import _identify_a_site_cations
 from .core.graph_construction import _graph_inorganic_ontology
 from .detection.layer_identification import _identify_layers, _identify_slabs_by_continuity
 from .detection.molecule_classification import (
@@ -48,7 +47,6 @@ __all__ = [
     '_build_bx_network',
     '_find_molecular_components',
     '_classify_molecules_by_continuity',
-    '_identify_a_site_cations',
     '_infer_structure_type',
     '_infer_structure_type_from_graph',
 ]

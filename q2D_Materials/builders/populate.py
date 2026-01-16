@@ -524,8 +524,10 @@ class _SpacerOrientationSequence:
 
 def _calculate_xy_pbc_distances(reference_pos: np.ndarray, positions: np.ndarray, cell: np.ndarray) -> np.ndarray:
     """
-    Calculate PBC-aware distances considering only XY periodic images (9 total: center + 8 neighbors).
+    Calculate PBC-aware distances considering only XY periodic images.
     Z coordinate is kept fixed (no wrapping in Z direction).
+    
+    Now uses unified pbc_distances module for consistency and performance.
     
     Parameters
     ----------
@@ -541,56 +543,8 @@ def _calculate_xy_pbc_distances(reference_pos: np.ndarray, positions: np.ndarray
     np.ndarray
         Array of shortest distances considering XY PBC only, shape (n,)
     """
-    reference_pos = np.asarray(reference_pos, dtype=np.float64)
-    positions = np.asarray(positions, dtype=np.float64)
-    cell = np.asarray(cell, dtype=np.float64)
-    
-    # Calculate base difference (no periodic shift)
-    diff_base = positions - reference_pos  # Shape: (n, 3)
-    
-    # Get XY components and Z component separately
-    diff_xy_base = diff_base[:, :2]  # Shape: (n, 2)
-    diff_z = diff_base[:, 2]  # Shape: (n,) - keep Z as-is
-    
-    # Convert to fractional coordinates using full cell (but we'll only use XY)
-    try:
-        inv_cell = np.linalg.inv(cell)
-    except np.linalg.LinAlgError:
-        # Fallback to simple distance if cell is singular
-        return np.linalg.norm(diff_base, axis=1)
-    
-    # Convert full difference to fractional
-    diff_frac_full = diff_base @ inv_cell.T  # Shape: (n, 3)
-    diff_frac_xy = diff_frac_full[:, :2]  # Shape: (n, 2) - only XY fractional coords
-    
-    # Generate all 9 XY periodic images: (-1,-1), (-1,0), (-1,1), (0,-1), (0,0), (0,1), (1,-1), (1,0), (1,1)
-    shifts = np.array([(dx, dy) for dx in [-1, 0, 1] for dy in [-1, 0, 1]], dtype=np.float64)  # Shape: (9, 2)
-    
-    # For each position, check all 9 XY images and find the minimum distance
-    n_positions = len(positions)
-    min_distances = np.full(n_positions, np.inf)
-    
-    for shift in shifts:
-        # Apply shift to fractional XY coordinates only
-        diff_frac_xy_shifted = diff_frac_xy - shift  # Shape: (n, 2)
-        
-        # Convert back to Cartesian using full cell
-        # Create full fractional coords with shifted XY and original Z
-        diff_frac_full_shifted = np.column_stack([
-            diff_frac_xy_shifted,
-            diff_frac_full[:, 2]  # Keep Z fractional coordinate unchanged
-        ])  # Shape: (n, 3)
-        
-        # Convert back to Cartesian
-        diff_shifted = diff_frac_full_shifted @ cell  # Shape: (n, 3)
-        
-        # Calculate distances
-        distances = np.linalg.norm(diff_shifted, axis=1)  # Shape: (n,)
-        
-        # Update minimum distances
-        min_distances = np.minimum(min_distances, distances)
-    
-    return min_distances
+    from ..utils.geometry.pbc_distances import calculate_xy_pbc_distances
+    return calculate_xy_pbc_distances(reference_pos, positions, cell)
 
 
 def populate_sharp(
@@ -910,12 +864,17 @@ def populate_structure(
             if len(entry) < 4:
                 continue
             st, x, y, z = entry[0], float(entry[1]), float(entry[2]), float(entry[3])
-            key = (st, st, round(x, 4), round(y, 4), round(z, 4))
+            x_round, y_round, z_round = round(x, 4), round(y, 4), round(z, 4)
+            key = (st, st, x_round, y_round, z_round)
             chosen = assignment_lookup.get(key)
             if chosen is None:
-                # fallback: ignore label match
+                # fallback: ignore label match, but must match z-coordinate exactly
+                # This ensures consecutive layers (like M1-M1) with same x,y but different z get correct assignments
                 for k, v in assignment_lookup.items():
-                    if k[0] == st and k[2] == round(x, 4) and k[3] == round(y, 4) and k[4] == round(z, 4):
+                    if (k[0] == st and 
+                        k[2] == x_round and 
+                        k[3] == y_round and 
+                        abs(k[4] - z_round) < 1e-4):  # Match z-coordinate with tolerance
                         chosen = v
                         break
             if chosen is None:

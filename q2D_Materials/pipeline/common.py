@@ -441,7 +441,7 @@ def default_layer_sequence(layer_sequence: Optional[str | List[str]], thickness:
         # DJ keyword: (L1-L2) * thickness + "-M1-M2" for bulk
         if structure_type.lower() == "bulk" and thickness > 1:
             parts = ["L2", "L1"] * thickness
-            parts.pop()
+            parts.pop() # remove the last L1
             base_sequence = "-".join(parts)
             return f"{base_sequence}-M1-M1", None
         elif structure_type.lower() == "bulk" and thickness == 1:

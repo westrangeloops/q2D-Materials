@@ -54,5 +54,5 @@ What the helper is really doing: seed with `AcB`, take `c` as the “third layer
 
 Regenerate the frames any time with:
 ```bash
-nix develop -c python3 Examples/plot.py
+python3 Examples/plot.py
 ```

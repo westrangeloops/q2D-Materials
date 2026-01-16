@@ -1,4 +1,58 @@
-"""Collision detection and resolution for molecular placement."""
+"""
+Collision detection and resolution for molecular placement.
+
+This module provides TWO collision detection systems that serve different purposes:
+
+1. **CollisionDetector class** (this file):
+   - **Purpose**: General atom-atom overlap detection during structure building
+   - **Use case**: Spacer/molecule placement, structure validation
+   - **Method**: PBC-aware distance checks using covalent radii + safety buffer
+   - **Key features**:
+     * Fast envelope-based pre-screening
+     * Configurable safety buffers (collision_factor, min_distance)
+     * Works with full structures and subsets
+   - **When to use**: During initial placement, collision resolution, structure assembly
+
+2. **check_collisions_with_neighbors()** (utils/properties/atomic_properties.py):
+   - **Purpose**: Fragment-specific geometric validation during molecular modifications
+   - **Use case**: Valence-aware bond vector checking when adding/replacing atoms
+   - **Method**: Checks if new atoms fit hybridization geometry (sp, sp2, sp3)
+   - **Key features**:
+     * Uses ideal bond vectors for different hybridizations
+     * Validates stereochemistry
+     * Ensures new atoms don't violate molecular geometry
+   - **When to use**: During fragment placement in molecular modifications
+
+Usage Guidelines
+----------------
+
+Use **CollisionDetector** when:
+- Placing spacers in perovskite layers
+- Checking if molecules fit in cavities
+- Validating final structures
+- Resolving overlaps through rotation/translation
+
+Use **check_collisions_with_neighbors()** when:
+- Replacing atoms/fragments in molecules
+- Adding functional groups
+- Validating hybridization geometry
+- Ensuring stereochemical correctness
+
+Example
+-------
+>>> from q2D_Materials.builders.collision import CollisionDetector
+>>> from ase import Atoms
+>>> import numpy as np
+>>> 
+>>> # Create a simple structure
+>>> atoms = Atoms('CH4', positions=[[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1], [-1, 0, 0]])
+>>> cell = np.eye(3) * 10.0
+>>> 
+>>> # Check for collisions
+>>> detector = CollisionDetector(cell=cell)
+>>> collisions = detector.detect_collisions(atoms)
+>>> print(f"Found {len(collisions)} collisions")
+"""
 
 from __future__ import annotations
 

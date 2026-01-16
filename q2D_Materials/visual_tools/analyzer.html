@@ -4,7 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Structure Analyzer - q2D Materials</title>
-    <link rel="stylesheet" href="http://localhost:8000/static/theme.css">
+    <link rel="stylesheet" href="/static/theme.css">
+    <script src="/lib/vis-9.1.2/vis-network.min.js" onerror="alert('Error loading vis.js library! Please check if /lib/vis-9.1.2/vis-network.min.js exists.')"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
 
     <script>
     // Apply theme immediately before anything else loads
@@ -18,90 +20,235 @@
     })();
     </script>
 
-    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
-
     <style>
-        /* --- Analyzer Specific Styles --- */
-        #app { display: flex; width: 100%; height: 100%; gap: 0; }
-
-        .sidebar {
-            width: 360px;
-            background: var(--bg-panel);
-            border-right: 1px solid rgba(255,255,255,0.05);
+        /* Main layout */
+        #app {
             display: flex;
-            flex-direction: column;
-            overflow-y: auto;
-            padding: 25px;
-            gap: 20px;
-            flex-shrink: 0;
-            z-index: 10;
-            box-shadow: 5px 0 20px rgba(0,0,0,0.1);
+            width: 100vw;
+            height: 100vh;
+            gap: 0;
+            overflow: hidden;
         }
 
-        .main {
+        /* Sidebars */
+        .sidebar {
+            display: flex;
+            flex-direction: column;
+            background: var(--bg-panel);
+            border: 1px solid rgba(255,255,255,0.05);
+            overflow-y: auto;
+            padding: 20px;
+            gap: 15px;
+            flex-shrink: 0;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+        }
+
+        .sidebar-left {
+            width: 320px;
+        }
+
+        .sidebar-right {
+            width: 350px;
+        }
+
+        /* Main center area */
+        .main-panel {
             flex: 1;
             display: flex;
             flex-direction: column;
-            padding: 25px;
             overflow: hidden;
-            position: relative;
-            background: var(--gradient-main);
         }
 
+        /* Header */
         .header {
+            padding: 15px 20px;
+            background: rgba(255,255,255,0.02);
+            border-bottom: 1px solid rgba(255,255,255,0.05);
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 20px;
             flex-shrink: 0;
-            padding: 0 5px;
         }
 
-        .workstation {
-            display: flex;
-            gap: 25px;
+        .header h2 {
+            margin: 0;
+            font-size: 1.1rem;
+            color: var(--fg-primary);
+        }
+
+        /* Graph container */
+        .graph-container {
             flex: 1;
-            min-height: 0;
-        }
-
-        .panel {
-            flex: 1;
-            min-height: 0;
-            max-height: 100%;
-        }
-
-        .tree-canvas-container {
-            width: 100%;
-            height: 100%;
-            background: var(--bg-canvas);
-            border-radius: var(--radius-lg);
-            position: relative;
             overflow: hidden;
-        }
-        
-        #treeCanvas {
-            width: 100%;
-            height: 100%;
-            cursor: pointer;
-            touch-action: none;
-        }
-
-        .hierarchy-container {
-            width: 100%;
-            height: 100%;
-            background: var(--bg-canvas);
-            border-radius: var(--radius-lg);
             position: relative;
-            overflow: hidden;
+            background: var(--bg-canvas);
         }
 
-        .info-panel {
-            width: 400px;
+        #network-viz {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Loading overlay */
+        .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
             display: flex;
             flex-direction: column;
+            align-items: center;
+            justify-content: center;
             gap: 15px;
+            z-index: 100;
         }
 
+        /* Debug Overlay */
+        #debug-log {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 150px;
+            background: rgba(0, 0, 0, 0.85);
+            color: #0f0;
+            font-family: monospace;
+            font-size: 12px;
+            padding: 10px;
+            overflow-y: auto;
+            z-index: 9999;
+            border-top: 2px solid #333;
+            display: none; /* Hidden by default, toggle with 'D' key */
+        }
+        .log-entry { margin-bottom: 4px; border-bottom: 1px solid #333; }
+        .log-error { color: #f55; font-weight: bold; }
+        .log-warn { color: #fa0; }
+        .log-info { color: #8cf; }
+
+        .spinner {
+            border: 3px solid rgba(131,211,220,0.2);
+            border-top: 3px solid var(--accent);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Upload area */
+        .upload-area {
+            border: 2px dashed var(--accent);
+            border-radius: var(--radius-lg);
+            padding: 30px;
+            text-align: center;
+            background: rgba(131, 211, 220, 0.05);
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .upload-area:hover {
+            background: rgba(131, 211, 220, 0.1);
+            border-color: var(--accent-hover);
+        }
+
+        .upload-area.dragover {
+            background: rgba(131, 211, 220, 0.2);
+            border-color: var(--accent-hover);
+            transform: scale(1.02);
+        }
+
+        .upload-icon {
+            font-size: 3rem;
+            margin-bottom: 15px;
+        }
+
+        .upload-text h4 {
+            margin: 0 0 8px 0;
+            color: var(--fg-primary);
+            font-size: 0.95rem;
+        }
+
+        .upload-text p {
+            margin: 0;
+            color: var(--fg-secondary);
+            font-size: 0.8rem;
+        }
+
+        #vasp-file-input {
+            display: none;
+        }
+
+        /* Cavity list */
+        .cavity-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+
+        .cavity-item {
+            background: var(--bg-input);
+            border: 1px solid rgba(255,255,255,0.05);
+            border-radius: var(--radius-md);
+            padding: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+        }
+
+        .cavity-item:hover {
+            background: rgba(255,255,255,0.04);
+            border-color: var(--accent);
+            transform: translateX(3px);
+        }
+
+        .cavity-item.active {
+            background: rgba(131, 211, 220, 0.1);
+            border-color: var(--accent);
+        }
+
+        .cavity-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 6px;
+        }
+
+        .cavity-item-title {
+            font-weight: 600;
+            color: var(--fg-primary);
+            font-size: 0.9rem;
+        }
+
+        .cavity-item-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            background: rgba(131, 211, 220, 0.2);
+            color: var(--accent);
+            border-radius: var(--radius-pill);
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .cavity-item-info {
+            display: flex;
+            gap: 15px;
+            font-size: 0.8rem;
+            color: var(--fg-secondary);
+        }
+
+        /* Info card */
         .info-card {
             background: var(--bg-input);
             border-radius: var(--radius-md);
@@ -140,71 +287,107 @@
             font-family: monospace;
         }
 
-        .badge {
-            display: inline-block;
-            padding: 4px 10px;
-            border-radius: var(--radius-pill);
-            font-size: 0.75rem;
-            font-weight: 600;
+        /* Filter section */
+        .filter-section {
+            background: var(--bg-input);
+            border-radius: var(--radius-md);
+            padding: 12px;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .filter-section h5 {
+            margin: 0 0 10px 0;
+            color: var(--accent);
+            font-size: 0.85rem;
             text-transform: uppercase;
             letter-spacing: 0.5px;
         }
 
-        .badge-bulk { background: rgba(131, 211, 220, 0.2); color: var(--accent); }
-        .badge-dj { background: rgba(245, 177, 2, 0.2); color: var(--warning); }
-        .badge-rp { background: rgba(143, 38, 171, 0.2); color: var(--danger); }
-        .badge-monolayer { background: rgba(73, 173, 182, 0.2); color: var(--success); }
-
-        .atom-list {
-            max-height: 300px;
-            overflow-y: auto;
-            margin-top: 10px;
-        }
-
-        .atom-item {
-            background: rgba(255,255,255,0.03);
-            padding: 8px 12px;
-            border-radius: var(--radius-sm);
-            margin-bottom: 6px;
+        .filter-list {
             display: flex;
-            justify-content: space-between;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .filter-item {
+            display: flex;
             align-items: center;
-            font-size: 0.8rem;
+            gap: 8px;
+            font-size: 0.85rem;
+        }
+
+        .filter-item input[type="checkbox"] {
+            cursor: pointer;
+            width: 16px;
+            height: 16px;
+        }
+
+        .filter-item label {
+            cursor: pointer;
+            flex: 1;
+            color: var(--fg-primary);
+        }
+
+        .filter-count {
+            color: var(--fg-secondary);
+            font-size: 0.75rem;
+            margin-left: auto;
+        }
+
+        /* Buttons */
+        button {
+            border: none;
+            border-radius: var(--radius-md);
+            padding: 10px 16px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
             transition: all 0.2s;
-            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
 
-        .atom-item:hover {
-            background: rgba(255,255,255,0.08);
-            transform: translateX(3px);
+        .primary-btn {
+            background: var(--accent);
+            color: #282a36;
         }
 
-        .atom-symbol {
-            font-weight: 700;
-            font-family: monospace;
+        .primary-btn:hover {
+            background: var(--accent-hover);
+            transform: translateY(-2px);
         }
 
-        .upload-area {
-            border: 2px dashed var(--accent);
-            border-radius: var(--radius-lg);
-            padding: 40px;
-            text-align: center;
-            background: rgba(131, 211, 220, 0.05);
-            cursor: pointer;
-            transition: all 0.3s;
+        .danger-btn {
+            background: rgba(255, 85, 85, 0.2);
+            color: #ff5555;
+            border: 1px solid rgba(255, 85, 85, 0.5);
         }
 
-        .upload-area:hover {
-            background: rgba(131, 211, 220, 0.1);
-            border-color: var(--accent-hover);
+        .danger-btn:hover {
+            background: rgba(255, 85, 85, 0.3);
         }
 
-        .upload-area.dragover {
-            background: rgba(131, 211, 220, 0.2);
-            border-color: var(--accent-hover);
-            transform: scale(1.02);
+        .secondary-btn {
+            background: rgba(255,255,255,0.1);
+            color: var(--fg-primary);
+            border: 1px solid rgba(255,255,255,0.2);
         }
 
+        .secondary-btn:hover {
+            background: rgba(255,255,255,0.15);
+        }
+
+        /* Error message */
+        .error-message {
+            background: rgba(255, 85, 85, 0.1);
+            border: 1px solid rgba(255, 85, 85, 0.5);
+            color: #ff5555;
+            padding: 12px;
+            border-radius: var(--radius-md);
+            font-size: 0.85rem;
+        }
+
+        /* Empty state */
         .empty-state {
             display: flex;
             flex-direction: column;
@@ -222,283 +405,294 @@
             opacity: 0.5;
         }
 
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 10px;
-            margin-top: 10px;
+        /* Responsive */
+        @media (max-width: 1200px) {
+            .sidebar-right {
+                width: 300px;
+            }
         }
 
-        .stat-box {
-            background: rgba(255,255,255,0.03);
-            padding: 12px;
-            border-radius: var(--radius-sm);
-            text-align: center;
+        @media (max-width: 900px) {
+            .sidebar-left, .sidebar-right {
+                width: 250px;
+            }
         }
-
-        .stat-value {
-            font-size: 1.5rem;
-            font-weight: 700;
-            color: var(--accent);
-            display: block;
-        }
-
-        .stat-label {
-            font-size: 0.75rem;
-            color: var(--fg-secondary);
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            margin-top: 4px;
-        }
-
-        .legend {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-
-        .legend-item {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 6px 10px;
-            background: rgba(255,255,255,0.03);
-            border-radius: var(--radius-sm);
-            font-size: 0.85rem;
-        }
-
-        .legend-color {
-            width: 16px;
-            height: 16px;
-            border-radius: 4px;
-            flex-shrink: 0;
-        }
-
-        h2 { font-size: 1.2rem; font-weight: 700; color: var(--fg-primary); margin: 0; }
-        h3 { font-size: 0.9rem; font-weight: 600; color: var(--fg-secondary); text-transform: uppercase; letter-spacing: 1px; margin: 10px 0; }
     </style>
 </head>
 <body>
 
 <div id="app">
-    <div class="sidebar">
-        <div @click="goToIndex" style="display:flex; align-items:center; gap:10px; margin-bottom: 10px; cursor:pointer; padding:10px; border-radius:var(--radius-md); transition:all 0.2s; background:transparent;"
+    <!-- Debug Overlay -->
+    <div id="debug-log" style="display: block;">
+        <div style="position: sticky; top: 0; background: #000; padding: 2px; border-bottom: 1px solid #555; display: flex; justify-content: space-between;">
+            <span>🔧 Debug Console</span>
+            <button onclick="document.getElementById('debug-log').style.display='none'" style="padding: 2px 8px; font-size: 10px; background: #333;">Close</button>
+        </div>
+        <div id="debug-content"></div>
+    </div>
+
+    <!-- Left Sidebar: Upload & Cavities -->
+    <div class="sidebar sidebar-left">
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px; cursor: pointer; padding: 10px; border-radius: var(--radius-md); transition: all 0.2s; background: transparent;"
+             @click="goToIndex"
              @mouseover="$event.currentTarget.style.background='rgba(131, 211, 220, 0.1)'; $event.currentTarget.style.transform='translateX(-2px)'"
              @mouseout="$event.currentTarget.style.background='transparent'; $event.currentTarget.style.transform='translateX(0)'">
             <object type="image/svg+xml" data="/Logos/logo_q2D_materials.svg" width="200" height="60" style="pointer-events: none;"></object>
         </div>
 
-        <div style="display:flex; align-items:center; justify-content:center; margin-bottom: 15px; padding: 10px; background: rgba(255,255,255,0.03); border-radius: var(--radius-md);">
-            <h2 style="color:var(--fg-primary); letter-spacing:-0.5px; margin:0; font-size:1.1rem;">Structure<span style="color:var(--accent);">Analyzer</span></h2>
-        </div>
-
-        <div v-if="!graphData">
-            <input type="file" @change="handleFileUpload" accept=".json" style="display:none;" ref="fileInput">
-            <div class="upload-area" @click="$refs.fileInput.click()"
+        <div v-if="!analysisData">
+            <!-- Upload Area -->
+            <input type="file" @change="handleFileUpload" ref="fileInput" id="vasp-file-input">
+            <div class="upload-area"
+                 @click="$refs.fileInput.click()"
                  @dragover.prevent="isDragging = true"
                  @dragleave="isDragging = false"
                  @drop.prevent="handleFileDrop"
                  :class="{ dragover: isDragging }">
-                <div style="font-size: 3rem; margin-bottom: 15px;">📊</div>
-                <h3 style="margin: 0 0 10px 0; color: var(--fg-primary);">Load Structure Data</h3>
-                <p style="color: var(--fg-secondary); font-size: 0.85rem; margin: 0;">
-                    Drop JSON file here or click to browse
-                </p>
+                <div class="upload-icon">📂</div>
+                <div class="upload-text">
+                    <h4>Upload VASP File</h4>
+                    <p>Drop file here or click to browse</p>
+                    <p style="font-size: 0.75rem; margin-top: 4px; opacity: 0.6;">Supported: .vasp, POSCAR, CONTCAR</p>
             </div>
-
-            <div style="margin-top: 20px; padding: 15px; background: rgba(131, 211, 220, 0.1); border-radius: var(--radius-md); border-left: 3px solid var(--accent);">
-                <h4 style="margin: 0 0 10px 0; color: var(--accent); font-size: 0.9rem;">💡 How to use</h4>
-                <ol style="margin: 0; padding-left: 20px; color: var(--fg-secondary); font-size: 0.85rem; line-height: 1.6;">
-                    <li>Analyze your structure with q2D_analyzer</li>
-                    <li>Call analyzer.export_graph_data('file.json')</li>
-                    <li>Load the JSON file here</li>
-                    <li>Explore the interactive graph</li>
-                </ol>
             </div>
         </div>
 
-        <template v-if="graphData">
+        <template v-else>
+            <!-- Cavity List Header -->
+            <button class="secondary-btn" style="width: 100%;" @click="returnToMainGraph">
+                ← Back to Main Graph
+            </button>
+
+            <h4 style="margin: 10px 0 8px 0; color: var(--accent); font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.5px;">
+                Cavities ({{ cavities.length }})
+            </h4>
+
+            <!-- Cavity List -->
+            <div class="cavity-list" v-if="cavities.length > 0">
+                <div class="cavity-item" 
+                     v-for="(cavity, idx) in cavities" 
+                     :key="idx"
+                     :class="{ active: selectedCavityIndex === idx }">
+                    <div style="flex: 1;" @click="selectCavity(idx)">
+                        <div class="cavity-item-header">
+                            <span class="cavity-item-title">Cavity {{ cavity.index }}</span>
+                            <span class="cavity-item-badge" v-if="cavity.contains_a_site">A-site</span>
+                        </div>
+                        <div class="cavity-item-info">
+                            <span>{{ cavity.octahedra_count }} Oct</span>
+                            <span>{{ cavity.x_atom_count }} X</span>
+                        </div>
+                    </div>
+                    <button class="primary-btn" 
+                            style="padding: 4px 10px; font-size: 0.75rem; min-width: 60px;"
+                            @click.stop="selectCavity(idx)">
+                        {{ selectedCavityIndex === idx ? 'Viewing' : 'View' }}
+                    </button>
+                </div>
+            </div>
+
+            <div v-else style="padding: 20px; text-align: center; color: var(--fg-secondary); font-size: 0.85rem;">
+                No cavities detected
+            </div>
+        </template>
+
+        <!-- Error message -->
+        <div v-if="errorMessage" class="error-message">
+            {{ errorMessage }}
+                    </div>
+                    </div>
+
+    <!-- Center Panel: Graph Visualization -->
+    <div class="main-panel">
+        <div class="header">
+            <h2 v-if="!analysisData">Structure Analyzer</h2>
+            <h2 v-else-if="currentView === 'main'">{{ analysisData.metadata?.formula || 'Unknown' }} - Main Graph</h2>
+            <h2 v-else>{{ analysisData.metadata?.formula || 'Unknown' }} - Cavity {{ selectedCavityIndex }}</h2>
+            
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <button v-if="analysisData && currentView === 'main'" class="primary-btn" @click="resetView">🔄 Reset</button>
+                <button v-if="analysisData && currentView === 'main'" class="primary-btn" @click="fitGraph">🔍 Fit</button>
+            </div>
+        </div>
+
+        <div class="graph-container">
+            <div v-if="!analysisData" class="empty-state">
+                <div class="empty-state-icon">📊</div>
+                <h3 style="color: var(--fg-primary); margin: 0 0 10px 0;">No Structure Loaded</h3>
+                <p style="max-width: 400px;">Upload a VASP file to visualize the structure and analyze cavities.</p>
+            </div>
+
+            <div v-else id="network-viz"></div>
+
+            <div v-if="isLoading" class="loading-overlay">
+                <div class="spinner"></div>
+                <span v-if="currentView === 'main'">Loading structure...</span>
+                <span v-else>Loading cavity {{ selectedCavityIndex }}...</span>
+            </div>
+                </div>
+            </div>
+
+    <!-- Right Sidebar: Filters & Info -->
+    <div class="sidebar sidebar-right">
+        <template v-if="analysisData && analysisData.metadata">
+            <!-- Structure Info -->
             <div class="info-card">
                 <h4>📋 Structure Info</h4>
                 <div class="info-row">
-                    <span class="info-label">Name</span>
-                    <span class="info-value">{{ metadata.experiment_name }}</span>
+                    <span class="info-label">Formula</span>
+                    <span class="info-value">{{ analysisData.metadata.formula || '-' }}</span>
                 </div>
                 <div class="info-row">
                     <span class="info-label">Type</span>
-                    <span class="badge" :class="`badge-${metadata.structure_type}`">
-                        {{ metadata.structure_type }}
-                    </span>
+                    <span class="info-value">{{ analysisData.metadata.structure_type || '-' }}</span>
                 </div>
                 <div class="info-row">
-                    <span class="info-label">Formula</span>
-                    <span class="info-value">{{ metadata.formula }}</span>
+                    <span class="info-label">Atoms</span>
+                    <span class="info-value">{{ analysisData.metadata.atom_count || 0 }}</span>
                 </div>
                 <div class="info-row">
-                    <span class="info-label">Total Atoms</span>
-                    <span class="info-value">{{ metadata.total_atoms }}</span>
+                    <span class="info-label">Nodes/Edges</span>
+                    <span class="info-value">{{ analysisData.metadata.node_count || 0 }}/{{ analysisData.metadata.edge_count || 0 }}</span>
                 </div>
             </div>
 
+            <!-- Statistics -->
             <div class="info-card">
                 <h4>📊 Statistics</h4>
-                <div class="stats-grid">
-                    <div class="stat-box">
-                        <span class="stat-value">{{ metadata.octahedra_count }}</span>
-                        <span class="stat-label">Octahedra</span>
-                    </div>
-                    <div class="stat-box">
-                        <span class="stat-value">{{ metadata.layers_count }}</span>
-                        <span class="stat-label">Layers</span>
-                    </div>
-                    <div class="stat-box">
-                        <span class="stat-value">{{ metadata.spacers_count }}</span>
-                        <span class="stat-label">Spacers</span>
-                    </div>
-                    <div class="stat-box">
-                        <span class="stat-value">{{ metadata.a_sites_count }}</span>
-                        <span class="stat-label">A-sites</span>
-                    </div>
-                </div>
-            </div>
-
-            <div class="info-card" v-if="selectedNode">
-                <h4>🔍 Selected Node</h4>
                 <div class="info-row">
-                    <span class="info-label">Type</span>
-                    <span class="info-value">{{ selectedNode.type }}</span>
+                    <span class="info-label">Octahedra</span>
+                    <span class="info-value">{{ analysisData.metadata.octahedra_count || 0 }}</span>
                 </div>
                 <div class="info-row">
-                    <span class="info-label">Label</span>
-                    <span class="info-value">{{ selectedNode.label }}</span>
+                    <span class="info-label">Layers</span>
+                    <span class="info-value">{{ analysisData.metadata.layer_count || 0 }}</span>
                 </div>
-                <template v-if="selectedNode.type === 'octahedron'">
-                    <div class="info-row">
-                        <span class="info-label">B-Element</span>
-                        <span class="info-value">{{ selectedNode.b_element }}</span>
-                    </div>
-                    <div class="info-row">
-                        <span class="info-label">Terminal Atoms</span>
-                        <span class="info-value">{{ selectedNode.terminal_atoms.length }}</span>
-                    </div>
-                    <div class="info-row">
-                        <span class="info-label">Interlayer Atoms</span>
-                        <span class="info-value">{{ selectedNode.interlayer_atoms.length }}</span>
-                    </div>
-                    <div class="info-row">
-                        <span class="info-label">Intralayer Atoms</span>
-                        <span class="info-value">{{ selectedNode.intralayer_atoms.length }}</span>
-                    </div>
-                </template>
-                <template v-else-if="selectedNode.type === 'layer'">
-                    <div class="info-row">
-                        <span class="info-label">Position</span>
-                        <span class="info-value">{{ selectedNode.position }}</span>
-                    </div>
-                    <div class="info-row">
-                        <span class="info-label">Octahedra Count</span>
-                        <span class="info-value">{{ selectedNode.octahedra_count }}</span>
-                    </div>
-                </template>
+                <div class="info-row">
+                    <span class="info-label">Spacers</span>
+                    <span class="info-value">{{ analysisData.metadata.spacers_count || 0 }}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">A-sites</span>
+                    <span class="info-value">{{ analysisData.metadata.a_sites_count || 0 }}</span>
+                </div>
             </div>
 
-            <div class="info-card">
-                <h4>🎨 Legend</h4>
-                <div class="legend">
-                    <div class="legend-item">
-                        <div class="legend-color" style="background-color: #8be9fd;"></div>
-                        <span>Octahedra (BX₆ units)</span>
-                    </div>
-                    <div class="legend-item">
-                        <div class="legend-color" style="background-color: #ff79c6;"></div>
-                        <span>Layers</span>
+            <!-- Node Type Filters -->
+            <div class="filter-section">
+                <h5>Node Types</h5>
+                <div class="filter-list">
+                    <div class="filter-item" v-for="type in nodeTypes" :key="type">
+                        <input type="checkbox" 
+                               :id="'node-' + type"
+                               :checked="nodeVisibility[type]"
+                               @change="toggleNodeType(type)">
+                        <label :for="'node-' + type">{{ type }}</label>
+                        <span class="filter-count">({{ getNodeTypeCount(type) }})</span>
                     </div>
                 </div>
             </div>
 
-            <button class="danger full-width" @click="clearData" style="margin-top: 10px;">
-                🗑️ Clear Data
-            </button>
-        </template>
+            <!-- Edge Type Filters -->
+            <div class="filter-section">
+                <h5>Edge Types</h5>
+                <div class="filter-list">
+                    <div class="filter-item" v-for="type in edgeTypes" :key="type">
+                        <input type="checkbox" 
+                               :id="'edge-' + type"
+                               :checked="edgeVisibility[type]"
+                               @change="toggleEdgeType(type)">
+                        <label :for="'edge-' + type">{{ type }}</label>
+                        <span class="filter-count">({{ getEdgeTypeCount(type) }})</span>
     </div>
-
-    <div class="main">
-        <div class="header">
-            <h2 v-if="graphData">{{ metadata.experiment_name }} - Graph Visualization</h2>
-            <h2 v-else>Structure Analyzer</h2>
-
-            <div v-if="graphData" style="display:flex; gap:10px;">
-                <button @click="resetView" class="primary">
-                    🔄 Reset View
-                </button>
-                <button @click="fitTree" class="primary">
-                    🔍 Fit to Screen
-                </button>
-                <button @click="expandAllNodes" class="primary">
-                    ➕ Expand All
-                </button>
-                <button @click="collapseAllNodes" class="primary">
-                    ➖ Collapse All
-                </button>
             </div>
         </div>
-
-        <div class="workstation">
-            <div class="panel">
-                <div class="panel-header">
-                    <span>🕸️ Interactive Network Graph</span>
-                    <span v-if="graphData" style="margin-left:auto; font-size:0.8em; opacity:0.5;">
-                        Click nodes to expand hierarchy • Scroll to Zoom • Drag to Pan
-                    </span>
-                </div>
-                <div class="panel-content" style="padding: 0;">
-                    <div v-if="!graphData" class="empty-state">
-                        <div class="empty-state-icon">📊</div>
-                        <h3 style="color: var(--fg-primary); margin: 0 0 10px 0;">No Data Loaded</h3>
-                        <p style="max-width: 400px;">
-                            Load a structure analysis JSON file to visualize the graph network.
-                            Use the upload panel on the left to get started.
-                        </p>
-                    </div>
-                    <div v-else class="tree-canvas-container">
-                        <canvas id="treeCanvas" ref="treeCanvas" 
-                                @click="handleTreeClick"
-                                @mousemove="handleTreeMouseMove"
-                                @mousedown="handleTreeMouseDown"
-                                @mouseup="handleTreeMouseUp"
-                                @mouseleave="handleTreeMouseUp"
-                                @wheel.prevent="handleTreeWheel"></canvas>
-                    </div>
-                </div>
-            </div>
-        </div>
+        </template>
     </div>
 </div>
 
 <script>
-const { createApp, ref, onMounted, onUnmounted, watch, computed, nextTick } = Vue;
+const { createApp, ref, computed, onMounted, onUnmounted, nextTick } = Vue;
+
+// Debug logging helper
+function log(msg, type = 'info') {
+    const debugContent = document.getElementById('debug-content');
+    if (debugContent) {
+        const entry = document.createElement('div');
+        entry.className = `log-entry log-${type}`;
+        const time = new Date().toISOString().split('T')[1].slice(0, -1);
+        entry.textContent = `[${time}] ${msg}`;
+        debugContent.appendChild(entry);
+        debugContent.scrollTop = debugContent.scrollHeight;
+    }
+    console.log(`[${type.toUpperCase()}] ${msg}`);
+}
 
 createApp({
     setup() {
-        const graphData = ref(null);
-        const metadata = ref(null);
-        const selectedNode = ref(null);
-        const treeCanvas = ref(null);
-        const isDragging = ref(false);
+        // Initial environment check
+        onMounted(() => {
+            log('🚀 Application mounted');
+            log(`Checking vis.js: ${typeof vis !== 'undefined' ? 'LOADED' : 'MISSING'}`, typeof vis !== 'undefined' ? 'info' : 'error');
+            
+            // Check if lib script tag loaded
+            const scripts = document.getElementsByTagName('script');
+            for(let s of scripts) {
+                if(s.src && s.src.includes('vis')) {
+                    log(`Found vis script tag: ${s.src}`);
+                }
+            }
+        });
+
         const fileInput = ref(null);
+        const analysisData = ref(null);
+        const cavities = ref([]);
+        const currentView = ref('main'); // 'main' or 'cavity'
+        const selectedCavityIndex = ref(null);
+        const isDragging = ref(false);
+        const isLoading = ref(false);
+        const errorMessage = ref(null);
+        const jobId = ref(null);
         
-        // Tree visualization state
-        const expandedNodes = ref(new Set());
-        const allNodes = ref(new Map()); // id -> node data
-        const allEdges = ref([]);
-        const nodeHierarchy = ref(new Map()); // id -> {children: [], parent: id}
-        const nodePositions = ref(new Map()); // id -> {x, y, angle, radius}
+        // Current graph data
+        const currentGraphData = ref(null);
+        const cavityGraphData = ref(null);
         
-        // Canvas transform state
-        const canvasOffset = ref({ x: 0, y: 0 });
-        const canvasZoom = ref(1.0);
-        const dragStart = ref({ x: 0, y: 0 });
-        const hoveredNode = ref(null);
+        // Filters
+        const nodeVisibility = ref({});
+        const edgeVisibility = ref({});
+        
+        const nodeTypes = computed(() => Object.keys(nodeVisibility.value).sort());
+        const edgeTypes = computed(() => Object.keys(edgeVisibility.value).sort());
+        
+        // Network visualization
+        let network = null;
+        let isRendering = false; // Guard to prevent multiple renders
+
+        const updateFiltersFromData = (data) => {
+            if (!data) return;
+            
+            // Update Node Types
+            const foundNodeTypes = new Set(data.nodes.map(n => n.node_type));
+            
+            // Keep existing preferences, add new types as visible
+            for (const type of foundNodeTypes) {
+                if (nodeVisibility.value[type] === undefined) {
+                    // Default visibility: Cell is hidden by default, others visible
+                    nodeVisibility.value[type] = type !== 'cell'; 
+                }
+            }
+            
+            // Update Edge Types
+            const foundEdgeTypes = new Set(data.edges.map(e => e.edge_type || 'unknown'));
+            for (const type of foundEdgeTypes) {
+                if (edgeVisibility.value[type] === undefined) {
+                    edgeVisibility.value[type] = true;
+                }
+            }
+            
+            log(`Filters updated: ${foundNodeTypes.size} node types, ${foundEdgeTypes.size} edge types`);
+        };
 
         const goToIndex = () => {
             window.location.href = '/';
@@ -507,981 +701,478 @@ createApp({
         const handleFileUpload = async (event) => {
             const file = event.target.files[0];
             if (!file) return;
-            await loadFile(file);
+            await uploadFile(file);
         };
 
         const handleFileDrop = async (event) => {
             isDragging.value = false;
             const file = event.dataTransfer.files[0];
             if (!file) return;
-            await loadFile(file);
+            await uploadFile(file);
         };
 
-        const loadFile = async (file) => {
+        const uploadFile = async (file) => {
+            log(`Starting upload for file: ${file.name} (${file.size} bytes)`);
+            
+            if (!isValidVaspFile(file.name)) {
+                const msg = 'File must be .vasp, POSCAR, or CONTCAR format';
+                log(msg, 'error');
+                errorMessage.value = msg;
+                return;
+            }
+
+            isLoading.value = true;
+            errorMessage.value = null;
+
             try {
-                const text = await file.text();
-                const data = JSON.parse(text);
+                const formData = new FormData();
+                formData.append('file', file);
 
-                if (!data.metadata || !data.nodes || !data.edges) {
-                    alert('Invalid graph data format. Please ensure the JSON file was exported from q2D_analyzer.');
-                    return;
+                log('Sending POST request to /api/vasp/analyze...');
+                const response = await fetch('/api/vasp/analyze', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                log(`Response status: ${response.status} ${response.statusText}`);
+                
+                if (!response.ok) {
+                    const text = await response.text();
+                    log(`Server error body: ${text}`, 'error');
+                    throw new Error(`Server returned ${response.status}: ${text}`);
                 }
 
-                graphData.value = data;
-                metadata.value = data.metadata;
+                const result = await response.json();
+                log('Response JSON parsed successfully');
 
-                await nextTick();
-                buildExpandableNetwork();
-                initTree();
+                if (result.status === 'success') {
+                    log('✓ Analysis success reported by backend');
+                    log(`Metadata: ${JSON.stringify(result.graph_data?.metadata || {})}`);
+                    
+                    analysisData.value = result;
+                    cavities.value = result.cavities || [];
+                    jobId.value = result.job_id;
+                    currentView.value = 'main';
+                    currentGraphData.value = result.graph_data;
+                    selectedCavityIndex.value = null;
+                    
+                    log(`Graph data loaded: ${result.graph_data?.nodes?.length || 0} nodes, ${result.graph_data?.edges?.length || 0} edges`);
+                    
+                    // Update filters based on actual data
+                    updateFiltersFromData(result.graph_data);
+                    
+                    await nextTick();
+                    log('DOM updated, calling renderNetwork()...');
+                    renderNetwork();
+                    
+                    // Ensure loading is stopped after a short delay to allow network to initialize
+                    setTimeout(() => {
+                        isLoading.value = false;
+                        log('✓ Loading state cleared');
+                    }, 100);
+                } else {
+                    isLoading.value = false;
+                    const msg = result.message || 'Analysis failed';
+                    log(`Analysis failed: ${msg}`, 'error');
+                    if (result.error_details) log(`Details: ${result.error_details}`, 'error');
+                    errorMessage.value = msg;
+                }
             } catch (error) {
-                console.error('Error loading file:', error);
-                alert('Error loading file. Please check the console for details.');
+                isLoading.value = false;
+                const msg = 'Upload error: ' + error.message;
+                log(msg, 'error');
+                console.error('Full error:', error);
+                errorMessage.value = msg;
+            } finally {
+                // Safety net: ensure loading is always stopped
+                setTimeout(() => {
+                    if (isLoading.value) {
+                        log('⚠ Force stopping loading state (safety timeout)', 'warn');
+                        isLoading.value = false;
+                    }
+                }, 10000); // 10 second safety timeout
             }
         };
 
-        const buildExpandableNetwork = () => {
-            if (!graphData.value) return;
+        const isValidVaspFile = (filename) => {
+            const lower = filename.toLowerCase();
+            return lower.endsWith('.vasp') || 
+                   lower === 'poscar' || 
+                   lower === 'contcar' ||
+                   lower.includes('poscar') ||
+                   lower.includes('contcar');
+        };
 
-            allNodes.value.clear();
-            allEdges.value = [];
-            nodeHierarchy.value.clear();
-            expandedNodes.value.clear();
+        const selectCavity = async (index) => {
+            selectedCavityIndex.value = index;
+            currentView.value = 'cavity';
+            isLoading.value = true;
 
-            // Node ID counter for new nodes
-            let nextId = Math.max(...graphData.value.nodes.map(n => n.id), -1) + 1;
+            try {
+                const response = await fetch(`/api/cavity/${jobId.value}/${index}`);
+                const result = await response.json();
 
-            // 1. Create Cell node (root)
-            const cellId = 'cell';
-            allNodes.value.set(cellId, {
-                id: cellId,
-                label: 'Cell',
-                type: 'cell',
-                level: 0,
-                color: '#83D3DC',
-                shape: 'ellipse',
-                size: 30,
-                _nodeData: { type: 'cell', metadata: metadata.value }
-            });
-            nodeHierarchy.value.set(cellId, { children: [], parent: null });
+                if (result.status === 'success') {
+                    cavityGraphData.value = result;
+                    updateFiltersFromData(result);
+                    await nextTick();
+                    renderNetwork();
+                } else {
+                    errorMessage.value = result.message || 'Failed to load cavity';
+                    currentView.value = 'main';
+                    selectedCavityIndex.value = null;
+                }
+            } catch (error) {
+                errorMessage.value = 'Error loading cavity: ' + error.message;
+                currentView.value = 'main';
+                selectedCavityIndex.value = null;
+            } finally {
+                isLoading.value = false;
+            }
+        };
 
-            // 2. Create Layer nodes and connect to Cell
-            const layerNodes = new Map();
-            graphData.value.nodes.forEach(node => {
-                if (node.type === 'layer') {
-                    const layerId = `layer_${node.id}`;
-                    allNodes.value.set(layerId, {
-                        id: layerId,
-                        label: node.label,
-                        type: 'layer',
-                        level: 1,
-                        color: '#ff79c6',
-                        shape: 'ellipse',
-                        size: 25,
-                        _nodeData: node
-                    });
-                    layerNodes.set(node.id, layerId);
-                    nodeHierarchy.value.set(layerId, { children: [], parent: cellId });
-                    nodeHierarchy.value.get(cellId).children.push(layerId);
-                    allEdges.value.push({ from: cellId, to: layerId, type: 'contains' });
+        const returnToMainGraph = () => {
+            currentView.value = 'main';
+            selectedCavityIndex.value = null;
+            cavityGraphData.value = null;
+            renderNetwork();
+        };
+
+        const toggleNodeType = (type) => {
+            nodeVisibility.value[type] = !nodeVisibility.value[type];
+            updateGraphFilter();
+        };
+
+        const toggleEdgeType = (type) => {
+            edgeVisibility.value[type] = !edgeVisibility.value[type];
+            updateGraphFilter();
+        };
+
+        const getNodeTypeCount = (type) => {
+            if (!currentGraphData.value && !cavityGraphData.value) return 0;
+            const data = currentView.value === 'cavity' ? cavityGraphData.value : currentGraphData.value;
+            if (!data || !data.nodes) return 0;
+            return data.nodes.filter(n => n.node_type === type).length;
+        };
+
+        const getEdgeTypeCount = (type) => {
+            if (!currentGraphData.value && !cavityGraphData.value) return 0;
+            const data = currentView.value === 'cavity' ? cavityGraphData.value : currentGraphData.value;
+            if (!data || !data.edges) return 0;
+            return data.edges.filter(e => e.edge_type === type).length;
+        };
+
+        const updateGraphFilter = () => {
+            if (!network) return;
+            
+            const data = currentView.value === 'cavity' ? cavityGraphData.value : currentGraphData.value;
+            if (!data) return;
+
+            // Update node visibility
+            const nodeIds = network.body.nodes;
+            data.nodes.forEach(nodeData => {
+                const nodeId = nodeData.id;
+                const isVisible = nodeVisibility.value[nodeData.node_type];
+                if (nodeIds[nodeId]) {
+                    nodeIds[nodeId].setOptions({ hidden: !isVisible });
                 }
             });
 
-            // 3. Create Octahedra nodes and connect to Layers
-            const octahedraNodes = new Map();
-            graphData.value.nodes.forEach(node => {
-                if (node.type === 'octahedron') {
-                    const octId = `oct_${node.id}`;
-                    allNodes.value.set(octId, {
-                        id: octId,
-                        label: node.label,
-                        type: 'octahedron',
-                        level: 2,
-                        color: node.color || '#8be9fd',
-                        shape: 'box',
-                        size: 20,
-                        _nodeData: node
-                    });
-                    octahedraNodes.set(node.id, octId);
-                    nodeHierarchy.value.set(octId, { children: [], parent: null });
-
-                    // Find parent layer via edges
-                    const layerEdge = graphData.value.edges.find(e => 
-                        (e.from === node.id && graphData.value.nodes.find(n => n.id === e.to && n.type === 'layer')) ||
-                        (e.to === node.id && graphData.value.nodes.find(n => n.id === e.from && n.type === 'layer'))
-                    );
-                    
-                    if (layerEdge) {
-                        const layerId = layerEdge.from === node.id ? layerEdge.to : layerEdge.from;
-                        const parentLayerId = layerNodes.get(layerId);
-                        if (parentLayerId) {
-                            nodeHierarchy.value.get(octId).parent = parentLayerId;
-                            nodeHierarchy.value.get(parentLayerId).children.push(octId);
-                            allEdges.value.push({ from: parentLayerId, to: octId, type: 'contains' });
-                        }
-                    }
-                }
-            });
-
-            // 4. Create Atom nodes and connect to Octahedra (hidden by default)
-            graphData.value.atoms.forEach(atom => {
-                const atomId = `atom_${atom.index}`;
-                allNodes.value.set(atomId, {
-                    id: atomId,
-                    label: `${atom.symbol}${atom.index}`,
-                    type: 'atom',
-                    level: 3,
-                    color: '#50fa7b',
-                    shape: 'dot',
-                    size: 15,
-                    hidden: true, // Hidden until parent is expanded
-                    _nodeData: atom
-                });
-                nodeHierarchy.value.set(atomId, { children: [], parent: null });
-
-                // Find which octahedra contain this atom
-                graphData.value.nodes.forEach(node => {
-                    if (node.type === 'octahedron') {
-                        const allAtoms = [
-                            ...(node.terminal_atoms || []),
-                            ...(node.interlayer_atoms || []),
-                            ...(node.intralayer_atoms || [])
-                        ];
-                        if (node.central_atom_index !== null && node.central_atom_index !== undefined) {
-                            allAtoms.push(node.central_atom_index);
-                        }
-                        
-                        if (allAtoms.includes(atom.index)) {
-                            const parentOctId = octahedraNodes.get(node.id);
-                            if (parentOctId) {
-                                nodeHierarchy.value.get(atomId).parent = parentOctId;
-                                nodeHierarchy.value.get(parentOctId).children.push(atomId);
-                            }
-                        }
+            // Update edge visibility
+            const edgeIds = network.body.edges;
+            data.edges.forEach(edgeData => {
+                const edgeId = `${edgeData.from}-${edgeData.to}`;
+                const isVisible = edgeVisibility.value[edgeData.edge_type];
+                // Find edge by from/to
+                Object.values(edgeIds).forEach(edge => {
+                    if ((edge.from.id === edgeData.from && edge.to.id === edgeData.to) ||
+                        (edge.from.id === edgeData.to && edge.to.id === edgeData.from)) {
+                        edge.setOptions({ hidden: !isVisible });
                     }
                 });
             });
-
-            // 5. Create Spacer/Molecule nodes and connect to Cell
-            // First, deduplicate spacers by grouping by their atom indices
-            if (graphData.value.spacers && graphData.value.spacers.length > 0) {
-                const spacerGroups = new Map();
-                const usedAtomIndices = new Set();
-                
-                // Group spacers by their original_indices to detect duplicates
-                graphData.value.spacers.forEach((spacer, idx) => {
-                    const indices = spacer.original_indices || [];
-                    if (indices.length === 0) return; // Skip spacers with no indices
-                    
-                    // Check if any atoms are already used in another spacer
-                    const hasOverlap = indices.some(idx => usedAtomIndices.has(idx));
-                    if (hasOverlap) {
-                        // This spacer shares atoms with another - skip it (it's likely a duplicate)
-                        return;
-                    }
-                    
-                    // Create a key from sorted indices
-                    const key = indices.slice().sort((a, b) => a - b).join(',');
-                    
-                    // Only keep the spacer with more atoms if there's a duplicate
-                    if (!spacerGroups.has(key) || (spacerGroups.get(key).atom_count || 0) < (spacer.atom_count || indices.length)) {
-                        spacerGroups.set(key, {
-                            ...spacer,
-                            original_indices: indices,
-                            atom_count: spacer.atom_count || indices.length
-                        });
-                        // Mark these atoms as used
-                        indices.forEach(idx => usedAtomIndices.add(idx));
-                    }
-                });
-                
-                // Create nodes only for unique spacers
-                let spacerIdx = 0;
-                spacerGroups.forEach((spacer, key) => {
-                    const spacerId = `spacer_${spacerIdx}`;
-                    let formula = spacer.formula || 'Spacer';
-                    if (!formula && typeof spacer === 'object' && spacer.get_chemical_formula) {
-                        formula = spacer.get_chemical_formula({mode: 'hill'});
-                    }
-                    
-                    allNodes.value.set(spacerId, {
-                        id: spacerId,
-                        label: `Spacer: ${formula}`,
-                        type: 'molecule',
-                        level: 1,
-                        color: '#ffb86c',
-                        shape: 'ellipse',
-                        size: 25,
-                        _nodeData: spacer
-                    });
-                    nodeHierarchy.value.set(spacerId, { children: [], parent: cellId });
-                    nodeHierarchy.value.get(cellId).children.push(spacerId);
-                    allEdges.value.push({ from: cellId, to: spacerId, type: 'contains' });
-                    
-                    // Create atom children for this spacer
-                    const spacerAtomIndices = spacer.original_indices || [];
-                    spacerAtomIndices.forEach(atomIndex => {
-                        // Create a unique atom node ID for this spacer's atoms
-                        // Use a prefix to avoid conflicts with octahedra atoms
-                        const spacerAtomId = `spacer_${spacerIdx}_atom_${atomIndex}`;
-                        const atomData = graphData.value.atoms.find(a => a.index === atomIndex);
-                        
-                        if (atomData) {
-                            // Create atom node for this spacer
-                            const spacerAtomNode = {
-                                id: spacerAtomId,
-                                label: `${atomData.symbol}${atomIndex}`,
-                                type: 'atom',
-                                level: 2,
-                                color: '#50fa7b',
-                                shape: 'dot',
-                                size: 15,
-                                hidden: true, // Hidden until parent spacer is expanded
-                                _nodeData: atomData
-                            };
-                            
-                            allNodes.value.set(spacerAtomId, spacerAtomNode);
-                            nodeHierarchy.value.set(spacerAtomId, { children: [], parent: spacerId });
-                            nodeHierarchy.value.get(spacerId).children.push(spacerAtomId);
-                            allEdges.value.push({ from: spacerId, to: spacerAtomId, type: 'contains' });
-                        }
-                    });
-                    
-                    spacerIdx++;
-                });
-            }
-
-            // 6. Create A-site nodes and connect to Cell
-            if (graphData.value.a_sites && graphData.value.a_sites.length > 0) {
-                graphData.value.a_sites.forEach((aSite, idx) => {
-                    const aSiteId = `a_site_${idx}`;
-                    const formula = aSite.formula || aSite.symbol || 'A-site';
-                    allNodes.value.set(aSiteId, {
-                        id: aSiteId,
-                        label: `A-site: ${formula}`,
-                        type: 'molecule',
-                        level: 1,
-                        color: '#ffb86c',
-                        shape: 'ellipse',
-                        size: 25,
-                        _nodeData: aSite
-                    });
-                    nodeHierarchy.value.set(aSiteId, { children: [], parent: cellId });
-                    nodeHierarchy.value.get(cellId).children.push(aSiteId);
-                    allEdges.value.push({ from: cellId, to: aSiteId, type: 'contains' });
-                });
-            }
-
-            // Expand Cell by default to show top level
-            expandedNodes.value.add(cellId);
-        };
-
-        const getVisibleNodes = () => {
-            const visible = [];
-            const visited = new Set();
-
-            const addNode = (nodeId) => {
-                if (visited.has(nodeId)) return;
-                visited.add(nodeId);
-                
-                const node = allNodes.value.get(nodeId);
-                if (!node) return;
-
-                const hierarchy = nodeHierarchy.value.get(nodeId);
-                
-                // Show node if:
-                // 1. It's not hidden (like Cell, Layers, Octahedra), OR
-                // 2. It's hidden but its parent is expanded (like Atoms)
-                const shouldShow = !node.hidden || (hierarchy && hierarchy.parent && expandedNodes.value.has(hierarchy.parent));
-                
-                if (shouldShow) {
-                    visible.push({
-                        id: node.id,
-                        label: node.label,
-                        title: getNodeTooltip(node._nodeData),
-                        color: {
-                            background: node.color,
-                            border: '#f8f8f2',
-                            highlight: {
-                                background: node.color,
-                                border: '#83D3DC'
-                            }
-                        },
-                        shape: node.shape,
-                        size: node.size,
-                        font: {
-                            color: '#f8f8f2',
-                            size: 14,
-                            face: 'Arial'
-                        },
-                        _nodeData: node._nodeData,
-                        _hierarchy: hierarchy
-                    });
-
-                    // If expanded, recursively show children
-                    if (expandedNodes.value.has(nodeId) && hierarchy && hierarchy.children && hierarchy.children.length > 0) {
-                        hierarchy.children.forEach(childId => addNode(childId));
-                    }
-                }
-            };
-
-            // Start from Cell
-            addNode('cell');
-            return visible;
-        };
-
-        // Initialize tree canvas
-        const initTree = () => {
-            if (!treeCanvas.value || !graphData.value) return;
-            
-            const canvas = treeCanvas.value;
-            const rect = canvas.getBoundingClientRect();
-            canvas.width = rect.width;
-            canvas.height = rect.height;
-            
-            calculateNodePositions();
-            drawRadialTree();
-        };
-        
-        // Calculate positions for all nodes in radial layout
-        const calculateNodePositions = () => {
-            if (!graphData.value) return;
-            
-            nodePositions.value.clear();
-            const centerX = 0;
-            const centerY = 0;
-            
-            // Cell at center
-            nodePositions.value.set('cell', { x: centerX, y: centerY, angle: 0, radius: 0 });
-            
-            // Get visible nodes
-            const visibleNodes = getVisibleNodes();
-            const cellNode = visibleNodes.find(n => n.id === 'cell');
-            if (!cellNode) return;
-            
-            // Group nodes by level and parent
-            const layers = visibleNodes.filter(n => {
-                const node = allNodes.value.get(n.id);
-                return node && node.type === 'layer';
-            });
-            
-            const molecules = visibleNodes.filter(n => {
-                const node = allNodes.value.get(n.id);
-                return node && node.type === 'molecule';
-            });
-            
-            // Position layers in a circle around Cell
-            const layerRadius = 150;
-            layers.forEach((layer, idx) => {
-                const angle = (idx / layers.length) * Math.PI * 2;
-                nodePositions.value.set(layer.id, {
-                    x: centerX + Math.cos(angle) * layerRadius,
-                    y: centerY + Math.sin(angle) * layerRadius,
-                    angle: angle,
-                    radius: layerRadius
-                });
-            });
-            
-            // Position molecules in a circle around Cell (alternating with layers)
-            const moleculeRadius = 150;
-            const moleculeStartAngle = layers.length > 0 ? (Math.PI / layers.length) : 0;
-            molecules.forEach((mol, idx) => {
-                const angle = moleculeStartAngle + (idx / molecules.length) * Math.PI * 2;
-                nodePositions.value.set(mol.id, {
-                    x: centerX + Math.cos(angle) * moleculeRadius,
-                    y: centerY + Math.sin(angle) * moleculeRadius,
-                    angle: angle,
-                    radius: moleculeRadius
-                });
-            });
-            
-            // Position octahedra around their parent layers
-            visibleNodes.forEach(node => {
-                const nodeData = allNodes.value.get(node.id);
-                if (nodeData && nodeData.type === 'octahedron') {
-                    const hierarchy = nodeHierarchy.value.get(node.id);
-                    if (hierarchy && hierarchy.parent) {
-                        const parentPos = nodePositions.value.get(hierarchy.parent);
-                        if (parentPos) {
-                            const parentChildren = nodeHierarchy.value.get(hierarchy.parent)?.children || [];
-                            const octahedraInLayer = parentChildren.filter(childId => {
-                                const child = allNodes.value.get(childId);
-                                return child && child.type === 'octahedron';
-                            });
-                            const octIdx = octahedraInLayer.indexOf(node.id);
-                            const octRadius = 100;
-                            const octAngle = parentPos.angle + (octIdx / octahedraInLayer.length) * Math.PI * 0.5 - Math.PI * 0.25;
-                            nodePositions.value.set(node.id, {
-                                x: parentPos.x + Math.cos(octAngle) * octRadius,
-                                y: parentPos.y + Math.sin(octAngle) * octRadius,
-                                angle: octAngle,
-                                radius: octRadius
-                            });
-                        }
-                    }
-                }
-            });
-            
-            // Position atoms around their parent octahedra
-            visibleNodes.forEach(node => {
-                const nodeData = allNodes.value.get(node.id);
-                if (nodeData && nodeData.type === 'atom') {
-                    const hierarchy = nodeHierarchy.value.get(node.id);
-                    if (hierarchy && hierarchy.parent) {
-                        const parentPos = nodePositions.value.get(hierarchy.parent);
-                        if (parentPos) {
-                            const parentChildren = nodeHierarchy.value.get(hierarchy.parent)?.children || [];
-                            const atomsInOct = parentChildren.filter(childId => {
-                                const child = allNodes.value.get(childId);
-                                return child && child.type === 'atom';
-                            });
-                            const atomIdx = atomsInOct.indexOf(node.id);
-                            const atomRadius = 50;
-                            const atomAngle = parentPos.angle + (atomIdx / atomsInOct.length) * Math.PI * 2;
-                            nodePositions.value.set(node.id, {
-                                x: parentPos.x + Math.cos(atomAngle) * atomRadius,
-                                y: parentPos.y + Math.sin(atomAngle) * atomRadius,
-                                angle: atomAngle,
-                                radius: atomRadius
-                            });
-                        }
-                    }
-                }
-            });
-        };
-
-        const getNodeTooltip = (node) => {
-            if (node.type === 'octahedron') {
-                return `
-                    <div style="padding: 10px;">
-                        <strong>Octahedron: ${node.label}</strong><br>
-                        B-site: ${node.b_element}<br>
-                        Central atom: ${node.central_atom_index}<br>
-                        Terminal atoms: ${node.terminal_atoms.length}<br>
-                        Interlayer atoms: ${node.interlayer_atoms.length}<br>
-                        Intralayer atoms: ${node.intralayer_atoms.length}
-                    </div>
-                `;
-            } else {
-                return `
-                    <div style="padding: 10px;">
-                        <strong>Layer: ${node.layer_id}</strong><br>
-                        Position: ${node.position}<br>
-                        Octahedra count: ${node.octahedra_count}
-                    </div>
-                `;
-            }
-        };
-
-        // Identify interlayer atoms (atoms shared between layers)
-        const identifyInterlayerAtoms = () => {
-            const interlayerAtoms = new Map(); // atomIndex -> {layers: [], octahedra: []}
-            
-            // Get all visible nodes
-            const visibleNodes = getVisibleNodes();
-            
-            // Find all atoms and their parent octahedra
-            visibleNodes.forEach(node => {
-                const nodeData = allNodes.value.get(node.id);
-                if (nodeData && nodeData.type === 'atom') {
-                    const hierarchy = nodeHierarchy.value.get(node.id);
-                    if (hierarchy && hierarchy.parent) {
-                        const parentOct = allNodes.value.get(hierarchy.parent);
-                        if (parentOct && parentOct.type === 'octahedron') {
-                            const octHierarchy = nodeHierarchy.value.get(hierarchy.parent);
-                            if (octHierarchy && octHierarchy.parent) {
-                                const parentLayer = allNodes.value.get(octHierarchy.parent);
-                                if (parentLayer && parentLayer.type === 'layer') {
-                                    const atomIndex = nodeData._nodeData.index;
-                                    if (!interlayerAtoms.has(atomIndex)) {
-                                        interlayerAtoms.set(atomIndex, { layers: new Set(), octahedra: new Set() });
-                                    }
-                                    interlayerAtoms.get(atomIndex).layers.add(octHierarchy.parent);
-                                    interlayerAtoms.get(atomIndex).octahedra.add(hierarchy.parent);
-                                }
-                            }
-                        }
-                    }
-                }
-            });
-            
-            // Filter to only atoms that appear in multiple layers
-            const trueInterlayer = new Map();
-            interlayerAtoms.forEach((data, atomIndex) => {
-                if (data.layers.size > 1) {
-                    trueInterlayer.set(atomIndex, {
-                        layers: Array.from(data.layers),
-                        octahedra: Array.from(data.octahedra)
-                    });
-                }
-            });
-            
-            return trueInterlayer;
-        };
-        
-        // Draw the radial tree
-        const drawRadialTree = () => {
-            if (!treeCanvas.value || !graphData.value) return;
-            
-            const canvas = treeCanvas.value;
-            const ctx = canvas.getContext('2d');
-            const width = canvas.width;
-            const height = canvas.height;
-            
-            // Clear canvas
-            const bgColor = getComputedStyle(document.documentElement).getPropertyValue('--bg-canvas').trim() || '#282a36';
-            ctx.fillStyle = bgColor;
-            ctx.fillRect(0, 0, width, height);
-            
-            // Apply transformations
-            ctx.save();
-            ctx.translate(width / 2 + canvasOffset.value.x, height / 2 + canvasOffset.value.y);
-            ctx.scale(canvasZoom.value, canvasZoom.value);
-            
-            // Get visible nodes
-            const visibleNodes = getVisibleNodes();
-            const interlayerAtoms = identifyInterlayerAtoms();
-            
-            // Draw connections first (so nodes appear on top)
-            visibleNodes.forEach(node => {
-                const hierarchy = nodeHierarchy.value.get(node.id);
-                if (hierarchy && hierarchy.parent) {
-                    const parentPos = nodePositions.value.get(hierarchy.parent);
-                    const nodePos = nodePositions.value.get(node.id);
-                    if (parentPos && nodePos) {
-                        drawConnection(ctx, parentPos, nodePos, node);
-                    }
-                }
-            });
-            
-            // Draw interlayer atoms at branch overlaps (between layers)
-            interlayerAtoms.forEach((data, atomIndex) => {
-                if (data.layers.length >= 2) {
-                    const layerPositions = data.layers.map(layerId => nodePositions.value.get(layerId)).filter(p => p);
-                    if (layerPositions.length >= 2) {
-                        // Calculate position at the overlap point between layers
-                        // Use the midpoint, but adjust towards the center to show it's between layers
-                        const centerX = 0;
-                        const centerY = 0;
-                        const midX = layerPositions.reduce((sum, p) => sum + p.x, 0) / layerPositions.length;
-                        const midY = layerPositions.reduce((sum, p) => sum + p.y, 0) / layerPositions.length;
-                        
-                        // Position closer to center, at about 75% of the way from center to midpoint
-                        const overlapX = centerX + (midX - centerX) * 0.75;
-                        const overlapY = centerY + (midY - centerY) * 0.75;
-                        
-                        // Find the atom node (might be in multiple octahedra, use first one)
-                        const atomNode = visibleNodes.find(n => {
-                            const nodeData = allNodes.value.get(n.id);
-                            return nodeData && nodeData._nodeData && nodeData._nodeData.index === atomIndex;
-                        });
-                        
-                        if (atomNode) {
-                            const atomPos = { x: overlapX, y: overlapY, angle: 0, radius: 0 };
-                            // Use a special ID for interlayer atoms to avoid conflicts
-                            const interlayerAtomId = `interlayer_atom_${atomIndex}`;
-                            nodePositions.value.set(interlayerAtomId, atomPos);
-                            
-                            // Draw connections to all parent octahedra with dashed lines
-                            data.octahedra.forEach(octId => {
-                                const octPos = nodePositions.value.get(octId);
-                                if (octPos) {
-                                    drawConnection(ctx, octPos, atomPos, atomNode, true);
-                                }
-                            });
-                            
-                            // Draw interlayer atom node with special styling
-                            drawNode(ctx, atomPos, { ...atomNode, id: interlayerAtomId }, true);
-                        }
-                    }
-                }
-            });
-            
-            // Draw all visible nodes (excluding interlayer atoms which are drawn separately)
-            visibleNodes.forEach(node => {
-                const pos = nodePositions.value.get(node.id);
-                const nodeData = allNodes.value.get(node.id);
-                // Skip if this is an interlayer atom (they're drawn separately at overlaps)
-                if (pos && nodeData && nodeData._nodeData && !interlayerAtoms.has(nodeData._nodeData.index)) {
-                    drawNode(ctx, pos, node);
-                }
-            });
-            
-            ctx.restore();
-        };
-        
-        // Draw a connection line between two nodes
-        const drawConnection = (ctx, fromPos, toPos, toNode, isInterlayer = false) => {
-            ctx.save();
-            
-            // Create gradient for connection
-            const gradient = ctx.createLinearGradient(fromPos.x, fromPos.y, toPos.x, toPos.y);
-            
-            if (isInterlayer) {
-                gradient.addColorStop(0, '#f1fa8c');
-                gradient.addColorStop(1, '#ffb86c');
-                ctx.strokeStyle = gradient;
-                ctx.lineWidth = 2.5;
-                ctx.setLineDash([5, 5]);
-            } else {
-                gradient.addColorStop(0, '#6272a4');
-                gradient.addColorStop(1, '#44475a');
-                ctx.strokeStyle = gradient;
-                ctx.lineWidth = 1.5;
-                ctx.setLineDash([]);
-            }
-            
-            ctx.globalAlpha = 0.6;
-            ctx.shadowColor = 'rgba(0, 0, 0, 0.2)';
-            ctx.shadowBlur = 3;
-            ctx.beginPath();
-            ctx.moveTo(fromPos.x, fromPos.y);
-            ctx.lineTo(toPos.x, toPos.y);
-            ctx.stroke();
-            
-            ctx.restore();
-        };
-        
-        // Draw a node
-        const drawNode = (ctx, pos, node, isInterlayer = false) => {
-            const nodeData = allNodes.value.get(node.id);
-            if (!nodeData) return;
-            
-            const hierarchy = nodeHierarchy.value.get(node.id);
-            const hasChildren = hierarchy && hierarchy.children && hierarchy.children.length > 0;
-            const isExpanded = expandedNodes.value.has(node.id);
-            const isSelected = selectedNode.value && (
-                (selectedNode.value.id !== undefined && selectedNode.value.id === node._nodeData?.id) ||
-                (selectedNode.value.index !== undefined && selectedNode.value.index === node._nodeData?.index) ||
-                (selectedNode.value === node._nodeData)
-            );
-            const isHovered = hoveredNode.value === node.id;
-            
-            ctx.save();
-            
-            // Node colors
-            let nodeColor = nodeData.color || '#6272a4';
-            if (isInterlayer) {
-                nodeColor = '#f1fa8c';
-            }
-            
-            // Draw shadow
-            ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
-            ctx.shadowBlur = isSelected || isHovered ? 15 : 8;
-            ctx.shadowOffsetX = 2;
-            ctx.shadowOffsetY = 2;
-            
-            // Draw node shape with gradient
-            const size = nodeData.size || 20;
-            
-            // Create gradient for node
-            let gradient;
-            if (nodeData.shape === 'box' || nodeData.type === 'octahedron') {
-                gradient = ctx.createLinearGradient(pos.x - size/2, pos.y - size/2, pos.x + size/2, pos.y + size/2);
-            } else {
-                gradient = ctx.createRadialGradient(pos.x, pos.y, 0, pos.x, pos.y, size / 2);
-            }
-            
-            const baseColor = nodeColor;
-            gradient.addColorStop(0, baseColor + 'FF');
-            gradient.addColorStop(1, baseColor + 'AA');
-            
-            if (nodeData.shape === 'box' || nodeData.type === 'octahedron') {
-                // Draw rounded rectangle with gradient
-                const radius = 4;
-                ctx.fillStyle = isSelected || isHovered ? gradient : baseColor + 'CC';
-                ctx.strokeStyle = isSelected ? '#83D3DC' : baseColor;
-                ctx.lineWidth = isSelected ? 3 : 2;
-                roundRect(ctx, pos.x - size/2, pos.y - size/2, size, size, radius);
-                ctx.fill();
-                ctx.stroke();
-            } else if (nodeData.shape === 'dot' || nodeData.type === 'atom') {
-                // Draw circle with gradient
-                ctx.fillStyle = isSelected || isHovered ? gradient : baseColor + 'CC';
-                ctx.strokeStyle = isSelected ? '#83D3DC' : baseColor;
-                ctx.lineWidth = isSelected ? 3 : 2;
-                ctx.beginPath();
-                ctx.arc(pos.x, pos.y, size / 2, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.stroke();
-            } else {
-                // Draw ellipse with gradient
-                ctx.fillStyle = isSelected || isHovered ? gradient : baseColor + 'CC';
-                ctx.strokeStyle = isSelected ? '#83D3DC' : baseColor;
-                ctx.lineWidth = isSelected ? 3 : 2;
-                ctx.beginPath();
-                ctx.ellipse(pos.x, pos.y, size / 2, size / 2.5, 0, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.stroke();
-            }
-            
-            ctx.shadowBlur = 0;
-            
-            // Draw expand/collapse indicator
-            if (hasChildren) {
-                ctx.fillStyle = '#f8f8f2';
-                ctx.font = 'bold 12px Arial';
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                ctx.fillText(isExpanded ? '−' : '+', pos.x, pos.y - size - 8);
-            }
-            
-            // Draw label
-            ctx.fillStyle = '#f8f8f2';
-            ctx.font = '12px Arial';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'top';
-            const label = nodeData.label || node.label || 'Node';
-            ctx.fillText(label, pos.x, pos.y + size / 2 + 4);
-            
-            ctx.restore();
-        };
-        
-        // Helper function for rounded rectangles
-        const roundRect = (ctx, x, y, width, height, radius) => {
-            ctx.beginPath();
-            ctx.moveTo(x + radius, y);
-            ctx.lineTo(x + width - radius, y);
-            ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
-            ctx.lineTo(x + width, y + height - radius);
-            ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
-            ctx.lineTo(x + radius, y + height);
-            ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
-            ctx.lineTo(x, y + radius);
-            ctx.quadraticCurveTo(x, y, x + radius, y);
-            ctx.closePath();
         };
         
         const resetView = () => {
-            canvasOffset.value = { x: 0, y: 0 };
-            canvasZoom.value = 1.0;
-            calculateNodePositions();
-            drawRadialTree();
-        };
-        
-        const fitTree = () => {
-            // Calculate bounding box of all visible nodes
-            const visibleNodes = getVisibleNodes();
-            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-            
-            visibleNodes.forEach(node => {
-                const pos = nodePositions.value.get(node.id);
-                if (pos) {
-                    minX = Math.min(minX, pos.x);
-                    minY = Math.min(minY, pos.y);
-                    maxX = Math.max(maxX, pos.x);
-                    maxY = Math.max(maxY, pos.y);
-                }
-            });
-            
-            if (minX !== Infinity) {
-                const canvas = treeCanvas.value;
-                const width = canvas.width;
-                const height = canvas.height;
-                
-                const treeWidth = maxX - minX;
-                const treeHeight = maxY - minY;
-                const centerX = (minX + maxX) / 2;
-                const centerY = (minY + maxY) / 2;
-                
-                const scaleX = (width * 0.8) / treeWidth;
-                const scaleY = (height * 0.8) / treeHeight;
-                canvasZoom.value = Math.min(scaleX, scaleY, 1.0);
-                
-                canvasOffset.value = {
-                    x: -centerX * canvasZoom.value,
-                    y: -centerY * canvasZoom.value
-                };
-                
-                calculateNodePositions();
-                drawRadialTree();
+            if (network) {
+                network.fit();
             }
         };
 
-        const expandAllNodes = () => {
-            allNodes.value.forEach((node, nodeId) => {
-                const hierarchy = nodeHierarchy.value.get(nodeId);
-                if (hierarchy && hierarchy.children.length > 0) {
-                    expandedNodes.value.add(nodeId);
-                }
-            });
-            calculateNodePositions();
-            drawRadialTree();
-        };
-
-        const collapseAllNodes = () => {
-            expandedNodes.value.clear();
-            expandedNodes.value.add('cell'); // Keep Cell expanded
-            calculateNodePositions();
-            drawRadialTree();
-        };
-
-        // Tree interaction handlers
-        const handleTreeClick = (event) => {
-            if (!treeCanvas.value || !graphData.value) return;
-            
-            const canvas = treeCanvas.value;
-            const rect = canvas.getBoundingClientRect();
-            const x = (event.clientX - rect.left - canvasOffset.value.x - canvas.width / 2) / canvasZoom.value;
-            const y = (event.clientY - rect.top - canvasOffset.value.y - canvas.height / 2) / canvasZoom.value;
-            
-            // Find clicked node
-            const visibleNodes = getVisibleNodes();
-            let clickedNode = null;
-            let minDist = Infinity;
-            
-            visibleNodes.forEach(node => {
-                const pos = nodePositions.value.get(node.id);
-                if (pos) {
-                    const nodeData = allNodes.value.get(node.id);
-                    const size = nodeData ? nodeData.size || 20 : 20;
-                    const dist = Math.sqrt((x - pos.x) ** 2 + (y - pos.y) ** 2);
-                    if (dist < size && dist < minDist) {
-                        minDist = dist;
-                        clickedNode = node;
-                    }
-                }
-            });
-            
-            if (clickedNode) {
-                const hierarchy = nodeHierarchy.value.get(clickedNode.id);
-                if (hierarchy && hierarchy.children && hierarchy.children.length > 0) {
-                    // Toggle expansion
-                    if (expandedNodes.value.has(clickedNode.id)) {
-                        expandedNodes.value.delete(clickedNode.id);
-                    } else {
-                        expandedNodes.value.add(clickedNode.id);
-                    }
-                    calculateNodePositions();
-                    drawRadialTree();
-                }
-                
-                const nodeData = allNodes.value.get(clickedNode.id);
-                if (nodeData) {
-                    selectedNode.value = nodeData._nodeData;
-                }
-            } else {
-                selectedNode.value = null;
+        const fitGraph = () => {
+            if (network) {
+                network.fit({ animation: true });
             }
         };
-        
-        const handleTreeMouseDown = (event) => {
-            isDragging.value = true;
-            dragStart.value = {
-                x: event.clientX - canvasOffset.value.x,
-                y: event.clientY - canvasOffset.value.y
-            };
-        };
-        
-        const handleTreeMouseUp = () => {
-            isDragging.value = false;
-        };
-        
-        const handleTreeMouseMove = (event) => {
-            if (isDragging.value) {
-                canvasOffset.value = {
-                    x: event.clientX - dragStart.value.x,
-                    y: event.clientY - dragStart.value.y
+
+        const renderNetwork = () => {
+            log('renderNetwork() called');
+            
+            // Guard against multiple simultaneous renders
+            if (isRendering) {
+                log('⚠ Render already in progress, skipping...', 'warn');
+                return;
+            }
+            
+            if (!analysisData.value) {
+                log('✗ No analysis data available', 'error');
+                return;
+            }
+            
+            const container = document.getElementById('network-viz');
+            if (!container) {
+                log('✗ Network container element #network-viz not found in DOM', 'error');
+                return;
+            }
+
+            const data = currentView.value === 'cavity' ? cavityGraphData.value : currentGraphData.value;
+            if (!data) {
+                log(`✗ No graph data for current view: ${currentView.value}`, 'error');
+                return;
+            }
+
+            if (!data.nodes || data.nodes.length === 0) {
+                log('✗ No nodes in graph data', 'error');
+                return;
+            }
+
+            isRendering = true;
+            log(`Creating network: ${data.nodes.length} nodes, ${data.edges ? data.edges.length : 0} edges`);
+
+            try {
+                if (typeof vis === 'undefined') {
+                    throw new Error('vis.js library is not loaded! Check network tab for 404s.');
+                }
+
+                // Enhanced Color Scheme by Element
+                const elementColors = {
+                    // Metals (B-site)
+                    'Pb': '#6272a4', // Blue-grey
+                    'Sn': '#8be9fd', // Cyan
+                    'Ge': '#ffb86c', // Orange
+                    'Ti': '#bd93f9', // Purple
+                    // Halogens (X-site)
+                    'I':  '#ff5555', // Red
+                    'Br': '#ff79c6', // Pink
+                    'Cl': '#50fa7b', // Green
+                    'F':  '#f1fa8c', // Yellow
+                    // A-site / Organic
+                    'Cs': '#50fa7b', // Green
+                    'MA': '#ffb86c', // Orange
+                    'FA': '#ffb86c', // Orange
+                    'C':  '#44475a', // Dark Grey
+                    'N':  '#8be9fd', // Cyan
+                    'H':  '#f8f8f2', // White
+                    // Default Types
+                    'octahedron': '#bd93f9', // Purple
+                    'layer': '#ff79c6',      // Pink
+                    'cavity': '#f1fa8c',     // Yellow
+                    'cell': '#6272a4',       // Grey
+                    'atom': '#50fa7b',       // Default atom
+                    'molecule': '#ffb86c'    // Default molecule
                 };
-                drawRadialTree();
-            } else {
-                // Check for hover
-                if (!treeCanvas.value || !graphData.value) return;
+
+                // Helper to get color
+                const getNodeColor = (node) => {
+                    // 1. Try symbol property directly
+                    if (node.symbol && elementColors[node.symbol]) return elementColors[node.symbol];
+                    
+                    // 2. Try parsing label (e.g. "Pb1" -> "Pb")
+                    if (node.label) {
+                        const symbolMatch = node.label.match(/^([A-Z][a-z]?)/);
+                        if (symbolMatch && elementColors[symbolMatch[1]]) return elementColors[symbolMatch[1]];
+                    }
+                    
+                    // 3. Fallback to node type
+                    return elementColors[node.node_type] || '#888888';
+                };
+
+                // Build nodes for vis.js
+                const nodes = data.nodes.map(node => ({
+                    id: node.id,
+                    label: node.label,
+                    title: `${node.node_type}: ${node.label}`,
+                    color: getNodeColor(node),
+                    hidden: !nodeVisibility.value[node.node_type],
+                    physics: true,
+                    size: node.node_type === 'octahedron' ? 25 : 
+                           node.node_type === 'layer' ? 30 : 20,
+                }));
+
+                // Build edges for vis.js
+                const edgeColors = {
+                    contains: '#888888',
+                    shares_atoms: '#ff6b6b',
+                    cavity_octahedron: '#ffd700',
+                    contains_a_site: '#ff69b4',
+                    proximity: '#00ff00',
+                    is_contained_in: '#888888',
+                };
+
+                const edges = (data.edges || []).map(edge => {
+                    const type = edge.edge_type || 'unknown';
+                    // Default to true if type is new/unknown
+                    const isVisible = edgeVisibility.value[type] !== undefined ? edgeVisibility.value[type] : true;
+                    
+                    return {
+                        from: edge.from,
+                        to: edge.to,
+                        color: edgeColors[type] || '#888888',
+                        title: type,
+                        hidden: !isVisible,
+                        arrows: 'to',
+                        smooth: { type: 'continuous' }
+                    };
+                });
+
+                // Create new network
+                const networkData = { nodes, edges };
                 
-                const canvas = treeCanvas.value;
-                const rect = canvas.getBoundingClientRect();
-                const x = (event.clientX - rect.left - canvasOffset.value.x - canvas.width / 2) / canvasZoom.value;
-                const y = (event.clientY - rect.top - canvasOffset.value.y - canvas.height / 2) / canvasZoom.value;
+                // Physics Optimization:
+                // If we have very few edges compared to nodes, we likely have many isolated atoms (spacers/A-sites).
+                // Full physics with many isolated nodes is CPU intensive (N^2 repulsion).
+                // We use BarnesHut which is O(N log N) but still can be heavy.
+                // We'll limit iterations to prevent infinite "gas expansion".
                 
-                const visibleNodes = getVisibleNodes();
-                let hovered = null;
-                let minDist = Infinity;
+                const hasEdges = edges.length > 0;
+                const nodeCount = nodes.length;
+                const edgeCount = edges.length;
+                const isSparse = edgeCount < nodeCount * 0.5; // Heuristic for sparse/disconnected graph
                 
-                visibleNodes.forEach(node => {
-                    const pos = nodePositions.value.get(node.id);
-                    if (pos) {
-                        const nodeData = allNodes.value.get(node.id);
-                        const size = nodeData ? nodeData.size || 20 : 20;
-                        const dist = Math.sqrt((x - pos.x) ** 2 + (y - pos.y) ** 2);
-                        if (dist < size && dist < minDist) {
-                            minDist = dist;
-                            hovered = node.id;
-                        }
+                log(`Physics config: nodes=${nodeCount}, edges=${edgeCount}, sparse=${isSparse}`);
+                
+                const options = {
+                    physics: {
+                        enabled: true, // Always enable initially to layout nodes
+                        stabilization: {
+                            enabled: true,
+                            iterations: 100,  // Fixed iteration count prevents infinite CPU usage
+                            updateInterval: 25,
+                            onlyDynamicEdges: false,
+                            fit: true
+                        },
+                        barnesHut: {
+                            gravitationalConstant: -2000,
+                            centralGravity: 0.3,
+                            springLength: 200,
+                            avoidOverlap: 0.1 // Help separate nodes
+                        },
+                        maxVelocity: 50,
+                        timestep: 0.35,
+                        solver: 'barnesHut',
+                        adaptiveTimestep: true // Helps with performance
+                    },
+                    nodes: {
+                        shape: 'dot',
+                        scaling: {
+                            label: { enabled: true, drawThreshold: 14, maxVisible: 30 }
+                        },
+                        font: { size: 14, color: '#f8f8f2' }
+                    },
+                    edges: {
+                        smooth: { type: 'continuous' },
+                        font: { size: 12 },
+                        color: { opacity: 0.7 }
+                    },
+                    interaction: {
+                        hover: true,
+                        navigationButtons: true,
+                        keyboard: true,
+                        zoomView: true,
+                        dragView: true
+                    }
+                };
+
+                log('Instantiating vis.Network...');
+                network = new vis.Network(container, networkData, options);
+                log('✓ Network created successfully');
+                
+                // --- Interaction Physics Handling ---
+                // Re-enable physics when user drags a node to give "bouncy" feedback
+                network.on("dragStart", function (params) {
+                    if (params.nodes.length > 0) {
+                        network.setOptions({ physics: { enabled: true } });
                     }
                 });
-                
-                if (hovered !== hoveredNode.value) {
-                    hoveredNode.value = hovered;
-                    drawRadialTree();
-                }
-            }
-        };
-        
-        const handleTreeWheel = (event) => {
-            event.preventDefault();
-            const delta = event.deltaY > 0 ? 0.9 : 1.1;
-            canvasZoom.value = Math.max(0.3, Math.min(3.0, canvasZoom.value * delta));
-            drawRadialTree();
-        };
 
-        const clearData = () => {
-            if (confirm('Are you sure you want to clear the current data?')) {
-                graphData.value = null;
-                metadata.value = null;
-                selectedNode.value = null;
-                expandedNodes.value = new Set();
-                allNodes.value.clear();
-                allEdges.value = [];
-                nodeHierarchy.value.clear();
-                nodePositions.value.clear();
-                canvasOffset.value = { x: 0, y: 0 };
-                canvasZoom.value = 1.0;
-                hoveredNode.value = null;
-            }
-        };
-        
-        // Handle window resize
-        const handleResize = () => {
-            if (treeCanvas.value && graphData.value) {
-                const canvas = treeCanvas.value;
-                const rect = canvas.getBoundingClientRect();
-                canvas.width = rect.width;
-                canvas.height = rect.height;
-                calculateNodePositions();
-                drawRadialTree();
+                // Disable physics again when dragging stops to save CPU
+                network.on("dragEnd", function (params) {
+                    // Wait a bit for nodes to settle, then freeze
+                    setTimeout(() => {
+                        network.setOptions({ physics: { enabled: false } });
+                    }, 1000);
+                });
+                
+                // For zero edges or very sparse graphs, run brief physics then stop
+                if (!hasEdges || isSparse) {
+                     log('ℹ Sparse/Disconnected graph - running brief physics');
+                     // Note: options.physics.stabilization already handles the initial layout
+                }
+                
+                // Stabilize physics and then disable to save CPU
+                let stabilizationTimeout;
+                network.once('stabilizationEnd', () => {
+                    log('✓ Physics stabilization finished');
+                    if (network) {
+                        network.setOptions({ physics: { enabled: false } });
+                    }
+                    isRendering = false;
+                    isLoading.value = false;
+                    if (stabilizationTimeout) clearTimeout(stabilizationTimeout);
+                });
+                
+                // Fallback: disable physics after 2 seconds if not stabilized
+                stabilizationTimeout = setTimeout(() => {
+                    if (network && network.physics && network.physics.physicsEnabled) {
+                        log('⚠ Force disabling physics after timeout (stabilization took too long)', 'warn');
+                        network.setOptions({ physics: { enabled: false } });
+                    }
+                    isRendering = false;
+                    isLoading.value = false;
+                }, 2000);
+                
+            } catch (e) {
+                const msg = 'Error rendering graph: ' + e.message;
+                log(msg, 'error');
+                console.error('Render error:', e);
+                errorMessage.value = msg;
+                isRendering = false;
+                isLoading.value = false;
             }
         };
         
         onMounted(() => {
-            window.addEventListener('resize', handleResize);
-        });
-        
-        onUnmounted(() => {
-            window.removeEventListener('resize', handleResize);
+            // Any initialization if needed
         });
 
             return {
-            graphData,
-            metadata,
-            selectedNode,
-            treeCanvas,
-            isDragging,
             fileInput,
+            analysisData,
+            cavities,
+            currentView,
+            selectedCavityIndex,
+            isDragging,
+            isLoading,
+            errorMessage,
+            nodeVisibility,
+            edgeVisibility,
+            nodeTypes,
+            edgeTypes,
             goToIndex,
             handleFileUpload,
             handleFileDrop,
+            selectCavity,
+            returnToMainGraph,
+            toggleNodeType,
+            toggleEdgeType,
+            getNodeTypeCount,
+            getEdgeTypeCount,
             resetView,
-            fitTree,
-            clearData,
-            expandAllNodes,
-            collapseAllNodes,
-            handleTreeClick,
-            handleTreeMouseMove,
-            handleTreeMouseDown,
-            handleTreeMouseUp,
-            handleTreeWheel
+            fitGraph,
         };
     }
 }).mount('#app');
 </script>
+
 </body>
 </html>

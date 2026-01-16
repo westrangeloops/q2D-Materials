@@ -15,6 +15,7 @@ import numpy as np
 import networkx as nx
 from ase.io import read
 from ase import Atoms
+import os
 
 from .graph_construction import _graph_inorganic_ontology
 from ..detection.octahedral_detection import _count_octahedra, find_shared_atoms
@@ -179,6 +180,11 @@ class q2D_analyzer:
         atom_positions = self.cell.get_positions()
         atom_symbols = self.cell.get_chemical_symbols()
         cell_matrix = np.array(self.cell.get_cell())
+        
+        # Store for later use in cavity detection
+        self._atom_positions = np.array(atom_positions)
+        self._atom_symbols = list(atom_symbols)
+        self._cell = cell_matrix
 
         self._graph = _graph_inorganic_ontology(
             atom_positions,
@@ -211,14 +217,17 @@ class q2D_analyzer:
         
         # Ensure all atoms are in the graph
         if len(atom_nodes) < n_atoms:
-            # Add missing atoms
+            # Add missing atoms with x, y, z coordinates
             for i in range(n_atoms):
                 if f'atom_{i}' not in self._graph:
+                    pos = atom_positions[i]
                     node_data = {
                         'node_type': 'atom',
                         'vasp_index': i,
                         'symbol': atom_symbols[i] if atom_symbols else 'Unknown',
-                        'direct_coordinates': atom_positions[i].tolist(),
+                        'x': float(pos[0]),
+                        'y': float(pos[1]),
+                        'z': float(pos[2]),
                     }
                     self._graph.add_node(f'atom_{i}', **node_data)
         
@@ -234,91 +243,11 @@ class q2D_analyzer:
             import sys
             print(f"ERROR: Graph integrity failure - {n_atoms} atoms but only {final_total} nodes (no structural nodes!)", file=sys.stderr)
 
-        self._classify_molecules_in_graph(cell_matrix)
+        # Structure type inference uses graph patterns
         self._structure_type = self._infer_structure_type_from_graph()
 
         self._analyzed = True
         return self
-    
-    def _classify_molecules_in_graph(self, cell: np.ndarray) -> None:
-        """
-        Classify molecules as spacers or A-sites and store in graph nodes.
-
-        This method identifies molecules using pymatgen, classifies them based on
-        slab continuity, and stores classification as atom node attributes.
-        """
-        from ..detection.molecule_classification import _find_molecular_components, _classify_molecules_by_continuity
-        from ..characterization.network_analysis import _build_bx_network
-        from ..detection.layer_identification import _identify_slabs_by_continuity
-        from ..detection.octahedral_detection import find_shared_atoms
-
-        atom_positions = self.cell.get_positions()
-        atom_symbols = self.cell.get_chemical_symbols()
-
-        atoms_in_octahedra = set()
-        octahedra_info = []
-        neighbor_indices = []
-
-        for node, data in self._graph.nodes(data=True):
-            if data.get('node_type') == 'octahedron':
-                central_idx = data.get('central_atom')
-                terminal = data.get('terminal_atoms', [])
-                interlayer = data.get('interlayer_atoms', [])
-                intralayer = data.get('intralayer_atoms', [])
-
-                if central_idx is not None:
-                    atoms_in_octahedra.add(central_idx)
-                atoms_in_octahedra.update(terminal)
-                atoms_in_octahedra.update(interlayer)
-                atoms_in_octahedra.update(intralayer)
-
-                octahedra_info.append({
-                    'id': node,
-                    'central_atom_index': central_idx,
-                    'terminal_atoms': terminal,
-                    'interlayer_atoms': interlayer,
-                    'intralayer_atoms': intralayer,
-                })
-                neighbor_indices.append(terminal + interlayer + intralayer)
-
-        molecules = _find_molecular_components(
-            atom_positions,
-            atom_symbols,
-            cell,
-            self._graph,
-            atoms_in_octahedra,
-            full_atoms=self.cell,
-        )
-
-        shared_atoms = find_shared_atoms(neighbor_indices)
-        bx_graph = _build_bx_network(octahedra_info, atom_positions, shared_atoms)
-        slab_info = _identify_slabs_by_continuity(bx_graph, octahedra_info, atom_positions)
-
-        spacers, a_sites = _classify_molecules_by_continuity(
-            molecules,
-            slab_info,
-            atom_positions,
-            cell,
-        )
-
-        for spacer in spacers:
-            indices = spacer.info.get('original_indices', [])
-            for idx in indices:
-                node_id = f'atom_{idx}'
-                if self._graph.has_node(node_id):
-                    self._graph.nodes[node_id]['is_spacer'] = True
-                    self._graph.nodes[node_id]['spacer_formula'] = spacer.get_chemical_formula(mode='hill')
-                    self._graph.nodes[node_id]['spacer_indices'] = indices
-                    self._graph.nodes[node_id]['spacer_type'] = spacer.info.get('spacer_type')
-
-        for a_site in a_sites:
-            indices = a_site.info.get('original_indices', [])
-            for idx in indices:
-                node_id = f'atom_{idx}'
-                if self._graph.has_node(node_id):
-                    self._graph.nodes[node_id]['is_a_site'] = True
-                    self._graph.nodes[node_id]['a_site_formula'] = a_site.get_chemical_formula(mode='hill')
-                    self._graph.nodes[node_id]['a_site_indices'] = indices
 
     def _infer_structure_type_from_graph(self) -> str:
         """Infer structure type from graph patterns."""
@@ -326,40 +255,28 @@ class q2D_analyzer:
         from ..characterization.network_analysis import _build_bx_network
         from ..detection.layer_identification import _identify_slabs_by_continuity
         from ..detection.octahedral_detection import find_shared_atoms
+        from ..detection.cavity_tracing import get_octahedra_data
 
         atom_positions = self.cell.get_positions()
 
+        # Get octahedra data through the helper function that queries edges
+        octahedra_data = get_octahedra_data(self._graph)
+        
         octahedra_info = []
         neighbor_indices = []
-        for node, data in self._graph.nodes(data=True):
-            if data.get('node_type') == 'octahedron':
-                terminal = data.get('terminal_atoms', [])
-                interlayer = data.get('interlayer_atoms', [])
-                intralayer = data.get('intralayer_atoms', [])
-                octahedra_info.append({'id': node})
-                neighbor_indices.append(terminal + interlayer + intralayer)
+        for oct_idx, data in octahedra_data.items():
+            terminal = data.get('terminal_atoms', [])
+            interlayer = data.get('interlayer_atoms', [])
+            intralayer = data.get('intralayer_atoms', [])
+            octahedra_info.append({'id': data['node_id']})
+            neighbor_indices.append(terminal + interlayer + intralayer)
 
         shared_atoms = find_shared_atoms(neighbor_indices)
         bx_graph = _build_bx_network(octahedra_info, atom_positions, shared_atoms)
         slab_info = _identify_slabs_by_continuity(bx_graph, octahedra_info, atom_positions)
 
-        spacers = []
-        processed_indices = set()
-        for node, data in self._graph.nodes(data=True):
-            if data.get('node_type') == 'atom' and data.get('is_spacer'):
-                atom_idx = data.get('vasp_index')
-                if atom_idx in processed_indices:
-                    continue
-                spacer_indices = data.get('spacer_indices', [atom_idx])
-                processed_indices.update(spacer_indices)
-
-                spacer_atoms = Atoms(
-                    symbols=[self.cell[i].symbol for i in spacer_indices],
-                    positions=[self.cell[i].position for i in spacer_indices],
-                )
-                spacer_atoms.info['original_indices'] = spacer_indices
-                spacer_atoms.info['spacer_type'] = data.get('spacer_type')
-                spacers.append(spacer_atoms)
+        # Get spacers from Molecule nodes (without calling public API to avoid circular dependency)
+        spacers = self._get_spacers_internal()
 
         return _infer_structure_type_from_graph(
             slab_info,
@@ -367,6 +284,36 @@ class q2D_analyzer:
             bx_graph,
             np.array(self.cell.get_cell()),
         )
+    
+    def _get_spacers_internal(self) -> List[Atoms]:
+        """Internal method to get spacers without analyzed check."""
+        spacers = []
+
+        # Query Molecule nodes with molecule_type='spacer'
+        for node, data in self._graph.nodes(data=True):
+            if data.get('node_type') == 'molecule' and data.get('molecule_type') == 'spacer':
+                # Get atoms in this molecule via CONTAINS edges
+                atom_indices = []
+                for neighbor in self._graph.neighbors(node):
+                    edge_data = self._graph.get_edge_data(node, neighbor)
+                    if edge_data and edge_data.get('edge_type') == 'contains':
+                        neighbor_data = self._graph.nodes.get(neighbor, {})
+                        if neighbor_data.get('node_type') == 'atom':
+                            atom_idx = neighbor_data.get('vasp_index')
+                            if atom_idx is not None:
+                                atom_indices.append(atom_idx)
+                
+                if atom_indices:
+                    spacer_atoms = Atoms(
+                        symbols=[self.cell[i].symbol for i in atom_indices],
+                        positions=[self.cell[i].position for i in atom_indices],
+                    )
+                    spacer_atoms.info['original_indices'] = atom_indices
+                    spacer_atoms.info['spacer_formula'] = data.get('formula')
+                    spacer_atoms.info['template_match'] = data.get('formula')
+                    spacers.append(spacer_atoms)
+
+        return spacers
 
 
 
@@ -398,6 +345,49 @@ class q2D_analyzer:
         
         return self._graph
 
+    def get_structure_metadata(self) -> Dict[str, Any]:
+        """
+        Get structure metadata from the Structure root node.
+        
+        The Structure node contains global properties like chemical formula,
+        cell parameters, and counts of structural components.
+        
+        Returns
+        -------
+        dict
+            Structure metadata containing:
+            - 'formula': Chemical formula (Hill notation)
+            - 'thickness': Number of octahedral layers
+            - 'a', 'b', 'c': Cell lengths in Angstroms
+            - 'alpha', 'beta', 'gamma': Cell angles in degrees
+            - 'layer_count': Number of layers
+            - 'octahedra_count': Number of octahedra
+            - 'molecule_count': Number of molecules (A-sites + spacers)
+            - 'atom_count': Total atoms
+            - 'experiment_name': Experiment identifier (if set)
+            - 'file_path': Source file path (if loaded from file)
+        
+        Examples
+        --------
+        >>> analyzer = q2D_analyzer("structure.vasp")
+        >>> analyzer.analyze()
+        >>> metadata = analyzer.get_structure_metadata()
+        >>> print(f"Formula: {metadata['formula']}")
+        >>> print(f"Cell: a={metadata['a']:.3f}, b={metadata['b']:.3f}, c={metadata['c']:.3f}")
+        """
+        self._ensure_analyzed()
+        from .graph_construction import get_structure_node
+        
+        structure_data = get_structure_node(self._graph)
+        if structure_data is None:
+            structure_data = {}
+        
+        # Add analyzer-level metadata
+        structure_data['experiment_name'] = self.experiment_name
+        structure_data['file_path'] = str(self.file_path) if self.file_path else None
+        
+        return structure_data
+
     def get_octahedra(self) -> List[Dict]:
         """
         Get octahedra information extracted from graph.
@@ -414,21 +404,25 @@ class q2D_analyzer:
             - 'intralayer_atoms': list of intra-layer shared atom indices
         """
         self._ensure_analyzed()
+        from ..detection.cavity_tracing import get_octahedra_data
+        
         octahedra = []
         atom_symbols = self.cell.get_chemical_symbols()
+        
+        # Use the helper function that queries through edges
+        octahedra_data = get_octahedra_data(self._graph)
 
-        for node, data in self._graph.nodes(data=True):
-            if data.get('node_type') == 'octahedron':
-                central_idx = data.get('central_atom')
-                oct_info = {
-                    'id': node,
-                    'central_atom_index': central_idx,
-                    'central_atom_symbol': atom_symbols[central_idx] if central_idx is not None else None,
-                    'terminal_atoms': data.get('terminal_atoms', []),
-                    'interlayer_atoms': data.get('interlayer_atoms', []),
-                    'intralayer_atoms': data.get('intralayer_atoms', []),
-                }
-                octahedra.append(oct_info)
+        for oct_idx, data in octahedra_data.items():
+            central_idx = data.get('central_atom')
+            oct_info = {
+                'id': data['node_id'],
+                'central_atom_index': central_idx,
+                'central_atom_symbol': atom_symbols[central_idx] if central_idx is not None else None,
+                'terminal_atoms': data.get('terminal_atoms', []),
+                'interlayer_atoms': data.get('interlayer_atoms', []),
+                'intralayer_atoms': data.get('intralayer_atoms', []),
+            }
+            octahedra.append(oct_info)
 
         return octahedra
 
@@ -440,7 +434,6 @@ class q2D_analyzer:
         -------
         dict
             Layer ID -> layer info dict containing:
-            - 'position': 'surface' or 'central'
             - 'octahedra': list of octahedra IDs in this layer
             - 'octahedra_count': number of octahedra
             - 'z_coord': z-coordinate of layer
@@ -452,19 +445,18 @@ class q2D_analyzer:
             if data.get('node_type') == 'layer':
                 layer_id = node.replace('layer_', '')
 
+                # Query octahedra via CONTAINS edges
                 layer_octahedra = []
                 for neighbor in self._graph.neighbors(node):
-                    if neighbor.startswith('octahedron_'):
-                        layer_octahedra.append(neighbor)
+                    edge_data = self._graph.get_edge_data(node, neighbor)
+                    if edge_data and edge_data.get('edge_type') == 'contains':
+                        if neighbor.startswith('octahedron_'):
+                            layer_octahedra.append(neighbor)
 
                 layers[layer_id] = {
-                    'position': data.get('position'),
                     'octahedra': layer_octahedra,
                     'octahedra_count': len(layer_octahedra),
                     'z_coord': data.get('z_coord'),
-                    'intralayer_x_atoms': data.get('intralayer_x_atoms', []),
-                    'interlayer_x_atoms_above': data.get('interlayer_x_atoms_above', []),
-                    'interlayer_x_atoms_below': data.get('interlayer_x_atoms_below', []),
                 }
 
         return layers
@@ -479,33 +471,10 @@ class q2D_analyzer:
             Each Atoms object represents a spacer molecule.
             The 'info' dict contains:
             - 'original_indices': atom indices in the original structure
-            - 'spacer_type': 'dj' or 'rp'
             - 'spacer_formula': chemical formula
         """
         self._ensure_analyzed()
-        spacers = []
-        processed_indices = set()
-
-        for node, data in self._graph.nodes(data=True):
-            if data.get('node_type') == 'atom' and data.get('is_spacer'):
-                atom_idx = data.get('vasp_index')
-                if atom_idx in processed_indices:
-                    continue
-
-                spacer_indices = data.get('spacer_indices', [atom_idx])
-                processed_indices.update(spacer_indices)
-
-                spacer_atoms = Atoms(
-                    symbols=[self.cell[i].symbol for i in spacer_indices],
-                    positions=[self.cell[i].position for i in spacer_indices],
-                )
-                spacer_atoms.info['original_indices'] = spacer_indices
-                spacer_atoms.info['spacer_type'] = data.get('spacer_type')
-                spacer_atoms.info['template_match'] = data.get('spacer_formula')
-
-                spacers.append(spacer_atoms)
-
-        return spacers
+        return self._get_spacers_internal()
 
     def get_a_sites(self) -> List[Dict]:
         """
@@ -515,38 +484,198 @@ class q2D_analyzer:
         -------
         list of dict
             Each dict contains:
-            - 'atom_index': index in original structure
+            - 'atom_index': first atom index in molecule
             - 'symbol': element symbol or formula
-            - 'position': cartesian coordinates
+            - 'position': cartesian coordinates of first atom
             - 'is_molecular': True if part of molecular A-site
             - 'molecule_atoms': indices of all atoms in molecular A-site
             - 'formula': chemical formula
         """
         self._ensure_analyzed()
         a_sites = []
-        processed_indices = set()
         atom_positions = self.cell.get_positions()
 
+        # Query Molecule nodes with molecule_type='a_site'
         for node, data in self._graph.nodes(data=True):
-            if data.get('node_type') == 'atom' and data.get('is_a_site'):
-                atom_idx = data.get('vasp_index')
-                if atom_idx in processed_indices:
-                    continue
-
-                a_site_indices = data.get('a_site_indices', [atom_idx])
-                processed_indices.update(a_site_indices)
-
-                formula = data.get('a_site_formula', self.cell[atom_idx].symbol)
-                a_sites.append({
-                    'atom_index': atom_idx,
-                    'symbol': formula,
-                    'position': atom_positions[atom_idx].tolist(),
-                    'is_molecular': len(a_site_indices) > 1,
-                    'molecule_atoms': a_site_indices,
-                    'formula': formula,
-                })
+            if data.get('node_type') == 'molecule' and data.get('molecule_type') == 'a_site':
+                # Get atoms in this molecule via CONTAINS edges
+                atom_indices = []
+                for neighbor in self._graph.neighbors(node):
+                    edge_data = self._graph.get_edge_data(node, neighbor)
+                    if edge_data and edge_data.get('edge_type') == 'contains':
+                        neighbor_data = self._graph.nodes.get(neighbor, {})
+                        if neighbor_data.get('node_type') == 'atom':
+                            atom_idx = neighbor_data.get('vasp_index')
+                            if atom_idx is not None:
+                                atom_indices.append(atom_idx)
+                
+                if atom_indices:
+                    first_atom_idx = atom_indices[0]
+                    formula = data.get('formula', self.cell[first_atom_idx].symbol)
+                    a_sites.append({
+                        'atom_index': first_atom_idx,
+                        'symbol': formula,
+                        'position': atom_positions[first_atom_idx].tolist(),
+                        'is_molecular': len(atom_indices) > 1,
+                        'molecule_atoms': atom_indices,
+                        'formula': formula,
+                    })
 
         return a_sites
+
+    def get_cavities(self) -> 'CavityCollection':
+        """
+        Get all detected cavities in the structure as a CavityCollection.
+
+        A cavity is the cuboctahedral cage formed by corner-sharing octahedra
+        that typically contains an A-site cation in perovskite structures.
+
+        Returns
+        -------
+        CavityCollection
+            Collection of Cavity objects with convenient methods for filtering and bulk operations.
+            
+            Each Cavity object has attributes:
+            - `id`: cavity identifier (e.g., 'cavity_0')
+            - `b_atom_indices`: B-site atom indices forming the cavity
+            - `x_atom_indices`: X-site (halide) atom indices
+            - `a_site_indices`: A-site (cation) atom indices
+            - `center_position`: 3D coordinates of cavity center
+            - `contains_a_site`: bool, True if cavity contains A-site
+            - `pbc_coordinates`: dict of PBC-unwrapped positions
+            - `subgraph`: NetworkX subgraph with detailed cavity structure
+            - `hull_data`: Cached convex hull data if computed
+            
+            Methods:
+            - `to_atoms()`: Convert all cavities to list of ASE Atoms objects
+            - `filter(**kwargs)`: Filter cavities by attributes
+
+        Examples
+        --------
+        >>> analyzer = q2D_analyzer("structure.vasp")
+        >>> analyzer.analyze()
+        >>> cavities = analyzer.get_cavities()
+        >>> print(f"Found {len(cavities)} cavities")
+        >>>
+        >>> # Convert all to atoms and save
+        >>> atoms_list = cavities.to_atoms()
+        >>> for i, cavity_atoms in enumerate(atoms_list):
+        ...     from ase.io import write
+        ...     write(f'cavity_{i}.vasp', cavity_atoms)
+        >>>
+        >>> # Filter cavities with A-sites
+        >>> with_a_sites = cavities.filter(contains_a_site=True)
+        >>> print(f"Cavities with A-sites: {len(with_a_sites)}")
+        >>>
+        >>> # Work with individual cavities
+        >>> for cavity in cavities:
+        ...     print(f"{cavity.id}: {len(cavity.b_atom_indices)} B atoms")
+        ...     if cavity.hull_data:
+        ...         print(f"  Volume: {cavity.get_volume():.2f} Ų")
+        """
+        from ..detection.cavity_class import CavityCollection
+        
+        self._ensure_analyzed()
+        
+        # Detect cavities on demand using the cavity_tracing module
+        from ..detection.cavity_tracing import _detect_all_cavities
+        
+        try:
+            # Get neighbor_indices from graph (stored during analysis)
+            neighbor_indices = self._graph.graph.get('neighbor_indices', [])
+            
+            # Detect cavities using stored analysis data
+            cavities = _detect_all_cavities(
+                self._graph,
+                self._atom_positions,
+                self._atom_symbols,
+                self._cell,
+                neighbor_indices
+            )
+            return CavityCollection(cavities)
+        except Exception as e:
+            # If cavity detection fails, return empty collection
+            import sys
+            print(f"WARNING: Cavity detection failed: {e}", file=sys.stderr)
+            return CavityCollection([])
+
+    def get_cavity_for_a_site(self, atom_idx: int) -> Optional[Dict]:
+        """
+        Get the cavity containing a specific A-site atom.
+
+        Parameters
+        ----------
+        atom_idx : int
+            Index of the A-site atom in the structure
+
+        Returns
+        -------
+        dict or None
+            Cavity information dict if found, None otherwise.
+            See get_cavities() for dict structure.
+
+        Examples
+        --------
+        >>> analyzer = q2D_analyzer("structure.vasp")
+        >>> analyzer.analyze()
+        >>> a_sites = analyzer.get_a_sites()
+        >>> for a_site in a_sites:
+        ...     cavity = analyzer.get_cavity_for_a_site(a_site['atom_index'])
+        ...     if cavity:
+        ...         print(f"A-site at {a_site['atom_index']} is in {cavity['id']}")
+        """
+        self._ensure_analyzed()
+
+        # Look for cavity containing this atom via graph edges
+        atom_node = f'atom_{atom_idx}'
+        if not self._graph.has_node(atom_node):
+            return None
+
+        for neighbor in self._graph.neighbors(atom_node):
+            if neighbor.startswith('cavity_'):
+                edge_data = self._graph[atom_node][neighbor]
+                if edge_data.get('edge_type') == 'is_contained_in':
+                    # Found the cavity, get its full data
+                    data = self._graph.nodes[neighbor]
+                    return {
+                        'id': neighbor,
+                        'upper_octahedra': data.get('upper_octahedra', []),
+                        'lower_octahedra': data.get('lower_octahedra', []),
+                        'equatorial_x_atoms': data.get('equatorial_x_atoms', []),
+                        'axial_x_atoms': data.get('axial_x_atoms', []),
+                        'chirality': data.get('chirality'),
+                        'center_position': data.get('center_position'),
+                        'layer_pair': data.get('layer_pair'),
+                        'contains_a_site': data.get('contains_a_site', False),
+                        'a_site_indices': data.get('a_site_indices', []),
+                        'a_site_type': data.get('a_site_type'),
+                        'is_pbc_wrapped': data.get('is_pbc_wrapped', False),
+                        'is_single_layer': data.get('is_single_layer', False),
+                        'hull_data': data.get('hull_data'),
+                    }
+
+        # Fallback: search all cavities for this atom index
+        for node, data in self._graph.nodes(data=True):
+            if data.get('node_type') == 'cavity':
+                if atom_idx in data.get('a_site_indices', []):
+                    return {
+                        'id': node,
+                        'upper_octahedra': data.get('upper_octahedra', []),
+                        'lower_octahedra': data.get('lower_octahedra', []),
+                        'equatorial_x_atoms': data.get('equatorial_x_atoms', []),
+                        'axial_x_atoms': data.get('axial_x_atoms', []),
+                        'chirality': data.get('chirality'),
+                        'center_position': data.get('center_position'),
+                        'layer_pair': data.get('layer_pair'),
+                        'contains_a_site': data.get('contains_a_site', False),
+                        'a_site_indices': data.get('a_site_indices', []),
+                        'a_site_type': data.get('a_site_type'),
+                        'is_pbc_wrapped': data.get('is_pbc_wrapped', False),
+                        'is_single_layer': data.get('is_single_layer', False),
+                        'hull_data': data.get('hull_data'),
+                    }
+
+        return None
 
     def get_glazer_pattern(
         self, 
@@ -713,7 +842,7 @@ class q2D_analyzer:
         >>> # Graph queries with method chaining
         >>> result = (analyzer.get_characterization()
         ...          .octahedra()
-        ...          .neighbors(edge_type='shares_atoms')
+        ...          .neighbors(edge_type='contains')
         ...          .to_list())
         """
         self._ensure_analyzed()
@@ -1196,8 +1325,10 @@ class q2D_analyzer:
         atom_symbols = self.cell.get_chemical_symbols()
         x_ions = set()
         for oct in octahedra:
-            for idx in oct['terminal_atoms'] + oct['interlayer_atoms'] + oct['intralayer_atoms']:
-                x_ions.add(atom_symbols[idx])
+            all_ligands = oct['terminal_atoms'] + oct['interlayer_atoms'] + oct['intralayer_atoms']
+            for idx in all_ligands:
+                if idx < len(atom_symbols):
+                    x_ions.add(atom_symbols[idx])
         x_ions = list(x_ions)
 
         a_sites = self.get_a_sites()
@@ -1295,9 +1426,6 @@ class q2D_analyzer:
                 'b_element': str(b_element),
                 'color': str(color),
                 'central_atom_index': to_native(oct.get('central_atom_index')),
-                'terminal_atoms': to_native(oct.get('terminal_atoms', [])),
-                'interlayer_atoms': to_native(oct.get('interlayer_atoms', [])),
-                'intralayer_atoms': to_native(oct.get('intralayer_atoms', [])),
             })
             node_counter += 1
 
@@ -1312,16 +1440,56 @@ class q2D_analyzer:
                 'type': 'layer',
                 'label': f"Layer-{layer_id}",
                 'layer_id': str(layer_id),
-                'position': str(layer_info.get('position', 'unknown')),
                 'z_coord': to_native(layer_info.get('z_coord')),
                 'octahedra': to_native(layer_info.get('octahedra', [])),
                 'octahedra_count': int(layer_info.get('octahedra_count', 0)),
-                'intralayer_x_atoms': to_native(layer_info.get('intralayer_x_atoms', [])),
-                'interlayer_x_atoms_above': to_native(layer_info.get('interlayer_x_atoms_above', [])),
-                'interlayer_x_atoms_below': to_native(layer_info.get('interlayer_x_atoms_below', [])),
                 'color': '#ff79c6'
             })
             node_counter += 1
+        
+        # Add molecule nodes
+        for node, data in self._graph.nodes(data=True):
+            if data.get('node_type') == 'molecule':
+                node_id_map[node] = node_counter
+                mol_type = data.get('molecule_type', 'unknown')
+                formula = data.get('formula', 'Unknown')
+                color = '#50fa7b' if mol_type == 'a_site' else '#f1fa8c'
+                
+                nodes.append({
+                    'id': int(node_counter),
+                    'original_id': str(node),
+                    'type': 'molecule',
+                    'label': f"{mol_type}: {formula}",
+                    'molecule_type': str(mol_type),
+                    'formula': str(formula),
+                    'color': str(color),
+                })
+                node_counter += 1
+        
+        # Add Structure root node
+        for node, data in self._graph.nodes(data=True):
+            if data.get('node_type') == 'structure':
+                node_id_map[node] = node_counter
+                nodes.append({
+                    'id': int(node_counter),
+                    'original_id': str(node),
+                    'type': 'structure',
+                    'label': f"Structure: {data.get('formula', 'Unknown')}",
+                    'formula': str(data.get('formula', '')),
+                    'thickness': int(data.get('thickness', 0)),
+                    'a': to_native(data.get('a')),
+                    'b': to_native(data.get('b')),
+                    'c': to_native(data.get('c')),
+                    'alpha': to_native(data.get('alpha')),
+                    'beta': to_native(data.get('beta')),
+                    'gamma': to_native(data.get('gamma')),
+                    'layer_count': int(data.get('layer_count', 0)),
+                    'octahedra_count': int(data.get('octahedra_count', 0)),
+                    'molecule_count': int(data.get('molecule_count', 0)),
+                    'atom_count': int(data.get('atom_count', 0)),
+                    'color': '#bd93f9',  # Purple for structure node
+                })
+                node_counter += 1
 
         edges = []
         for source, target in self._graph.edges():
@@ -1365,18 +1533,10 @@ class q2D_analyzer:
                 'formula': str(a_site.get('formula', a_site.get('symbol', '')))
             })
 
+        # Layer connections are now derived from shared atoms between layers
+        # We keep this section for backward compatibility but it will be empty
+        # since interlayer connections are now queryable via graph traversal
         layer_edges = []
-        layer_ids = sorted([int(k) for k in layers.keys()])
-        for i in range(len(layer_ids) - 1):
-            layer_a = str(layer_ids[i])
-            layer_b = str(layer_ids[i + 1])
-            connecting_x_atoms = layers.get(layer_a, {}).get('interlayer_x_atoms_above', [])
-            if connecting_x_atoms:
-                layer_edges.append({
-                    'from_layer': int(layer_ids[i]),
-                    'to_layer': int(layer_ids[i + 1]),
-                    'via_x_atoms': to_native(connecting_x_atoms),
-                })
 
         graph_data = {
             'metadata': {
@@ -1403,3 +1563,4 @@ class q2D_analyzer:
             json.dump(graph_data, f, indent=2)
 
         return os.path.abspath(output_path)
+    

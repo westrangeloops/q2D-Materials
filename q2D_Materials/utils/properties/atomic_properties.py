@@ -1491,3 +1491,215 @@ def align_fragment_geometry_aware(
             pass  # Skip wrapping if cell is singular
     
     return positions
+
+
+# ============================================================================
+# Unified Bond Detection
+# ============================================================================
+
+def detect_bonds(
+    symbols: List[str],
+    positions: np.ndarray,
+    tolerance: float = 0.45,
+    cell: Optional[np.ndarray] = None,
+    pbc: Union[bool, List[bool], None] = None,
+    enforce_hydrogen_rules: bool = True,
+    estimate_bond_orders: bool = False,
+) -> List[Tuple[int, int, float, int]]:
+    """
+    Detect covalent bonds using atomic properties.
+    
+    This is the unified bond detection function that consolidates logic
+    from graph_converter and pymatgen_utils.
+    
+    Parameters
+    ----------
+    symbols : list of str
+        Atomic symbols
+    positions : np.ndarray
+        Atomic positions (N, 3)
+    tolerance : float, default=0.45
+        Additional tolerance beyond sum of covalent radii (in Angstroms)
+    cell : np.ndarray, optional
+        3x3 unit cell matrix for PBC-aware distance calculations
+    pbc : bool or list of bool, optional
+        Periodic boundary conditions (True for all, or [x, y, z])
+    enforce_hydrogen_rules : bool, default=True
+        If True, hydrogen atoms can only have one bond (shortest/closest)
+    estimate_bond_orders : bool, default=False
+        If True, estimate bond order (1, 2, 3) from distance. Otherwise all bonds are order 1.
+    
+    Returns
+    -------
+    list of tuple (int, int, float, int)
+        Each tuple contains (atom_i, atom_j, bond_length, bond_order)
+    
+    Examples
+    --------
+    >>> import numpy as np
+    >>> symbols = ['C', 'C', 'H', 'H', 'H', 'H']
+    >>> positions = np.array([[0.0, 0.0, 0.0], [1.54, 0.0, 0.0], ...])
+    >>> bonds = detect_bonds(symbols, positions)
+    >>> len(bonds)  # C-C + 4 C-H bonds
+    5
+    """
+    from ..geometry.pbc_distances import calculate_pbc_distances
+    
+    bonds = []
+    n_atoms = len(symbols)
+    
+    # Calculate all pairwise distances
+    for i in range(n_atoms):
+        for j in range(i + 1, n_atoms):
+            # Skip H-H bonds
+            if symbols[i] == 'H' and symbols[j] == 'H':
+                continue
+            
+            # Calculate distance
+            if cell is not None:
+                pbc_arg = True if pbc is None else pbc
+                distance = calculate_pbc_distances(
+                    positions[i],
+                    positions[j:j+1],
+                    cell,
+                    pbc=pbc_arg,
+                    mode='auto'
+                )[0]
+            else:
+                distance = np.linalg.norm(positions[i] - positions[j])
+            
+            # Check if bonded
+            if are_atoms_bonded(distance, symbols[i], symbols[j], tolerance):
+                # Estimate bond order if requested
+                if estimate_bond_orders:
+                    bond_order = estimate_bond_order(distance, symbols[i], symbols[j], tolerance=0.15)
+                else:
+                    bond_order = 1
+                
+                bonds.append((i, j, distance, bond_order))
+    
+    # Apply hydrogen bonding rules if requested
+    if enforce_hydrogen_rules:
+        bonds = _enforce_hydrogen_single_bond(bonds, symbols)
+    
+    return bonds
+
+
+def _enforce_hydrogen_single_bond(
+    bonds: List[Tuple[int, int, float, int]],
+    symbols: List[str]
+) -> List[Tuple[int, int, float, int]]:
+    """
+    Ensure H atoms only have one bond (keep shortest).
+    
+    Parameters
+    ----------
+    bonds : list of tuple
+        List of (atom_i, atom_j, distance, bond_order)
+    symbols : list of str
+        Atomic symbols
+    
+    Returns
+    -------
+    list of tuple
+        Filtered bonds with H constraint enforced
+    """
+    h_bonds_by_atom = {}
+    non_h_bonds = []
+    
+    for i, j, dist, order in bonds:
+        if symbols[i] == 'H':
+            if i not in h_bonds_by_atom:
+                h_bonds_by_atom[i] = []
+            h_bonds_by_atom[i].append((i, j, dist, order))
+        elif symbols[j] == 'H':
+            if j not in h_bonds_by_atom:
+                h_bonds_by_atom[j] = []
+            h_bonds_by_atom[j].append((i, j, dist, order))
+        else:
+            # Neither atom is H, keep as-is
+            non_h_bonds.append((i, j, dist, order))
+    
+    # For each H atom, keep only the shortest bond
+    valid_h_bonds = []
+    for h_idx, h_bond_list in h_bonds_by_atom.items():
+        if h_bond_list:
+            # Sort by distance (shortest first)
+            h_bond_list.sort(key=lambda x: x[2])
+            # Keep only the shortest bond
+            valid_h_bonds.append(h_bond_list[0])
+    
+    # Combine non-H bonds with validated H bonds
+    return non_h_bonds + valid_h_bonds
+
+
+def build_bond_graph(
+    symbols: List[str],
+    positions: np.ndarray,
+    tolerance: float = 0.45,
+    cell: Optional[np.ndarray] = None,
+    pbc: Union[bool, List[bool], None] = None,
+    enforce_hydrogen_rules: bool = True,
+    estimate_bond_orders: bool = False,
+) -> nx.Graph:
+    """
+    Build NetworkX graph from atomic structure using bond detection.
+    
+    This is a convenience function that wraps detect_bonds() and builds a graph.
+    
+    Parameters
+    ----------
+    symbols : list of str
+        Atomic symbols
+    positions : np.ndarray
+        Atomic positions (N, 3)
+    tolerance : float, default=0.45
+        Bond detection tolerance
+    cell : np.ndarray, optional
+        Unit cell matrix
+    pbc : bool or list of bool, optional
+        Periodic boundary conditions
+    enforce_hydrogen_rules : bool, default=True
+        Enforce H can only bond once
+    estimate_bond_orders : bool, default=False
+        Estimate bond orders from distances
+    
+    Returns
+    -------
+    nx.Graph
+        Graph with nodes as atom indices and edges as bonds.
+        Node attributes: 'symbol', 'position'
+        Edge attributes: 'distance', 'bond_order'
+    
+    Examples
+    --------
+    >>> import numpy as np
+    >>> symbols = ['C', 'H', 'H', 'H', 'H']
+    >>> positions = np.array([[0, 0, 0], [1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0]])
+    >>> G = build_bond_graph(symbols, positions)
+    >>> G.number_of_nodes()
+    5
+    >>> G.number_of_edges()
+    4
+    """
+    G = nx.Graph()
+    
+    # Add nodes
+    for i, symbol in enumerate(symbols):
+        G.add_node(i, symbol=symbol, position=positions[i])
+    
+    # Detect and add bonds
+    bonds = detect_bonds(
+        symbols,
+        positions,
+        tolerance=tolerance,
+        cell=cell,
+        pbc=pbc,
+        enforce_hydrogen_rules=enforce_hydrogen_rules,
+        estimate_bond_orders=estimate_bond_orders,
+    )
+    
+    for i, j, dist, order in bonds:
+        G.add_edge(i, j, distance=dist, bond_order=order)
+    
+    return G

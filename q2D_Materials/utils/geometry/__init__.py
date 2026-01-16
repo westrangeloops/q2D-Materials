@@ -1,5 +1,16 @@
 """Geometric utilities for crystal structures."""
 
+# New unified distance calculation API
+from .pbc_distances import (
+    calculate_pbc_distances,
+    find_nearest_neighbors,
+    distance_matrix_pbc,
+    calculate_xy_pbc_distances,
+    calculate_minimum_image_distances,
+    calculate_extended_pbc_distances,
+)
+
+# Legacy distance functions (will be deprecated)
 from .geometry import _calculate_distances
 from .structural_utils import (
     get_cart_from_frac,
@@ -30,6 +41,14 @@ from .structural_constants import (
 )
 
 __all__ = [
+    # New unified API (recommended)
+    'calculate_pbc_distances',
+    'find_nearest_neighbors',
+    'distance_matrix_pbc',
+    'calculate_xy_pbc_distances',
+    'calculate_minimum_image_distances',
+    'calculate_extended_pbc_distances',
+    # Legacy functions (backward compatibility)
     '_calculate_distances',
     'get_cart_from_frac',
     'get_frac_from_cart',
@@ -41,6 +60,7 @@ __all__ = [
     'distance_matrix_ase',
     'distance_matrix_ase_replace',
     'distance_matrix_handler',
+    # Constants
     'DEFAULT_FITTING_TOLERANCE',
     'DEFAULT_MATCH_TOLERANCE',
     'DEFAULT_BB_SEARCH_RADIUS',

@@ -1586,6 +1586,294 @@ if MATPLOTLIB_AVAILABLE:
 else:
     print("Matplotlib not available; skipping distortion plots\n")
 
+# -----------------------------------------------------------------------------
+# Cavity Visualization
+# -----------------------------------------------------------------------------
+if MATPLOTLIB_AVAILABLE:
+    print("\n" + "="*70)
+    print("Creating Cavity Visualization...")
+    print("="*70)
+    
+    try:
+        from q2D_Materials.analyzer import q2D_analyzer
+        from q2D_Materials.analyzer.detection.cavity_tracing import (
+            calculate_cavity_deformation,
+            calculate_cavity_volume,
+        )
+        from mpl_toolkits.mplot3d import Axes3D
+        from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+        
+        # Create 4x4x2 cubic structure
+        structure = q2d.create_structure(
+            A_ions='MA',
+            B_ions='Pb',
+            X_ions='I',
+            structure_type='bulk',
+            thickness=2,
+            xy_expansion=(4, 4),
+        )
+        
+        # Save temporarily and analyze
+        import tempfile
+        import os
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.vasp', delete=False) as tmp:
+            tmp_path = tmp.name
+            write(tmp_path, structure)
+        
+        analyzer = None
+        try:
+            analyzer = q2D_analyzer(tmp_path)
+            analyzer.analyze()
+        finally:
+            # Clean up temporary file
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+        
+        if analyzer is None:
+            raise Exception("Failed to create analyzer")
+        
+        # Get cavities
+        cavities = analyzer.get_cavities()
+        atom_positions = analyzer.cell.get_positions()
+        atom_symbols = analyzer.cell.get_chemical_symbols()
+        cell = analyzer.cell.get_cell()
+        
+        # Build octahedra data
+        octahedra_data = {}
+        for node, data in analyzer._graph.nodes(data=True):
+            if data.get('node_type') == 'octahedron':
+                oct_idx = int(node.replace('octahedron_', ''))
+                octahedra_data[oct_idx] = {
+                    'central_atom': data.get('central_atom'),
+                    'terminal_atoms': data.get('terminal_atoms', []),
+                    'interlayer_atoms': data.get('interlayer_atoms', []),
+                    'intralayer_atoms': data.get('intralayer_atoms', []),
+                }
+        
+        # Find a cavity that's fully inside the cell (not PBC-wrapped)
+        selected_cavity = None
+        for cavity in cavities:
+            if not cavity.get('is_pbc_wrapped', True):
+                selected_cavity = cavity
+                break
+        
+        # If all are wrapped, use the first one
+        if selected_cavity is None and cavities:
+            selected_cavity = cavities[0]
+        
+        if selected_cavity:
+            # Get all atoms in the cavity
+            upper_octs = selected_cavity.get('upper_octahedra', [])
+            lower_octs = selected_cavity.get('lower_octahedra', [])
+            all_octs = upper_octs + lower_octs
+            
+            # Collect cavity X atoms
+            cavity_x_atoms = set()
+            cavity_b_atoms = set()
+            cavity_a_atoms = set()
+            
+            for oct_idx in all_octs:
+                if oct_idx in octahedra_data:
+                    oct_data = octahedra_data[oct_idx]
+                    # B-site
+                    if oct_data.get('central_atom') is not None:
+                        cavity_b_atoms.add(oct_data['central_atom'])
+                    # X atoms
+                    cavity_x_atoms.update(oct_data.get('terminal_atoms', []))
+                    cavity_x_atoms.update(oct_data.get('interlayer_atoms', []))
+                    cavity_x_atoms.update(oct_data.get('intralayer_atoms', []))
+            
+            # Get A-site atoms in this cavity
+            a_site_indices = selected_cavity.get('a_site_indices', [])
+            cavity_a_atoms.update(a_site_indices)
+            
+            # Create figure with 3D subplot
+            fig = plt.figure(figsize=(14, 10))
+            ax = fig.add_subplot(111, projection='3d')
+            
+            # Color scheme
+            x_color = '#ff6b6b'  # Red for X atoms (I)
+            b_color = '#4ecdc4'   # Cyan for B atoms (Pb)
+            a_color = '#ffe66d'   # Yellow for A atoms (MA)
+            other_color = '#95a5a6'  # Gray for other atoms
+            
+            # Plot non-cavity atoms with alpha
+            for i, (pos, symbol) in enumerate(zip(atom_positions, atom_symbols)):
+                if i in cavity_x_atoms or i in cavity_b_atoms or i in cavity_a_atoms:
+                    continue  # Skip cavity atoms (will plot them separately)
+                
+                # Determine color based on element
+                if symbol in ['I', 'Br', 'Cl', 'F']:
+                    color = x_color
+                elif symbol in ['Pb', 'Sn', 'Ge']:
+                    color = b_color
+                elif symbol in ['C', 'N', 'H']:
+                    color = a_color
+                else:
+                    color = other_color
+                
+                ax.scatter(pos[0], pos[1], pos[2], 
+                          c=color, s=30, alpha=0.15, edgecolors='none')
+            
+            # Plot cavity atoms with full opacity
+            # X atoms (cavity walls)
+            for i in cavity_x_atoms:
+                if i < len(atom_positions):
+                    pos = atom_positions[i]
+                    ax.scatter(pos[0], pos[1], pos[2], 
+                              c=x_color, s=200, alpha=1.0, 
+                              edgecolors='black', linewidths=1.5, 
+                              label='Cavity X atoms' if i == list(cavity_x_atoms)[0] else '')
+            
+            # B atoms (octahedra centers)
+            for i in cavity_b_atoms:
+                if i < len(atom_positions):
+                    pos = atom_positions[i]
+                    ax.scatter(pos[0], pos[1], pos[2], 
+                              c=b_color, s=250, alpha=1.0, 
+                              edgecolors='black', linewidths=1.5,
+                              marker='^', label='Cavity B atoms' if i == list(cavity_b_atoms)[0] else '')
+            
+            # A atoms (molecules in cavity)
+            for i in cavity_a_atoms:
+                if i < len(atom_positions):
+                    pos = atom_positions[i]
+                    ax.scatter(pos[0], pos[1], pos[2], 
+                              c=a_color, s=150, alpha=1.0, 
+                              edgecolors='black', linewidths=1.5,
+                              marker='s', label='Cavity A atoms' if i == list(cavity_a_atoms)[0] else '')
+            
+            # Set labels and title
+            ax.set_xlabel('X (Å)', fontsize=12, fontweight='bold')
+            ax.set_ylabel('Y (Å)', fontsize=12, fontweight='bold')
+            ax.set_zlabel('Z (Å)', fontsize=12, fontweight='bold')
+            ax.set_title('Cavity Visualization (4×4×2 Cubic Perovskite)\n' +
+                        f'Cavity with {len(cavity_x_atoms)} X atoms, {len(cavity_b_atoms)} B atoms, {len(cavity_a_atoms)} A atoms',
+                        fontsize=14, fontweight='bold', pad=20)
+            
+            # Set equal aspect ratio
+            max_range = np.array([atom_positions[:, 0].max() - atom_positions[:, 0].min(),
+                                 atom_positions[:, 1].max() - atom_positions[:, 1].min(),
+                                 atom_positions[:, 2].max() - atom_positions[:, 2].min()]).max() / 2.0
+            mid_x = (atom_positions[:, 0].max() + atom_positions[:, 0].min()) * 0.5
+            mid_y = (atom_positions[:, 1].max() + atom_positions[:, 1].min()) * 0.5
+            mid_z = (atom_positions[:, 2].max() + atom_positions[:, 2].min()) * 0.5
+            ax.set_xlim(mid_x - max_range, mid_x + max_range)
+            ax.set_ylim(mid_y - max_range, mid_y + max_range)
+            ax.set_zlim(mid_z - max_range, mid_z + max_range)
+            
+            # Add legend
+            handles, labels = ax.get_legend_handles_labels()
+            # Remove duplicates
+            by_label = dict(zip(labels, handles))
+            ax.legend(by_label.values(), by_label.keys(), 
+                     loc='upper left', fontsize=10, framealpha=0.9)
+            
+            # Set viewing angle
+            ax.view_init(elev=20, azim=45)
+            
+            plt.tight_layout()
+            plt.savefig(IMAGES / "cavity_visualization.png", dpi=300, bbox_inches='tight')
+            plt.close()
+            print("✓ Created cavity_visualization.png")
+            
+            # Print cavity analysis metrics
+            try:
+                deformation = calculate_cavity_deformation(
+                    selected_cavity, octahedra_data, atom_positions, cell
+                )
+                volume = calculate_cavity_volume(
+                    selected_cavity, octahedra_data, atom_positions, cell
+                )
+                print(f"  Cavity metrics:")
+                if deformation.get('symmetry_score') is not None:
+                    print(f"    Symmetry score: {deformation['symmetry_score']:.3f}")
+                if volume > 0:
+                    print(f"    Volume: {volume:.2f} Ų")
+            except Exception as e:
+                print(f"  Could not compute cavity metrics: {e}")
+        else:
+            print("⚠ No cavities found in structure")
+            
+    except Exception as e:
+        print(f"⚠ Could not create cavity visualization: {e}")
+        import traceback
+        traceback.print_exc()
+    
+    print("="*70 + "\n")
+
+# -----------------------------------------------------------------------------
+# Cavity Visualization (Example 22)
+# -----------------------------------------------------------------------------
+print("\n" + "="*70)
+print("Generating Cavity Visualization Examples")
+print("="*70)
+
+from q2D_Materials.analyzer import q2D_analyzer
+
+# Create the same structure as test_graph_expoert.py
+cavity_structure = q2d.create_structure(
+    A_ions="MA",
+    B_ions="Pb",
+    X_ions="I",
+    template="reduced",
+    layer_sequence="DJ",
+    thickness=2,
+    spacer=["[NH3+]CCCC[NH3+]", "[NH3+]C1C=CCC=CC1C"],
+    glazer_angles=[0, 0, 3],
+    glazer_pattern=["0", "0", "+"],
+)
+
+# Analyze structure
+cavity_analyzer = q2D_analyzer(cavity_structure)
+cavity_analyzer.analyze()
+
+# Get cavities using on-demand detection
+cavities = cavity_analyzer.detect_cavities()
+print(f"Found {len(cavities)} cavities")
+
+# Convert all cavities to ASE Atoms objects
+cavity_atoms_list = cavities.to_atoms()
+
+# Save specific cavities as PNG images: cavity_0, cavity_2, cavity_3
+cavity_indices_to_plot = [0, 2, 3]
+
+for cavity_idx in cavity_indices_to_plot:
+    if cavity_idx < len(cavity_atoms_list):
+        cavity_atoms = cavity_atoms_list[cavity_idx]
+        
+        # Get cavity info for filename and title
+        if cavity_idx < len(cavities):
+            cavity = cavities[cavity_idx]
+            cavity_type = cavity.get('cavity_type', 'unknown')
+            b_count = len(cavity.get('b_data_list', []))
+            x_count = len(cavity.get('x_data_list', []))
+            a_count = len(cavity.get('a_site_indices', []))
+            
+            # Determine cavity label
+            if cavity.get('closed', False):
+                cav_label = "A-site"
+            elif cavity_type == 'spacer_dj':
+                cav_label = "DJ Spacer"
+            elif cavity_type == 'spacer_rp':
+                cav_label = "RP Spacer"
+            else:
+                cav_label = "Cavity"
+            
+            filename = f"cavity_{cavity_idx}.png"
+            write(IMAGES / filename, cavity_atoms, 
+                  rotation=rotation_iso, show_unit_cell=0)
+            print(f"✓ Created {filename} ({cav_label}: {b_count}B + {x_count}X + {a_count}A)")
+        else:
+            filename = f"cavity_{cavity_idx}.png"
+            write(IMAGES / filename, cavity_atoms, 
+                  rotation=rotation_iso, show_unit_cell=0)
+            print(f"✓ Created {filename}")
+    else:
+        print(f"⚠ Cavity {cavity_idx} not found (only {len(cavity_atoms_list)} cavities)")
+
+print("="*70 + "\n")
+
 print("\n" + "="*70)
 print("All Example Images Generated Successfully!")
 print("="*70 + "\n")

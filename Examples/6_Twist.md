@@ -46,5 +46,5 @@ bilayer = q2d.twist(
 
 Regenerate the frames:
 ```bash
-nix develop -c python3 Examples/plot.py
+python3 Examples/plot.py
 ```

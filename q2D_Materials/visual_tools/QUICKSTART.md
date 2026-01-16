@@ -14,7 +14,7 @@ The backend now serves the HTML file directly, so you don't need a separate HTTP
 ## Using Nix
 
 ```bash
-nix develop -c python3 q2D_Materials/visual_tools/backend.py
+python3 q2D_Materials/visual_tools/backend.py
 ```
 
 Then open **`http://localhost:8000`** in your browser.

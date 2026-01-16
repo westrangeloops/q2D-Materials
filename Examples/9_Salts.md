@@ -333,6 +333,6 @@ Create your own salt template by defining layers with X-sites and S# anchors:
 
 Regenerate examples:
 ```bash
-nix develop -c python3 Examples/plot.py
+python3 Examples/plot.py
 ```
 

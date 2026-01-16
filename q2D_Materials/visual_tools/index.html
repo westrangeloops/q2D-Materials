@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>q2D Materials - Module Launcher</title>
     <link rel="stylesheet" href="/static/theme.css">
+    <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
     
     <script>
     // Apply theme immediately before page renders
@@ -45,7 +46,7 @@
         }
         .modules-grid {
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
             gap: 25px;
             width: 100%;
             max-width: 1200px;
@@ -215,7 +216,7 @@
                 <div class="module-label">
                     <div class="module-title">Structure Analyzer</div>
                     <div class="module-description">
-                        Visualize and analyze perovskite structures with interactive graph networks
+                        Upload VASP files and visualize perovskite structures with interactive graph networks and cavity analysis
                     </div>
                 </div>
             </div>
@@ -223,6 +224,8 @@
     </div>
 
     <script>
+        let currentNetwork = null;
+        
         function launchModule(modulePath) {
             window.location.href = modulePath;
         }

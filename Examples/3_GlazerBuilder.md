@@ -255,5 +255,5 @@ By comparing the three views, you can see how tilting on different axes becomes 
 
 **Note:** To regenerate all visualizations, run:
 ```bash
-nix develop -c python3 Examples/plot.py
+python3 Examples/plot.py
 ```

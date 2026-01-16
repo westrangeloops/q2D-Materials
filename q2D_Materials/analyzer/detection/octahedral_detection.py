@@ -195,7 +195,23 @@ def classify_atoms_by_topology(neighbor_indices_list):
                 pair_sharing[pair] = []
             pair_sharing[pair].append(atom_idx)
 
-    # Step 3: Identify layer structure from sharing counts
+    # Step 3: Detect 1x1 unit cell case - octahedra share atoms with themselves through PBC
+    # In 1x1 cells, high sharing counts (4-5 atoms) between octahedra are due to
+    # equatorial atoms being shared with self through PBC (only 2 unique equatorial atoms)
+    # Real sharing is only through axial connections (1 atom between layers)
+    
+    # Heuristic: if max sharing is >= 4 and we have few octahedra, likely 1x1 cell
+    is_1x1_cell = False
+    if pair_sharing:
+        sharing_counts = {pair: len(atoms) for pair, atoms in pair_sharing.items()}
+        max_sharing = max(sharing_counts.values())
+        
+        # 1x1 signature: very high sharing count (>=4) due to PBC self-sharing
+        if max_sharing >= 4 and n_octahedra <= 8:  # Small system likely to be 1x1
+            is_1x1_cell = True
+            print(f"  INFO: Detected 1x1 unit cell (max_sharing={max_sharing}, n_oct={n_octahedra})", file=sys.stderr)
+            print(f"  INFO: Ignoring self-shared equatorial atoms, using only axial connections", file=sys.stderr)
+    
     if not pair_sharing:
         # Single octahedron or no sharing - all atoms are terminal
         atom_classification = {int(atom_idx): 'terminal' for atom_idx in atom_to_octahedra}
@@ -208,16 +224,26 @@ def classify_atoms_by_topology(neighbor_indices_list):
 
     # Find the maximum sharing count to distinguish intra-layer from inter-layer
     sharing_counts = {pair: len(atoms) for pair, atoms in pair_sharing.items()}
-    max_sharing = max(sharing_counts.values())
+    max_sharing = max(sharing_counts.values()) if not is_1x1_cell else 1
 
     same_layer_pairs = set()
     inter_layer_pairs = set()
 
-    for pair, count in sharing_counts.items():
-        if count >= max_sharing:
-            same_layer_pairs.add(pair)
-        else:
-            inter_layer_pairs.add(pair)
+    if is_1x1_cell:
+        # For 1x1 cells: only count sharing of 1 atom as inter-layer (axial bridge)
+        # Ignore high sharing counts (4-5) which are equatorial atoms shared with self
+        for pair, count in sharing_counts.items():
+            if count == 1:
+                # Single shared atom = axial interlayer connection
+                inter_layer_pairs.add(pair)
+            # Ignore count >= 2: these are self-shared equatorial atoms through PBC
+    else:
+        # Normal case: use max sharing heuristic
+        for pair, count in sharing_counts.items():
+            if count >= max_sharing:
+                same_layer_pairs.add(pair)
+            else:
+                inter_layer_pairs.add(pair)
 
     # Step 4: Assign layer membership using union-find
     layer_membership = {}
@@ -248,19 +274,46 @@ def classify_atoms_by_topology(neighbor_indices_list):
 
     # Step 5: Classify atoms globally
     atom_classification = {}
-
-    for atom_idx, octahedra in atom_to_octahedra.items():
-        atom_idx = int(atom_idx)
-        if len(octahedra) == 1:
-            atom_classification[atom_idx] = 'terminal'
-        elif len(octahedra) == 2:
-            oct_list = list(octahedra)
-            if layer_membership[oct_list[0]] == layer_membership[oct_list[1]]:
-                atom_classification[atom_idx] = 'equatorial'
+    
+    # For 1x1 cells: identify which atoms are truly shared vs self-shared equatorial
+    if is_1x1_cell:
+        # Collect atoms that are in inter-layer pairs (truly shared axials)
+        truly_shared_atoms = set()
+        for pair in inter_layer_pairs:
+            if pair in pair_sharing:
+                truly_shared_atoms.update(pair_sharing[pair])
+        
+        for atom_idx, octahedra in atom_to_octahedra.items():
+            atom_idx = int(atom_idx)
+            if len(octahedra) == 1:
+                # Belongs to only one octahedron = terminal axial
+                atom_classification[atom_idx] = 'terminal'
+            elif len(octahedra) == 2:
+                oct_list = list(octahedra)
+                # Check if this atom is in the truly shared set (axial bridge)
+                if atom_idx in truly_shared_atoms:
+                    # True inter-layer sharing (1 atom between octahedra)
+                    atom_classification[atom_idx] = 'axial_interlayer'
+                else:
+                    # High-count sharing in 1x1 = equatorial self-shared through PBC
+                    # These are equatorial atoms belonging to same layer (shared with self)
+                    atom_classification[atom_idx] = 'equatorial'
             else:
-                atom_classification[atom_idx] = 'axial_interlayer'
-        else:
-            atom_classification[atom_idx] = 'multi_shared'
+                atom_classification[atom_idx] = 'multi_shared'
+    else:
+        # Normal classification for larger cells
+        for atom_idx, octahedra in atom_to_octahedra.items():
+            atom_idx = int(atom_idx)
+            if len(octahedra) == 1:
+                atom_classification[atom_idx] = 'terminal'
+            elif len(octahedra) == 2:
+                oct_list = list(octahedra)
+                if layer_membership[oct_list[0]] == layer_membership[oct_list[1]]:
+                    atom_classification[atom_idx] = 'equatorial'
+                else:
+                    atom_classification[atom_idx] = 'axial_interlayer'
+            else:
+                atom_classification[atom_idx] = 'multi_shared'
 
     # Step 6: Build per-octahedron geometry dictionaries
     octahedra_geometries = []

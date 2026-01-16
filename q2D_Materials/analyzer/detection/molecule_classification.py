@@ -1,9 +1,59 @@
-"""Molecular component identification and classification.
+"""
+Molecular component identification and classification.
 
-This module identifies organic and atomic molecular components in the structure
-and classifies them based on their position relative to slabs.
+This module provides TWO complementary molecular extraction approaches:
 
-Uses pymatgen's CovalentBondNN for proper covalent bond detection.
+1. **extract_molecular_components()** (analyzer/utils/pymatgen_utils.py):
+   - **Purpose**: Generic graph-based molecular extraction
+   - **Use case**: Extract molecules from any structure type
+   - **Method**: Pure connectivity analysis using covalent bonds
+   - **Key features**:
+     * Works for bulk, surfaces, clusters, any structure
+     * No assumptions about layer structure
+     * Uses unified bond detection from atomic_properties
+   - **When to use**: General-purpose molecular extraction, unknown structure types
+
+2. **_find_molecular_components() + _classify_molecules_by_continuity()** (this file):
+   - **Purpose**: Layer-aware extraction for 2D perovskites
+   - **Use case**: Classify molecules in DJ, RP, monolayer structures
+   - **Method**: Distinguishes spacers vs A-sites by layer position
+   - **Key features**:
+     * Structure-type specific (knows about slabs/layers)
+     * Classifies based on z-position relative to inorganic layers
+     * Handles PBC-connected molecules across boundaries
+   - **When to use**: Classified 2D perovskites (after structure_classification)
+
+Usage Guidelines
+----------------
+
+Use **extract_molecular_components()** when:
+- Working with unknown/unclassified structures
+- Need simple molecular extraction without classification
+- Building molecular graphs for generic analysis
+- Don't care about spacer vs A-site distinction
+
+Use **_classify_molecules_by_continuity()** when:
+- Structure is already classified as DJ/RP/monolayer
+- Need to distinguish spacers from A-site cations
+- Building layer-specific analysis
+- Working with identified slab information
+
+Relationship
+------------
+Both methods use the same underlying bond detection (unified in atomic_properties),
+but differ in how they interpret and classify the resulting molecular components.
+
+Example
+-------
+>>> from q2D_Materials.analyzer.utils.pymatgen_utils import extract_molecular_components
+>>> 
+>>> # Generic extraction (any structure)
+>>> exclude_indices = set(octahedral_atoms)  # Exclude inorganic framework
+>>> molecules = extract_molecular_components(atoms, exclude_indices)
+>>> 
+>>> # For classified 2D perovskites, use the layer-aware classifier
+>>> from q2D_Materials.analyzer.detection.molecule_classification import _classify_molecules_by_continuity
+>>> spacers, a_sites = _classify_molecules_by_continuity(molecules, slab_info, positions, cell)
 """
 
 import numpy as np
@@ -14,6 +64,7 @@ from ase import Atoms
 
 from ...utils.geometry.geometry import _calculate_distances
 from ..utils.pymatgen_utils import build_molecular_graph, extract_molecular_components
+from .cavity_tracing import is_point_in_cavity, get_octahedra_data
 
 
 def _classify_molecules_by_continuity(
@@ -21,6 +72,8 @@ def _classify_molecules_by_continuity(
     slab_info: dict,
     atom_positions: np.ndarray,
     cell: np.ndarray,
+    cavities: list = None,
+    graph: nx.Graph = None,
 ) -> tuple:
     """Classify molecules as spacers or A-sites based on slab continuity.
 
@@ -37,6 +90,10 @@ def _classify_molecules_by_continuity(
         Array of all atom positions
     cell : np.ndarray
         Unit cell matrix
+    cavities : list, optional
+        List of cavity data dictionaries (for geometric containment check)
+    graph : nx.Graph, optional
+        Structural graph (needed for octahedra data if cavities provided)
 
     Returns
     -------
@@ -69,6 +126,10 @@ def _classify_molecules_by_continuity(
 
     z_tolerance = expected_layer_spacing * 0.25
 
+    octahedra_data = None
+    if cavities and graph:
+        octahedra_data = get_octahedra_data(graph)
+
     for mol in molecules:
         original_indices = mol.info.get('original_indices', [])
         if not original_indices:
@@ -76,6 +137,21 @@ def _classify_molecules_by_continuity(
 
         mol_z_coords = [atom_positions[idx][2] for idx in original_indices]
         mol_center_z = np.mean(mol_z_coords)
+        
+        # Check cavity containment if available (strongest evidence for A-site)
+        is_in_cavity = False
+        if cavities and octahedra_data:
+            mol_center = np.mean(atom_positions[original_indices], axis=0)
+            for cavity in cavities:
+                if is_point_in_cavity(mol_center, cavity, octahedra_data, atom_positions, cell):
+                    is_in_cavity = True
+                    break
+        
+        if is_in_cavity:
+            mol.info['classification'] = 'a_site'
+            mol.info['region'] = 'cavity'
+            a_sites.append(mol)
+            continue
 
         is_in_discontinuity = False
         for z_start, z_end in discontinuity_regions:
@@ -227,212 +303,3 @@ def _find_molecular_components(
             molecules.append(mol)
 
     return molecules
-
-def _extract_spacer_molecules(
-    atom_positions: np.ndarray,
-    atom_symbols: list,
-    cell: np.ndarray,
-    atoms_in_octahedra: set,
-    graph: nx.Graph,
-    layers: dict = None,
-    octahedra_info: list = None,
-    shared_atoms: dict = None,
-) -> list:
-    """Extract spacer molecules from atoms not in octahedra.
-
-    Uses pymatgen's CovalentBondNN for proper covalent bond detection.
-    Also detects atomic spacers (like Cs in interlayer regions).
-
-    Parameters
-    ----------
-    atom_positions : np.ndarray
-        Array of atom positions
-    atom_symbols : list
-        List of atomic symbols
-    atoms_in_octahedra : set
-        Set of atom indices that are part of octahedra
-    graph : nx.Graph
-        The structural connectivity graph (used for attachment detection)
-    layers : dict, optional
-        Layer information for slab analysis
-    octahedra_info : list, optional
-        List of octahedra information
-    shared_atoms : dict, optional
-        Shared atoms between octahedra
-
-    Returns
-    -------
-    list of ase.Atoms
-        List of spacer molecules, each as an Atoms object
-    """
-    from .cavity_detection import _analyze_slab_structure, _is_in_interlayer_region
-    from .perovskite_constants import MOLECULAR_A_SITE_PATTERNS
-
-    core_organic_elements = {'C', 'N', 'H', 'O', 'S', 'P'}
-    spacer_molecules = []
-    a_site_molecules = []
-
-    full_atoms = Atoms(
-        symbols=atom_symbols,
-        positions=atom_positions,
-        cell=cell,
-        pbc=True
-    )
-
-    mol_graph = build_molecular_graph(full_atoms, atoms_in_octahedra)
-
-    organic_indices = {
-        i for i, symbol in enumerate(atom_symbols)
-        if i not in atoms_in_octahedra and symbol in core_organic_elements
-    }
-
-    if organic_indices:
-        organic_subgraph = mol_graph.subgraph(organic_indices).copy()
-
-        for component in nx.connected_components(organic_subgraph):
-            component_indices = list(component)
-            mol_positions = atom_positions[component_indices]
-            mol_symbols = [atom_symbols[i] for i in component_indices]
-
-            mol = Atoms(symbols=mol_symbols, positions=mol_positions)
-            mol.info['original_indices'] = component_indices
-
-            attachment_atoms = []
-            attachment_nitrogens = []
-            halide_elements = {'F', 'Cl', 'Br', 'I'}
-
-            for idx in component_indices:
-                atom_node = f'atom_{idx}'
-                if not graph.has_node(atom_node):
-                    continue
-
-                for neighbor in graph.neighbors(atom_node):
-                    if neighbor.startswith('atom_'):
-                        neighbor_idx = int(neighbor.replace('atom_', ''))
-                        if neighbor_idx in atoms_in_octahedra:
-                            attachment_atoms.append(idx)
-                            if atom_symbols[idx] == 'N':
-                                attachment_nitrogens.append(idx)
-                            break
-
-            mol.info['attachment_atoms'] = attachment_atoms
-            mol.info['attachment_nitrogens'] = attachment_nitrogens
-            mol.info['n_attachments'] = len(attachment_nitrogens)
-            mol.info['template_match'] = None
-
-            formula = mol.get_chemical_formula(mode='hill')
-            n_atoms = len(mol)
-            n_attach = len(attachment_nitrogens)
-
-            is_a_site = False
-
-            if formula in MOLECULAR_A_SITE_PATTERNS:
-                mol.info['template_match'] = MOLECULAR_A_SITE_PATTERNS[formula]
-                if n_attach <= 1 and n_atoms <= 10:
-                    is_a_site = True
-
-            if n_attach >= 2:
-                mol.info['spacer_type'] = 'dj'
-            elif n_attach == 1:
-                mol.info['spacer_type'] = 'rp'
-            else:
-                mol.info['spacer_type'] = None
-
-            if is_a_site:
-                mol.info['molecule_type'] = 'a_site'
-                a_site_molecules.append(mol)
-            else:
-                mol.info['molecule_type'] = 'spacer'
-                spacer_molecules.append(mol)
-
-        spacer_molecules = _match_spacers_to_templates(spacer_molecules)
-
-        if a_site_molecules:
-            for mol in a_site_molecules:
-                mol.info['molecule_type'] = 'a_site'
-
-    if layers and octahedra_info and shared_atoms is not None:
-        slab_info = _analyze_slab_structure(
-            layers, octahedra_info, shared_atoms, atom_positions
-        )
-        terminal_octahedra = slab_info.get('terminal_octahedra', set())
-        z_levels = slab_info.get('z_levels', [])
-
-        accounted_atoms = set(atoms_in_octahedra)
-        for mol in spacer_molecules + a_site_molecules:
-            accounted_atoms.update(mol.info.get('original_indices', []))
-
-        a_site_elements = {'Cs', 'Rb', 'K', 'Na', 'Li', 'Ba', 'Sr', 'Ca'}
-
-        for i, symbol in enumerate(atom_symbols):
-            if i in accounted_atoms:
-                continue
-
-            if symbol not in a_site_elements:
-                continue
-
-            is_interlayer = _is_in_interlayer_region(
-                atom_positions[i], octahedra_info, atom_positions,
-                terminal_octahedra, cell, z_levels
-            )
-
-            if is_interlayer:
-                atomic_spacer = Atoms(symbols=[symbol], positions=[atom_positions[i]])
-                atomic_spacer.info['original_indices'] = [i]
-                atomic_spacer.info['molecule_type'] = 'atomic_spacer'
-                atomic_spacer.info['spacer_type'] = 'dj'
-                atomic_spacer.info['n_attachments'] = 0
-                atomic_spacer.info['template_match'] = symbol
-                spacer_molecules.append(atomic_spacer)
-
-    return spacer_molecules
-
-
-
-def _match_spacers_to_templates(spacers: list) -> list:
-    """Match spacer molecules against known templates.
-
-    Parameters
-    ----------
-    spacers : list of ase.Atoms
-        List of spacer molecules
-
-    Returns
-    -------
-    list of ase.Atoms
-        Same spacers with 'template_match' info populated if matched
-    """
-    known_templates = {
-        'CH6N': 'MA',
-        'CH6N2': 'FA',
-        'C2H8N': 'EA',
-        'C3H10N': 'PA',
-        'C4H12N': 'BA',
-        'C6H16N': 'HA',
-        'C8H20N': 'OA',
-        'C4H12N2': 'BDA',
-        'C6H8N': 'PEA',
-        'H4N': 'NH4',
-        'H3N': 'NH3',
-    }
-
-    for spacer in spacers:
-        formula = spacer.get_chemical_formula(mode='hill')
-
-        if formula in known_templates:
-            spacer.info['template_match'] = known_templates[formula]
-        else:
-            symbols = spacer.get_chemical_symbols()
-            n_count = symbols.count('N')
-            c_count = symbols.count('C')
-
-            if n_count == 1 and c_count > 0:
-                spacer.info['template_match'] = f'C{c_count}_amine'
-            elif n_count == 2 and c_count > 0:
-                spacer.info['template_match'] = f'C{c_count}_diamine'
-            elif n_count > 0:
-                spacer.info['template_match'] = 'amine_unknown'
-
-    return spacers
-
-

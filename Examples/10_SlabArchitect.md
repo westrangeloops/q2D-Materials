@@ -310,6 +310,6 @@ pattern_arch = q2d.create_structure(
 
 Regenerate examples:
 ```bash
-nix develop -c python3 Examples/plot.py
+python3 Examples/plot.py
 ```
 
