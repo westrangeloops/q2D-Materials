@@ -294,3 +294,17 @@ def extract_bx_bond_vectors(
     
     return bond_vectors, x_positions
 
+
+def normalize_layer_id(layer_id):
+    """Normalize layer ID to string format.
+    
+    Converts integers to strings and removes 'layer_' prefix if present.
+    """
+    if isinstance(layer_id, int):
+        return str(layer_id)
+    if isinstance(layer_id, str):
+        if layer_id.startswith('layer_'):
+            return layer_id.replace('layer_', '')
+        return layer_id
+    return str(layer_id)
+

@@ -10,7 +10,7 @@ graph-based approach to identify:
 - Structure type (bulk, DJ, RP, monolayer)
 """
 
-from typing import Optional, List, Dict, Any, Union, Tuple, Set
+from typing import Optional, List, Dict, Any, Union, Tuple, Set, TYPE_CHECKING
 import numpy as np
 import networkx as nx
 from ase.io import read
@@ -18,8 +18,8 @@ from ase import Atoms
 import os
 
 from .graph_construction import _graph_inorganic_ontology
-from ..detection.octahedral_detection import _count_octahedra, find_shared_atoms
-from ..detection.layer_identification import _identify_layers
+from ..octahedral_processing.octahedral_detection import _count_octahedra, find_shared_atoms
+from .layer_identification import _identify_layers
 from ..characterization.characterization import (
     _detect_glazer_pattern, 
     _calculate_bxb_angles, 
@@ -29,6 +29,9 @@ from ..characterization.characterization import (
     CharacterizationQuery,
 )
 from ...core.structure import q2DStructure
+
+if TYPE_CHECKING:
+    from .layers_wrapper import Layers
 
 
 class q2D_analyzer:
@@ -73,6 +76,8 @@ class q2D_analyzer:
         self._graph: Optional[nx.Graph] = None
         self._structure_type: Optional[str] = None
         self._analyzed: bool = False
+        self._b_x_atoms_cache: Optional[Dict[str, np.ndarray]] = None
+        self._layers: Optional["Layers"] = None
 
         if source is not None:
             self.load(source)
@@ -106,6 +111,8 @@ class q2D_analyzer:
         self._analyzed = False
         self._graph = None
         self._structure_type = None
+        self._b_x_atoms_cache = None
+        self._layers = None
 
         return self
     
@@ -246,34 +253,56 @@ class q2D_analyzer:
         # Structure type inference uses graph patterns
         self._structure_type = self._infer_structure_type_from_graph()
 
+        # Create B/X atom cache during analysis so all functions can access it
+        self._compute_b_x_atoms_cache()
+
         self._analyzed = True
         return self
 
     def _infer_structure_type_from_graph(self) -> str:
         """Infer structure type from graph patterns."""
         from .structure_classification import _infer_structure_type_from_graph
-        from ..characterization.network_analysis import _build_bx_network
-        from ..detection.layer_identification import _identify_slabs_by_continuity
-        from ..detection.octahedral_detection import find_shared_atoms
-        from ..detection.cavity_tracing import get_octahedra_data
+        from .layer_identification import _identify_slabs_by_continuity
+        from ..octahedral_processing.octahedral_detection import find_shared_atoms
 
         atom_positions = self.cell.get_positions()
 
-        # Get octahedra data through the helper function that queries edges
-        octahedra_data = get_octahedra_data(self._graph)
-        
+        # Query octahedra data directly from graph
         octahedra_info = []
         neighbor_indices = []
-        for oct_idx, data in octahedra_data.items():
-            terminal = data.get('terminal_atoms', [])
-            interlayer = data.get('interlayer_atoms', [])
-            intralayer = data.get('intralayer_atoms', [])
-            octahedra_info.append({'id': data['node_id']})
-            neighbor_indices.append(terminal + interlayer + intralayer)
+        for node, data in self._graph.nodes(data=True):
+            if data.get('node_type') == 'octahedron':
+                # Get central atom index from graph
+                central_atom_idx = None
+                for neighbor in self._graph.neighbors(node):
+                    edge_data = self._graph.get_edge_data(node, neighbor)
+                    if edge_data and edge_data.get('edge_type') == 'contains':
+                        if edge_data.get('role') == 'center':
+                            neighbor_data = self._graph.nodes.get(neighbor, {})
+                            if neighbor_data.get('node_type') == 'atom':
+                                central_atom_idx = neighbor_data.get('vasp_index')
+                                break
+                
+                octahedra_info.append({
+                    'id': node,
+                    'central_atom_index': central_atom_idx
+                })
+                
+                # Get ligand atoms from CONTAINS edges
+                ligand_atoms = []
+                for neighbor in self._graph.neighbors(node):
+                    edge_data = self._graph.get_edge_data(node, neighbor)
+                    if edge_data and edge_data.get('edge_type') == 'contains':
+                        if edge_data.get('role') == 'ligand':
+                            neighbor_data = self._graph.nodes.get(neighbor, {})
+                            if neighbor_data.get('node_type') == 'atom':
+                                atom_idx = neighbor_data.get('vasp_index')
+                                if atom_idx is not None:
+                                    ligand_atoms.append(atom_idx)
+                neighbor_indices.append(ligand_atoms)
 
         shared_atoms = find_shared_atoms(neighbor_indices)
-        bx_graph = _build_bx_network(octahedra_info, atom_positions, shared_atoms)
-        slab_info = _identify_slabs_by_continuity(bx_graph, octahedra_info, atom_positions)
+        slab_info = _identify_slabs_by_continuity(octahedra_info, shared_atoms, atom_positions)
 
         # Get spacers from Molecule nodes (without calling public API to avoid circular dependency)
         spacers = self._get_spacers_internal()
@@ -281,17 +310,18 @@ class q2D_analyzer:
         return _infer_structure_type_from_graph(
             slab_info,
             spacers,
-            bx_graph,
             np.array(self.cell.get_cell()),
+            graph=self._graph,
+            octahedra=octahedra_info,
         )
     
     def _get_spacers_internal(self) -> List[Atoms]:
         """Internal method to get spacers without analyzed check."""
         spacers = []
 
-        # Query Molecule nodes with molecule_type='spacer'
+        # Query Spacer nodes
         for node, data in self._graph.nodes(data=True):
-            if data.get('node_type') == 'molecule' and data.get('molecule_type') == 'spacer':
+            if data.get('node_type') == 'spacer':
                 # Get atoms in this molecule via CONTAINS edges
                 atom_indices = []
                 for neighbor in self._graph.neighbors(node):
@@ -304,9 +334,15 @@ class q2D_analyzer:
                                 atom_indices.append(atom_idx)
                 
                 if atom_indices:
+                    # Include cell and pbc from parent structure to enable
+                    # PBC-aware bond detection in downstream graph construction.
+                    # Without this, molecules spanning PBC boundaries will have
+                    # broken connectivity when their graph is built.
                     spacer_atoms = Atoms(
                         symbols=[self.cell[i].symbol for i in atom_indices],
                         positions=[self.cell[i].position for i in atom_indices],
+                        cell=self.cell.get_cell(),
+                        pbc=self.cell.get_pbc(),
                     )
                     spacer_atoms.info['original_indices'] = atom_indices
                     spacer_atoms.info['spacer_formula'] = data.get('formula')
@@ -340,7 +376,12 @@ class q2D_analyzer:
         atom_nodes = [n for n, d in self._graph.nodes(data=True) if d.get('node_type') == 'atom']
         octahedra_nodes = [n for n, d in self._graph.nodes(data=True) if d.get('node_type') == 'octahedron']
         layer_nodes = [n for n in self._graph.nodes() if 'layer' in str(n).lower()]
-        other_nodes = [n for n in self._graph.nodes() if n not in atom_nodes and n not in octahedra_nodes and n not in layer_nodes]
+        
+        # Convert to sets for O(1) membership testing in large graphs
+        atom_nodes_set = set(atom_nodes)
+        octahedra_nodes_set = set(octahedra_nodes)
+        layer_nodes_set = set(layer_nodes)
+        other_nodes = [n for n in self._graph.nodes() if n not in atom_nodes_set and n not in octahedra_nodes_set and n not in layer_nodes_set]
         
         
         return self._graph
@@ -362,7 +403,8 @@ class q2D_analyzer:
             - 'alpha', 'beta', 'gamma': Cell angles in degrees
             - 'layer_count': Number of layers
             - 'octahedra_count': Number of octahedra
-            - 'molecule_count': Number of molecules (A-sites + spacers)
+            - 'a_site_count': Number of A-site nodes
+            - 'spacer_count': Number of spacer nodes
             - 'atom_count': Total atoms
             - 'experiment_name': Experiment identifier (if set)
             - 'file_path': Source file path (if loaded from file)
@@ -388,6 +430,94 @@ class q2D_analyzer:
         
         return structure_data
 
+    def _compute_b_x_atoms_cache(self) -> None:
+        """
+        Compute and cache B-site and X-site atom indices and positions.
+        
+        This method is called during analyze() to pre-compute the cache.
+        B atoms are those that are CONTAINS (role='center') by an octahedron.
+        X atoms are those that are BONDED_TO (role='ligand') by a B atom.
+        """
+        # Use _graph directly since we're called from within analyze()
+        # where the graph has already been constructed
+        graph = self._graph
+        atom_positions = self.cell.get_positions()
+        
+        b_indices = []
+        x_indices_set = set()
+
+        # B-sites: Octahedron --[CONTAINS, role=center]--> B atom
+        for node, data in graph.nodes(data=True):
+            if data.get('node_type') != 'octahedron':
+                continue
+            for neighbor in graph.neighbors(node):
+                edge_data = graph.get_edge_data(node, neighbor)
+                if (edge_data and
+                    edge_data.get('edge_type') == 'contains' and
+                    edge_data.get('role') == 'center'):
+                    vasp_idx = graph.nodes.get(neighbor, {}).get('vasp_index')
+                    if vasp_idx is not None:
+                        b_indices.append(vasp_idx)
+                    break
+
+        # X-sites: B --[BONDED_TO, role=ligand]--> X atom
+        for v in b_indices:
+            b_node = f'atom_{v}'
+            if b_node not in graph:
+                continue
+            for neighbor in graph.neighbors(b_node):
+                edge_data = graph.get_edge_data(b_node, neighbor)
+                if (edge_data and
+                    edge_data.get('edge_type') == 'bonded_to' and
+                    edge_data.get('role') == 'ligand'):
+                    vasp_idx = graph.nodes.get(neighbor, {}).get('vasp_index')
+                    if vasp_idx is not None:
+                        x_indices_set.add(vasp_idx)
+
+        b_indices = np.array(b_indices, dtype=np.int32)
+        x_indices = np.array(sorted(x_indices_set), dtype=np.int32)
+        b_positions = atom_positions[b_indices]
+        x_positions = atom_positions[x_indices]
+        
+        # Cache the result
+        self._b_x_atoms_cache = {
+            'b_indices': b_indices,
+            'b_positions': b_positions,
+            'x_indices': x_indices,
+            'x_positions': x_positions,
+        }
+
+    def get_b_x_atoms(self) -> Dict[str, np.ndarray]:
+        """
+        Get cached B-site and X-site atom indices and positions.
+        
+        The cache is automatically created during analyze(), so this method
+        just returns the pre-computed data.
+        
+        Returns
+        -------
+        dict
+            Dictionary with keys:
+            - 'b_indices': numpy array of B atom indices
+            - 'b_positions': numpy array of B atom positions (N, 3)
+            - 'x_indices': numpy array of X atom indices
+            - 'x_positions': numpy array of X atom positions (M, 3)
+        
+        Examples
+        --------
+        >>> analyzer = q2D_analyzer("structure.vasp")
+        >>> analyzer.analyze()
+        >>> b_x_data = analyzer.get_b_x_atoms()
+        >>> print(f"Found {len(b_x_data['b_indices'])} B atoms and {len(b_x_data['x_indices'])} X atoms")
+        """
+        self._ensure_analyzed()
+        
+        # Cache should already exist from analyze(), but compute if missing
+        if self._b_x_atoms_cache is None:
+            self._compute_b_x_atoms_cache()
+        
+        return self._b_x_atoms_cache
+
     def get_octahedra(self) -> List[Dict]:
         """
         Get octahedra information extracted from graph.
@@ -399,30 +529,72 @@ class q2D_analyzer:
             - 'id': octahedron identifier
             - 'central_atom_index': index of B-site atom
             - 'central_atom_symbol': element symbol of B-site
-            - 'terminal_atoms': list of terminal (surface) atom indices
-            - 'interlayer_atoms': list of inter-layer shared atom indices
-            - 'intralayer_atoms': list of intra-layer shared atom indices
+            - 'ligand_atoms': list of ligand (X-site) atom indices
         """
         self._ensure_analyzed()
-        from ..detection.cavity_tracing import get_octahedra_data
         
         octahedra = []
         atom_symbols = self.cell.get_chemical_symbols()
         
-        # Use the helper function that queries through edges
-        octahedra_data = get_octahedra_data(self._graph)
-
-        for oct_idx, data in octahedra_data.items():
-            central_idx = data.get('central_atom')
-            oct_info = {
-                'id': data['node_id'],
-                'central_atom_index': central_idx,
-                'central_atom_symbol': atom_symbols[central_idx] if central_idx is not None else None,
-                'terminal_atoms': data.get('terminal_atoms', []),
-                'interlayer_atoms': data.get('interlayer_atoms', []),
-                'intralayer_atoms': data.get('intralayer_atoms', []),
-            }
-            octahedra.append(oct_info)
+        # Query octahedra directly from graph
+        for node, data in self._graph.nodes(data=True):
+            if data.get('node_type') == 'octahedron':
+                # Find center atom (B-site) via CONTAINS edge with role='center'
+                central_idx = None
+                b_atom_node = None
+                
+                for neighbor in self._graph.neighbors(node):
+                    edge_data = self._graph.get_edge_data(node, neighbor)
+                    if (edge_data and
+                        edge_data.get('edge_type') == 'contains' and
+                        edge_data.get('role') == 'center'):
+                        neighbor_data = self._graph.nodes.get(neighbor, {})
+                        if neighbor_data.get('node_type') == 'atom':
+                            atom_idx = neighbor_data.get('vasp_index')
+                            if atom_idx is not None:
+                                central_idx = atom_idx
+                                b_atom_node = neighbor
+                                break
+                
+                # Get ligand atoms via B atom → X atoms (BONDED_TO edges)
+                # Classify into terminal, interlayer, and intralayer
+                terminal_atoms = []
+                interlayer_atoms = []
+                intralayer_atoms = []
+                
+                if b_atom_node:
+                    for neighbor in self._graph.neighbors(b_atom_node):
+                        edge_data = self._graph.get_edge_data(b_atom_node, neighbor)
+                        if (edge_data and
+                            edge_data.get('edge_type') == 'bonded_to' and
+                            edge_data.get('role') == 'ligand'):
+                            neighbor_data = self._graph.nodes.get(neighbor, {})
+                            if neighbor_data.get('node_type') == 'atom':
+                                atom_idx = neighbor_data.get('vasp_index')
+                                if atom_idx is not None:
+                                    # Classify based on graph properties
+                                    if neighbor_data.get('is_terminal', False):
+                                        terminal_atoms.append(atom_idx)
+                                    elif neighbor_data.get('is_interlayer', False):
+                                        interlayer_atoms.append(atom_idx)
+                                    else:
+                                        # Equatorial atoms that are not interlayer are intralayer
+                                        intralayer_atoms.append(atom_idx)
+                
+                # Combine all ligand atoms for backward compatibility
+                ligand_atoms = terminal_atoms + interlayer_atoms + intralayer_atoms
+                
+                oct_info = {
+                    'id': node,
+                    'central_atom_index': central_idx,
+                    'central_atom_symbol': atom_symbols[central_idx] if central_idx is not None else None,
+                    'ligand_atoms': ligand_atoms,  # Keep for backward compatibility
+                    'terminal_atoms': terminal_atoms,
+                    'interlayer_atoms': interlayer_atoms,
+                    'intralayer_atoms': intralayer_atoms,
+                }
+                octahedra.append(oct_info)
+                
 
         return octahedra
 
@@ -461,6 +633,44 @@ class q2D_analyzer:
 
         return layers
 
+    @property
+    def layers(self) -> "Layers":
+        """
+        Get a Layers wrapper for convenient layer-specific analysis.
+        
+        Returns
+        -------
+        Layers
+            Wrapper object providing access to layer data and layer-specific
+            analysis methods like get_bxb(index=0) for B-X-B angles.
+            
+        Examples
+        --------
+        >>> analyzer = q2D_analyzer("structure.vasp")
+        >>> analyzer.analyze()
+        >>> 
+        >>> # Get intra-layer B-X-B angles for layer 0
+        >>> bxb_data = analyzer.layers.get_bxb(index=0)
+        >>> print(f"Layer 0 B-X-B mean: {bxb_data['bxb_mean']:.2f}°")
+        >>>
+        >>> # Get inter-layer B-X-B angles between layers 0 and 1
+        >>> interlayer_data = analyzer.layers.get_interlayer_bxb('0', '1')
+        >>> print(f"Inter-layer mean: {interlayer_data['bxb_mean']:.2f}°")
+        >>>
+        >>> # Dict-like access to layer data
+        >>> layer_0 = analyzer.layers['0']
+        >>> print(f"Layer 0 has {layer_0['octahedra_count']} octahedra")
+        >>>
+        >>> # Iterate over layers
+        >>> for layer_id in analyzer.layers:
+        ...     print(f"Layer {layer_id}")
+        """
+        self._ensure_analyzed()
+        if self._layers is None:
+            from .layers_wrapper import Layers
+            self._layers = Layers(self)
+        return self._layers
+
     def get_spacers(self) -> List[Atoms]:
         """
         Get identified spacer molecules extracted from graph.
@@ -495,9 +705,9 @@ class q2D_analyzer:
         a_sites = []
         atom_positions = self.cell.get_positions()
 
-        # Query Molecule nodes with molecule_type='a_site'
+        # Query A_Site nodes
         for node, data in self._graph.nodes(data=True):
-            if data.get('node_type') == 'molecule' and data.get('molecule_type') == 'a_site':
+            if data.get('node_type') == 'a_site':
                 # Get atoms in this molecule via CONTAINS edges
                 atom_indices = []
                 for neighbor in self._graph.neighbors(node):
@@ -523,18 +733,30 @@ class q2D_analyzer:
 
         return a_sites
 
-    def get_cavities(self) -> 'CavityCollection':
+    def get_cavities(self, a_site_weights=None, spacer_weights=None, max_validation_iterations=10) -> 'CavityCollection':
         """
         Get all detected cavities in the structure as a CavityCollection.
 
         A cavity is the cuboctahedral cage formed by corner-sharing octahedra
         that typically contains an A-site cation in perovskite structures.
 
+        Parameters
+        ----------
+        a_site_weights : ASiteWeights, optional
+            Weight configuration for A-site X atom selection.
+            If None, uses default weights (0.7 for dist_anchor, 0.3 for z_diff).
+        spacer_weights : SpacerWeights, optional
+            Weight configuration for spacer terminal X atom selection.
+            If None, uses default weights (0.4 for dist_anchor, 0.3 for dist_b_center, 0.3 for z_diff).
+        max_validation_iterations : int, optional
+            Maximum number of iterations for B-X connectivity validation and repair in cavity_tracing.
+            Default 10. Increase (e.g. 30) for structures that need more attempts to fix malformed cavities.
+
         Returns
         -------
         CavityCollection
             Collection of Cavity objects with convenient methods for filtering and bulk operations.
-            
+
             Each Cavity object has attributes:
             - `id`: cavity identifier (e.g., 'cavity_0')
             - `b_atom_indices`: B-site atom indices forming the cavity
@@ -545,7 +767,7 @@ class q2D_analyzer:
             - `pbc_coordinates`: dict of PBC-unwrapped positions
             - `subgraph`: NetworkX subgraph with detailed cavity structure
             - `hull_data`: Cached convex hull data if computed
-            
+
             Methods:
             - `to_atoms()`: Convert all cavities to list of ASE Atoms objects
             - `filter(**kwargs)`: Filter cavities by attributes
@@ -556,6 +778,12 @@ class q2D_analyzer:
         >>> analyzer.analyze()
         >>> cavities = analyzer.get_cavities()
         >>> print(f"Found {len(cavities)} cavities")
+        >>>
+        >>> # Use custom weights for cavity detection
+        >>> from q2D_Materials.analyzer.cavities_processing import ASiteWeights, SpacerWeights
+        >>> a_weights = ASiteWeights(w_dist_anchor=0.8, w_z_diff=0.2)
+        >>> s_weights = SpacerWeights(w_dist_anchor=0.6, w_dist_b_center=0.2, w_z_diff=0.2)
+        >>> cavities = analyzer.get_cavities(a_site_weights=a_weights, spacer_weights=s_weights)
         >>>
         >>> # Convert all to atoms and save
         >>> atoms_list = cavities.to_atoms()
@@ -573,24 +801,25 @@ class q2D_analyzer:
         ...     if cavity.hull_data:
         ...         print(f"  Volume: {cavity.get_volume():.2f} Ų")
         """
-        from ..detection.cavity_class import CavityCollection
+        from ..cavities_processing.cavity_class import CavityCollection
         
         self._ensure_analyzed()
         
         # Detect cavities on demand using the cavity_tracing module
-        from ..detection.cavity_tracing import _detect_all_cavities
+        from ..cavities_processing.cavity_tracing import detect_all_cavities
         
         try:
-            # Get neighbor_indices from graph (stored during analysis)
-            neighbor_indices = self._graph.graph.get('neighbor_indices', [])
-            
-            # Detect cavities using stored analysis data
-            cavities = _detect_all_cavities(
+            # Detect cavities using the streamlined pipeline
+            # Pass analyzer instance to use cached B/X atom data for better performance
+            cavities = detect_all_cavities(
                 self._graph,
                 self._atom_positions,
                 self._atom_symbols,
                 self._cell,
-                neighbor_indices
+                analyzer=self,
+                a_site_weights=a_site_weights,
+                spacer_weights=spacer_weights,
+                max_validation_iterations=max_validation_iterations,
             )
             return CavityCollection(cavities)
         except Exception as e:
@@ -740,7 +969,11 @@ class q2D_analyzer:
         bxb_scale: float = 1.4,
         supercell: Tuple[int, int, int] = (1, 1, 1),
         include_bp: bool = False,
-    ) -> Dict[str, Union[np.ndarray, float, None]]:
+        octahedra: Optional[List[str]] = None,
+        layer: Optional[str] = None,
+        layers: Optional[List[str]] = None,
+        group_by: Optional[str] = None,
+    ) -> Dict[str, Union[np.ndarray, float, None, Dict]]:
         """
         Get B-X-B bond angles.
 
@@ -755,33 +988,121 @@ class q2D_analyzer:
             Supercell replication (kept for API compatibility, not used in graph-based approach)
         include_bp : bool
             Whether to calculate B-X-Bp angles (Bp = spacer B-site)
+        octahedra : list of str, optional
+            Specific octahedra IDs to include (e.g., ['octahedron_0', 'octahedron_1'])
+        layer : str, optional
+            Single layer ID to filter by (e.g., '0')
+        layers : list of str, optional
+            Multiple layer IDs to filter by (e.g., ['0', '1'])
+        group_by : str, optional
+            Group results by 'layer' or None for global
 
         Returns
         -------
         dict
-            Dictionary with keys:
-            - 'bxb_angles': numpy array of B-X-B angles in degrees
-            - 'bxb_mean': Mean B-X-B angle
-            - 'bxb_std': Standard deviation of B-X-B angles
-            - 'bxbp_angles': numpy array of B-X-Bp angles (if include_bp=True)
-            - 'bxbp_mean': Mean B-X-Bp angle (if include_bp=True)
+            If group_by is None:
+                Dictionary with keys:
+                - 'bxb_angles': numpy array of B-X-B angles in degrees
+                - 'bxb_mean': Mean B-X-B angle
+                - 'bxb_std': Standard deviation of B-X-B angles
+                - 'bxbp_angles': numpy array of B-X-Bp angles (if include_bp=True)
+                - 'bxbp_mean': Mean B-X-Bp angle (if include_bp=True)
+            
+            If group_by == 'layer':
+                Dictionary with keys:
+                - 'global': dict with global statistics (bxb_angles, bxb_mean, bxb_std, etc.)
+                - layer IDs (e.g., '0', '1'): dict with per-layer statistics
+                - 'interlayer': dict with interlayer angle statistics (if any)
         """
         self._ensure_analyzed()
-        bxb_angles, bxbp_angles = _calculate_bxb_angles(self, bxb_scale, supercell, include_bp)
+        result_tuple = _calculate_bxb_angles(
+            self, bxb_scale, supercell, include_bp,
+            octahedra=octahedra, layer=layer, layers=layers, group_by=group_by
+        )
 
-        result = {
-            "bxb_angles": bxb_angles,
-            "bxb_mean": float(np.mean(bxb_angles)) if bxb_angles is not None and len(bxb_angles) > 0 else None,
-            "bxb_std": float(np.std(bxb_angles)) if bxb_angles is not None and len(bxb_angles) > 0 else None,
-        }
+        # Helper function to calculate deviations from ideal 180°
+        def calc_deviation_stats(angles):
+            """Calculate mean and std of |180 - angle| deviations."""
+            if angles is None or len(angles) == 0:
+                return None, None
+            deviations = np.abs(180.0 - angles)
+            return float(np.mean(deviations)), float(np.std(deviations))
 
-        if include_bp:
-            result["bxbp_angles"] = bxbp_angles
-            result["bxbp_mean"] = (
-                float(np.mean(bxbp_angles)) if bxbp_angles is not None and len(bxbp_angles) > 0 else None
-            )
+        # Unpack tuple result: (dict/data, bxbp_angles)
+        # When group_by='layer', result_tuple is a dict; otherwise it's a tuple
+        if isinstance(result_tuple, tuple):
+            result_data, _ = result_tuple
+        else:
+            result_data = result_tuple
 
-        return result
+        # Handle grouped results
+        if group_by == 'layer':
+            result = {}
+            
+            # Process global data
+            global_bxb, global_bxbp = result_data.get('global', (None, None))
+            result['global'] = {
+                "bxb_angles": global_bxb,
+                "bxb_mean": float(np.mean(global_bxb)) if global_bxb is not None and len(global_bxb) > 0 else None,
+                "bxb_std": float(np.std(global_bxb)) if global_bxb is not None and len(global_bxb) > 0 else None,
+            }
+            if include_bp:
+                result['global']["bxbp_angles"] = global_bxbp
+                result['global']["bxbp_mean"] = (
+                    float(np.mean(global_bxbp)) if global_bxbp is not None and len(global_bxbp) > 0 else None
+                )
+            
+            # Process per-layer data
+            for key, value in result_data.items():
+                if key == 'global':
+                    continue
+                if isinstance(value, dict):
+                    layer_bxb = value.get('bxb_angles')
+                    layer_bxbp = value.get('bxbp_angles')
+                    result[key] = {
+                        "bxb_angles": layer_bxb,
+                        "bxb_mean": float(np.mean(layer_bxb)) if layer_bxb is not None and len(layer_bxb) > 0 else None,
+                        "bxb_std": float(np.std(layer_bxb)) if layer_bxb is not None and len(layer_bxb) > 0 else None,
+                    }
+                    if include_bp:
+                        result[key]["bxbp_angles"] = layer_bxbp
+                        result[key]["bxbp_mean"] = (
+                            float(np.mean(layer_bxbp)) if layer_bxbp is not None and len(layer_bxbp) > 0 else None
+                        )
+            
+            return result
+        else:
+            # No grouping, return decomposed format with deviation statistics
+            bxb_all = result_data.get('bxb_angles')
+            bxb_equatorial = result_data.get('bxb_equatorial_angles')
+            bxb_interlayer = result_data.get('bxb_interlayer_angles')
+            
+            # Calculate deviation statistics for each category
+            # Note: Terminal X atoms cannot form B-X-B angles (they belong to only 1 octahedron)
+            dev_all_mean, dev_all_std = calc_deviation_stats(bxb_all)
+            dev_equatorial_mean, dev_equatorial_std = calc_deviation_stats(bxb_equatorial)
+            dev_interlayer_mean, dev_interlayer_std = calc_deviation_stats(bxb_interlayer)
+            
+            result = {
+                # Raw angles (local features)
+                "bxb_angles": bxb_all,
+                "bxb_equatorial_angles": bxb_equatorial,
+                "bxb_interlayer_angles": bxb_interlayer,
+                
+                # Global features (deviation from ideal 180°)
+                "bxb_deviation_mean": dev_all_mean,
+                "bxb_deviation_std": dev_all_std,
+                "bxb_equatorial_deviation_mean": dev_equatorial_mean,
+                "bxb_equatorial_deviation_std": dev_equatorial_std,
+                "bxb_interlayer_deviation_mean": dev_interlayer_mean,
+                "bxb_interlayer_deviation_std": dev_interlayer_std,
+            }
+
+            # Add B-X-Bp angles if requested (for future use)
+            if include_bp:
+                result["bxbp_angles"] = result_data.get('bxbp_angles')
+
+            return result
 
     def get_partial_rdf(
         self,
@@ -847,6 +1168,80 @@ class q2D_analyzer:
         """
         self._ensure_analyzed()
         return CharacterizationQuery(self)
+
+    def inter_plane_distance(self, debug: bool = False) -> Dict[str, Any]:
+        """
+        Calculate the distance between terminal atom planes.
+        
+        Terminal atoms define the boundaries between the spacer molecule region
+        and the inorganic slab region. Handles both multi-layer and single-layer cases.
+        
+        **Single-layer case:** When both top and bottom terminal atoms are in the same layer,
+        slab_thickness is calculated as the Z-span of terminal atoms, and interplane_distance
+        is derived as cell_z - slab_thickness.
+        
+        **Multi-layer case:** When terminal atoms are in different layers, fits planes to
+        each group and calculates the distance between them.
+        
+        Parameters
+        ----------
+        debug : bool, optional
+            If True, print detailed debugging information
+        
+        Returns
+        -------
+        dict
+            {
+                'interplane_distance': float (Å),
+                'slab_thickness': float (Å) or None,
+                'top_centroid': list or None,
+                'bottom_centroid': list or None,
+                'top_atom_count': int,
+                'bottom_atom_count': int,
+                'molecule_mean_z': float or None,
+                'molecule_centroid': list or None,
+                'top_z_range': [min_z, max_z],
+                'bottom_z_range': [min_z, max_z],
+                'terminal_z_range': [min_z, max_z],
+                'error': str or None,
+            }
+        
+        Examples
+        --------
+        >>> analyzer = q2D_analyzer("structure.vasp")
+        >>> analyzer.analyze()
+        >>> result = analyzer.inter_plane_distance()
+        >>> if result.get('error'):
+        ...     print(f"Error: {result['error']}")
+        ... else:
+        ...     print(f"Interplane distance: {result['interplane_distance']:.3f} Å")
+        ...     print(f"Slab thickness: {result.get('slab_thickness', 'N/A'):.3f} Å")
+        """
+        self._ensure_analyzed()
+        from ..characterization.structure_features import calculate_global_interplane_distance
+        try:
+            return calculate_global_interplane_distance(self._graph, debug=debug)
+        except Exception as e:
+            # Return error information instead of raising (catch all exceptions)
+            import traceback
+            error_msg = f"{type(e).__name__}: {str(e)}"
+            if debug:
+                print(f"  ERROR in inter_plane_distance: {error_msg}")
+                traceback.print_exc()
+            return {
+                'interplane_distance': np.nan,
+                'slab_thickness': np.nan,
+                'top_centroid': None,
+                'bottom_centroid': None,
+                'top_atom_count': 0,
+                'bottom_atom_count': 0,
+                'molecule_mean_z': None,
+                'molecule_centroid': None,
+                'terminal_z_range': [None, None],
+                'top_z_range': [None, None],
+                'bottom_z_range': [None, None],
+                'error': error_msg,
+            }
 
     def compute_delta(
         self,
@@ -1016,6 +1411,248 @@ class q2D_analyzer:
             return {k: v['lambda'] for k, v in result.items()}
         return result['lambda']
 
+    def get_mean_bond_lengths(
+        self,
+        octahedra: Optional[List[str]] = None,
+        layer: Optional[str] = None,
+        layers: Optional[List[str]] = None,
+        group_by: Optional[str] = None,
+    ) -> Union[Dict[str, float], Dict[str, Dict[str, float]]]:
+        """
+        Get mean B-X bond lengths separated by geometry (axial vs equatorial).
+
+        Axial bonds are along the c-axis (to terminal or interlayer X atoms),
+        while equatorial bonds are in the ab-plane. These have significantly
+        different lengths in layered perovskites due to structural relaxation.
+
+        Parameters
+        ----------
+        octahedra : list of str, optional
+            Specific octahedra IDs to include (e.g., ['octahedron_0', 'octahedron_1'])
+        layer : str, optional
+            Single layer ID to filter by (e.g., '0')
+        layers : list of str, optional
+            Multiple layer IDs to filter by (e.g., ['0', '1'])
+        group_by : str, optional
+            If 'layer', returns dict with per-layer results plus 'global' key
+
+        Returns
+        -------
+        dict
+            If group_by is None:
+                Dictionary containing:
+                - 'mean_bond_length': Mean of all B-X bond lengths (Å)
+                - 'mean_bond_length_axial': Mean of axial B-X bond lengths (Å)
+                - 'mean_bond_length_equatorial': Mean of equatorial B-X bond lengths (Å)
+
+            If group_by == 'layer':
+                Dictionary with layer IDs as keys, each containing the above metrics,
+                plus 'global' key with overall metrics
+
+        Examples
+        --------
+        >>> analyzer = q2D_analyzer("structure.cif")
+        >>> analyzer.analyze()
+        >>>
+        >>> # Global mean bond lengths
+        >>> bond_lengths = analyzer.get_mean_bond_lengths()
+        >>> print(f"All B-X: {bond_lengths['mean_bond_length']:.3f} Å")
+        >>> print(f"Axial B-X: {bond_lengths['mean_bond_length_axial']:.3f} Å")
+        >>> print(f"Equatorial B-X: {bond_lengths['mean_bond_length_equatorial']:.3f} Å")
+        >>>
+        >>> # Per-layer analysis
+        >>> by_layer = analyzer.get_mean_bond_lengths(group_by='layer')
+        >>> for layer_id, data in by_layer.items():
+        ...     print(f"Layer {layer_id}:")
+        ...     print(f"  Axial: {data['mean_bond_length_axial']:.3f} Å")
+        ...     print(f"  Equatorial: {data['mean_bond_length_equatorial']:.3f} Å")
+        """
+        from ..characterization.distortions import _compute_octahedral_distortions
+        self._ensure_analyzed()
+        result = _compute_octahedral_distortions(
+            self, octahedra=octahedra, layer=layer, layers=layers, group_by=group_by
+        )
+
+        def extract_bond_lengths(data):
+            return {
+                'mean_bond_length': data.get('mean_bond_length'),
+                'mean_bond_length_axial': data.get('mean_bond_length_axial'),
+                'mean_bond_length_equatorial': data.get('mean_bond_length_equatorial'),
+            }
+
+        if group_by == 'layer':
+            return {k: extract_bond_lengths(v) for k, v in result.items()}
+        return extract_bond_lengths(result)
+
+    def get_octahedral_tilts(
+        self,
+        octahedra: Optional[List[str]] = None,
+        bond_selection_threshold: float = 0.1,
+    ):
+        """
+        Get octahedral tilt data (Euler angles and rotation matrices).
+
+        Computes Euler angles via Kabsch algorithm + scipy Rotation decomposition.
+        Uses XYZ extrinsic convention matching builder: R_total = R_z @ R_y @ R_x.
+
+        Parameters
+        ----------
+        octahedra : list of str, optional
+            Specific octahedra IDs. If None, computes all octahedra.
+        bond_selection_threshold : float, default=0.1
+            Minimum projection for bond selection (ensures sign consistency)
+
+        Returns
+        -------
+        OctahedralTiltData
+            Container with euler_angles (N_oct, 3), rotation_matrices (N_oct, 3, 3),
+            octahedron_ids, b_atom_indices, and reference_axes
+
+        Examples
+        --------
+        >>> analyzer = q2D_analyzer("structure.vasp")
+        >>> analyzer.analyze()
+        >>> tilt_data = analyzer.get_octahedral_tilts()
+        >>> print(tilt_data.euler_angles)  # (N_oct, 3) array
+        """
+        from ..octahedral_processing.tilt_calculations import compute_octahedral_tilts
+        self._ensure_analyzed()
+        return compute_octahedral_tilts(self, octahedra, bond_selection_threshold)
+
+    def compute_mean_tilt_profile(
+        self,
+        octahedra: Optional[List[str]] = None,
+        layer: Optional[str] = None,
+        layers: Optional[List[str]] = None,
+        group_by: Optional[str] = None,
+    ) -> Union[float, Dict[str, float]]:
+        """
+        Compute mean tilt magnitude profile.
+
+        Formula: μ = (1/N) Σ ||T_i|| where ||T|| = sqrt(α² + β² + γ²)
+
+        Measures the average tilting magnitude, optionally grouped by layer/slab.
+        Most useful for 2D layered structures (DJ, RP) to quantify surface
+        relaxation effects and depth-dependent distortions.
+
+        Parameters
+        ----------
+        octahedra : list of str, optional
+            Specific octahedra IDs to include (e.g., ['octahedron_0', 'octahedron_1'])
+        layer : str, optional
+            Single layer ID to filter by (e.g., '0')
+        layers : list of str, optional
+            Multiple layer IDs to filter by (e.g., ['0', '1'])
+        group_by : str, optional
+            If 'layer' or 'slab', returns dict with per-layer/slab results plus 'global' key
+            If None, returns single global value
+
+        Returns
+        -------
+        float or dict
+            If group_by is None: Mean tilt magnitude (float, degrees)
+            If group_by == 'layer': Dict with layer IDs as keys plus 'global' key
+            If group_by == 'slab': Dict with slab IDs as keys plus 'global' key
+
+        Examples
+        --------
+        >>> analyzer = q2D_analyzer("rp_structure.vasp")
+        >>> analyzer.analyze()
+        >>>
+        >>> # Global mean tilt
+        >>> mu_global = analyzer.compute_mean_tilt_profile()
+        >>> print(f"Global mean tilt: {mu_global:.2f}°")
+        >>>
+        >>> # Per-layer profile
+        >>> profile = analyzer.compute_mean_tilt_profile(group_by='layer')
+        >>> for layer_id, mu in profile.items():
+        ...     print(f"Layer {layer_id}: μ = {mu:.2f}°")
+        >>>
+        >>> # Single layer
+        >>> mu_layer0 = analyzer.compute_mean_tilt_profile(layer='0')
+        >>> print(f"Layer 0 mean tilt: {mu_layer0:.2f}°")
+        """
+        from ..octahedral_processing.tilting_properties import compute_mean_tilt_profile
+        self._ensure_analyzed()
+        return compute_mean_tilt_profile(
+            self, octahedra=octahedra, layer=layer, layers=layers, group_by=group_by
+        )
+
+    def compute_gearing_correlation(
+        self,
+        octahedra: Optional[List[str]] = None,
+        layer: Optional[str] = None,
+        layers: Optional[List[str]] = None,
+        group_by: Optional[str] = None,
+        neighbor_criterion: str = 'shared_x',
+    ) -> Union[Dict[Tuple[str, str], float], Dict[str, Dict[Tuple[str, str], float]]]:
+        """
+        Compute gearing correlation between neighboring octahedra.
+
+        Formula: χ(i,j) = (R_i · R_j) / (||R_i|| ||R_j||)
+        where R = rotation vector (axis-angle representation)
+
+        Measures mechanical coordination between corner-sharing octahedra.
+        Quantifies cooperative vs. counter-rotating tilting patterns.
+
+        Parameters
+        ----------
+        octahedra : list of str, optional
+            Specific octahedra IDs to include (e.g., ['octahedron_0', 'octahedron_1'])
+        layer : str, optional
+            Single layer ID to filter by (e.g., '0')
+        layers : list of str, optional
+            Multiple layer IDs to filter by (e.g., ['0', '1'])
+        group_by : str, optional
+            If 'layer' or 'slab', returns dict with per-layer/slab results plus 'global' key
+            If None, returns single dict of correlations
+        neighbor_criterion : str, default='shared_x'
+            'shared_x' for corner-sharing neighbors
+
+        Returns
+        -------
+        dict or dict of dicts
+            If group_by is None: {(oct_i, oct_j): χ} where χ ∈ [-1, 1]
+            If group_by == 'layer' or 'slab': {layer_id: {(oct_i, oct_j): χ}, 'global': {...}}
+
+            χ interpretation:
+            - χ ≈ +1: Cooperative rotation (like meshing gears)
+            - χ ≈ -1: Counter-rotation
+            - χ ≈ 0: Orthogonal rotations
+
+        Examples
+        --------
+        >>> analyzer = q2D_analyzer("tilted_bulk.vasp")
+        >>> analyzer.analyze()
+        >>>
+        >>> # Global correlations
+        >>> gearing = analyzer.compute_gearing_correlation()
+        >>> for (oct_i, oct_j), chi in gearing.items():
+        ...     if chi > 0.5:
+        ...         print(f"{oct_i} ↔ {oct_j}: Cooperative (χ = {chi:.3f})")
+        >>>
+        >>> # Per-layer grouped correlations
+        >>> gearing_by_layer = analyzer.compute_gearing_correlation(group_by='layer')
+        >>> for layer_id, pairs in gearing_by_layer.items():
+        ...     if layer_id != 'global':
+        ...         avg_chi = np.mean(list(pairs.values()))
+        ...         print(f"Layer {layer_id} avg gearing: {avg_chi:.3f}")
+        >>>
+        >>> # Single layer
+        >>> layer0_gearing = analyzer.compute_gearing_correlation(layer='0')
+        >>> print(f"Layer 0 has {len(layer0_gearing)} octahedral pairs")
+        """
+        from ..octahedral_processing.tilting_properties import compute_gearing_correlation
+        self._ensure_analyzed()
+        return compute_gearing_correlation(
+            self,
+            octahedra=octahedra,
+            layer=layer,
+            layers=layers,
+            group_by=group_by,
+            neighbor_criterion=neighbor_criterion
+        )
+
     def get_octahedral_distortions(
         self,
         octahedra: Optional[List[str]] = None,
@@ -1027,7 +1664,9 @@ class q2D_analyzer:
 
         This method returns comprehensive distortion data for each octahedron,
         including delta, sigma, lambda parameters, raw bond lengths and angles,
-        and layer assignment. Useful for detailed analysis and custom visualizations.
+        and layer assignment. Bond lengths are separated into axial (along c-axis)
+        and equatorial (in ab-plane) categories, as these have significantly
+        different lengths in layered perovskites.
 
         Parameters
         ----------
@@ -1045,13 +1684,19 @@ class q2D_analyzer:
             - 'delta': Bond length distortion (Δ)
             - 'sigma': Bond length variance (σ²)
             - 'lambda': Bond angle variance (λ²)
-            - 'bond_lengths': Array of B-X bond lengths
+            - 'bond_lengths': Array of all B-X bond lengths (6 values)
+            - 'bond_lengths_axial': Array of axial B-X bond lengths (2 values)
+            - 'bond_lengths_equatorial': Array of equatorial B-X bond lengths (4 values)
             - 'bond_angles': Array of X-B-X angles
-            - 'mean_bond_length': Mean B-X bond length
+            - 'mean_bond_length': Mean of all B-X bond lengths
+            - 'mean_bond_length_axial': Mean of axial B-X bond lengths
+            - 'mean_bond_length_equatorial': Mean of equatorial B-X bond lengths
             - 'mean_angle': Mean X-B-X angle
+            - 'volume': Octahedral volume in ų
             - 'layer': Layer ID this octahedron belongs to
             - 'central_atom_index': Index of B-site atom
             - 'central_atom_symbol': Element symbol of B-site
+            - 'geometry': Dict mapping X atom index to geometry type
 
         Examples
         --------
@@ -1062,7 +1707,8 @@ class q2D_analyzer:
         >>> oct_data = analyzer.get_octahedral_distortions()
         >>> for oct_id, metrics in oct_data.items():
         ...     print(f"{oct_id} (Layer {metrics['layer']}):")
-        ...     print(f"  Δ={metrics['delta']:.4f}, σ²={metrics['sigma']:.6f}")
+        ...     print(f"  Axial B-X: {metrics['mean_bond_length_axial']:.3f} Å")
+        ...     print(f"  Equatorial B-X: {metrics['mean_bond_length_equatorial']:.3f} Å")
         >>>
         >>> # Filter by layer
         >>> layer0_oct = analyzer.get_octahedral_distortions(layer='0')
@@ -1070,13 +1716,744 @@ class q2D_analyzer:
         >>>
         >>> # Access specific octahedron
         >>> oct0 = analyzer.get_octahedral_distortions(octahedra=['octahedron_0'])
-        >>> print(f"Bond lengths: {oct0['octahedron_0']['bond_lengths']}")
+        >>> print(f"Axial bonds: {oct0['octahedron_0']['bond_lengths_axial']}")
+        >>> print(f"Equatorial bonds: {oct0['octahedron_0']['bond_lengths_equatorial']}")
         """
         from ..characterization.distortions import _get_octahedral_distortions_detailed
         self._ensure_analyzed()
         return _get_octahedral_distortions_detailed(
             self, octahedra=octahedra, layer=layer, layers=layers
         )
+    
+    def get_octahedral_volumes(
+        self,
+        mode: str = 'global',
+        octahedra: Optional[List[str]] = None,
+    ) -> Union[float, Dict[str, float]]:
+        """
+        Calculate octahedral volumes using convex hull of X atoms with PBC-aware positioning.
+        
+        For each octahedron, this method:
+        1. Gets the 6 X atoms bonded to the B atom
+        2. Uses PBC-aware distance calculations to ensure X atoms are in the minimum image
+        3. Calculates the convex hull volume of the 6 X atoms
+        
+        This ensures that all X atoms are in the closest periodic image relative to the B atom,
+        preventing errors from PBC wrapping that could distort the volume calculation.
+        
+        Parameters
+        ----------
+        mode : str, default='global'
+            Calculation mode:
+            - 'global': Return mean volume for all octahedra (single float)
+            - 'local': Return volume per octahedron (dict mapping octahedron_id -> volume)
+        octahedra : list of str, optional
+            Specific octahedra IDs to include (e.g., ['octahedron_0', 'octahedron_1'])
+            If None, computes all octahedra.
+        
+        Returns
+        -------
+        float or dict
+            - If mode='global': Mean octahedral volume in Å³ (float)
+            - If mode='local': Dict mapping octahedron_id -> volume in Å³
+        
+        Examples
+        --------
+        >>> analyzer = q2D_analyzer("structure.cif")
+        >>> analyzer.analyze()
+        >>> 
+        >>> # Global mode: mean volume
+        >>> mean_volume = analyzer.get_octahedral_volumes(mode='global')
+        >>> print(f"Mean octahedral volume: {mean_volume:.2f} Å³")
+        >>> 
+        >>> # Local mode: per-octahedron volumes
+        >>> volumes_dict = analyzer.get_octahedral_volumes(mode='local')
+        >>> for oct_id, vol in volumes_dict.items():
+        ...     print(f"{oct_id}: {vol:.2f} Å³")
+        """
+        from ..octahedral_processing.octahedral_analysis import calculate_octahedral_volumes_convex_hull
+        self._ensure_analyzed()
+        
+        # Get B and X atom data
+        b_x_data = self.get_b_x_atoms()
+        b_indices = b_x_data['b_indices']
+        x_indices = b_x_data['x_indices']
+        
+        # Filter octahedra if specified
+        graph = self.get_graph()
+        if octahedra is not None:
+            selected_octahedra = [oct for oct in octahedra if oct in graph.nodes()]
+        else:
+            selected_octahedra = [
+                node for node, data in graph.nodes(data=True)
+                if data.get('node_type') == 'octahedron'
+            ]
+        
+        # Build neigh_list from graph
+        # Map B atom indices to octahedron IDs and their X atoms
+        b_to_oct = {}  # b_index -> octahedron_id
+        oct_to_x_indices = {}  # octahedron_id -> list of x_indices (in x_indices array)
+        
+        for oct_node in selected_octahedra:
+            # Get B atom for this octahedron
+            b_atom_node = None
+            b_vasp_idx = None
+            for neighbor in graph.neighbors(oct_node):
+                edge_data = graph.get_edge_data(oct_node, neighbor)
+                if (edge_data and
+                    edge_data.get('edge_type') == 'contains' and
+                    edge_data.get('role') == 'center'):
+                    neighbor_data = graph.nodes.get(neighbor, {})
+                    if neighbor_data.get('node_type') == 'atom':
+                        b_vasp_idx = neighbor_data.get('vasp_index')
+                        b_atom_node = neighbor
+                        break
+            
+            if b_vasp_idx is None:
+                continue
+            
+            # Find index in b_indices array
+            try:
+                b_idx_in_array = np.where(b_indices == b_vasp_idx)[0][0]
+            except IndexError:
+                continue
+            
+            b_to_oct[b_idx_in_array] = oct_node
+            
+            # Get X atoms for this octahedron via B atom → X atoms (BONDED_TO edges)
+            x_vasp_indices = []
+            if b_atom_node:
+                for neighbor in graph.neighbors(b_atom_node):
+                    edge_data = graph.get_edge_data(b_atom_node, neighbor)
+                    if (edge_data and
+                        edge_data.get('edge_type') == 'bonded_to'):
+                        neighbor_data = graph.nodes.get(neighbor, {})
+                        if (neighbor_data.get('node_type') == 'atom' and
+                            neighbor_data.get('is_X', False)):
+                            x_vasp_idx = neighbor_data.get('vasp_index')
+                            if x_vasp_idx is not None:
+                                x_vasp_indices.append(x_vasp_idx)
+            
+            # Map to indices in x_indices array
+            x_indices_in_array = []
+            for x_vasp_idx in x_vasp_indices:
+                try:
+                    x_idx_in_array = np.where(x_indices == x_vasp_idx)[0][0]
+                    x_indices_in_array.append(x_idx_in_array)
+                except IndexError:
+                    continue
+            
+            # Store (should have 6 X atoms)
+            if len(x_indices_in_array) == 6:
+                oct_to_x_indices[oct_node] = x_indices_in_array
+            else:
+                # Store with NaN padding if not exactly 6
+                oct_to_x_indices[oct_node] = x_indices_in_array + [np.nan] * (6 - len(x_indices_in_array))
+        
+        # Build neigh_list array
+        neigh_list = np.full((len(b_indices), 6), np.nan)
+        for b_idx, oct_node in b_to_oct.items():
+            if oct_node in oct_to_x_indices:
+                x_idx_list = oct_to_x_indices[oct_node]
+                if len(x_idx_list) == 6 and not any(np.isnan(x_idx_list)):
+                    neigh_list[b_idx, :] = x_idx_list
+        
+        # Convert ASE Atoms to pymatgen Structure
+        from pymatgen.io.ase import AseAtomsAdaptor
+        struct = AseAtomsAdaptor.get_structure(self.cell)
+        
+        # Calculate volumes and displacements (returns tuple of raw arrays)
+        volumes_array, displacements_array = calculate_octahedral_volumes_convex_hull(
+            struct, neigh_list, b_indices.tolist(), x_indices.tolist(),
+            mode='raw'
+        )
+        
+        # Process based on mode
+        if mode == 'global':
+            # Return mean volume, ignoring NaN values
+            valid_volumes = volumes_array[~np.isnan(volumes_array)]
+            if len(valid_volumes) == 0:
+                return np.nan
+            return float(np.mean(valid_volumes))
+        
+        elif mode == 'local':
+            # Return dict mapping octahedron_id -> volume
+            # Map volumes back to octahedron IDs
+            volumes_dict = {}
+            for b_idx, oct_node in b_to_oct.items():
+                volumes_dict[oct_node] = float(volumes_array[b_idx])
+            return volumes_dict
+        
+        else:
+            raise ValueError(f"Unknown mode '{mode}'. Use 'global' or 'local'.")
+    
+    def get_xeq_xeq_and_xax_xax_distances(
+        self,
+        mode: str = 'global',
+    ) -> Union[Tuple[float, float], Tuple[Dict[str, float], Dict[str, float]]]:
+        """
+        Calculate Xeq-Xeq and Xax-Xax distances for octahedra using graph structure.
+        
+        For each octahedron:
+        1. Gets B atom from octahedron node (via CONTAINS edge)
+        2. Gets X atoms from B atom (via BONDED_TO edges)
+        3. Classifies X atoms as equatorial/axial from node attributes
+        4. Calculates minimum distance between any two equatorial X atoms (Xeq-Xeq)
+        5. Calculates distance between the two axial X atoms (Xax-Xax)
+        
+        Uses PBC-aware distance calculations to ensure accurate measurements.
+        
+        Parameters
+        ----------
+        mode : str, default='global'
+            Calculation mode:
+            - 'global': Return mean distances for all octahedra (tuple of floats)
+            - 'local': Return distances per octahedron (tuple of dicts)
+        
+        Returns
+        -------
+        tuple
+            - If mode='global': (mean_xeq_xeq, mean_xax_xax) in Å (tuple of floats)
+            - If mode='local': (xeq_xeq_dict, xax_xax_dict) (tuple of dicts)
+        
+        Examples
+        --------
+        >>> analyzer = q2D_analyzer("structure.cif")
+        >>> analyzer.analyze()
+        >>> 
+        >>> # Global mode: mean distances
+        >>> mean_xeq_xeq, mean_xax_xax = analyzer.get_xeq_xeq_and_xax_xax_distances(mode='global')
+        >>> print(f"Mean Xeq-Xeq: {mean_xeq_xeq:.2f} Å, Mean Xax-Xax: {mean_xax_xax:.2f} Å")
+        >>> 
+        >>> # Local mode: per-octahedron distances
+        >>> xeq_dict, xax_dict = analyzer.get_xeq_xeq_and_xax_xax_distances(mode='local')
+        >>> for oct_id in xeq_dict.keys():
+        ...     print(f"{oct_id}: Xeq-Xeq={xeq_dict[oct_id]:.2f} Å, Xax-Xax={xax_dict[oct_id]:.2f} Å")
+        """
+        from ..octahedral_processing.octahedral_analysis import calculate_xeq_xeq_and_xax_xax_distances
+        from pymatgen.io.ase import AseAtomsAdaptor
+        
+        self._ensure_analyzed()
+        
+        # Convert ASE Atoms to pymatgen Structure
+        struct = AseAtomsAdaptor.get_structure(self.cell)
+        
+        # Get graph
+        graph = self.get_graph()
+        
+        # Calculate distances using simple graph-based approach
+        return calculate_xeq_xeq_and_xax_xax_distances(struct, graph, mode=mode)
+    
+    def get_xbx_angles_by_layer_and_geometry(
+        self,
+        octahedra: Optional[List[str]] = None,
+        layer: Optional[str] = None,
+        layers: Optional[List[str]] = None,
+    ) -> Dict[str, Dict[str, np.ndarray]]:
+        """
+        Get X-B-X (XBX) angles grouped by layer and geometry (equatorial vs axial/interlayer).
+        
+        Returns XBX angles (angles between two X atoms and the central B atom within an octahedron)
+        separated by layer and by X atom geometry. Ideal angles are 90° (adjacent X) or 180° (opposite X).
+        
+        Parameters
+        ----------
+        octahedra : list of str, optional
+            Specific octahedra IDs to include
+        layer : str, optional
+            Single layer ID to filter by
+        layers : list of str, optional
+            Multiple layer IDs to filter by
+        
+        Returns
+        -------
+        dict
+            Dictionary with structure:
+            {
+                'Layer_0': {
+                    'equatorial': np.ndarray of XBX angles (both X atoms are equatorial),
+                    'axial': np.ndarray of XBX angles (at least one X atom is axial/interlayer)
+                },
+                'Layer_1': {
+                    'equatorial': np.ndarray,
+                    'axial': np.ndarray
+                },
+                ...
+            }
+        """
+        from ...utils.geometry.pbc_distances import find_nearest_image_positions
+        from ..characterization.distortions import _get_octahedral_distortions_detailed
+        
+        self._ensure_analyzed()
+        
+        # Get all octahedral distortions (contains XBX angles in 'bond_angles')
+        all_octahedra_distortions = _get_octahedral_distortions_detailed(
+            self, octahedra=octahedra, layer=layer, layers=layers
+        )
+        
+        if not all_octahedra_distortions:
+            return {}
+        
+        # Get graph and positions to determine X atom geometry
+        graph = self.get_graph()
+        atom_positions = self.cell.get_positions()
+        cell = np.array(self.cell.get_cell())
+        
+        # Get all X atom positions for PBC calculations
+        b_x_data = self.get_b_x_atoms()
+        all_x_indices = b_x_data['x_indices']
+        all_x_positions = b_x_data['x_positions']
+        
+        # Result structure: layer_id -> {'equatorial': [...], 'axial': [...]}
+        result = {}
+        
+        # Process each octahedron
+        for oct_id, oct_data in all_octahedra_distortions.items():
+            central_idx = oct_data.get('central_atom_index')
+            if central_idx is None:
+                continue
+            
+            # Use already-calculated bond_angles from get_octahedral_distortions()
+            bond_angles = oct_data.get('bond_angles')
+            if bond_angles is None or len(bond_angles) == 0:
+                continue
+            
+            layer_id = oct_data.get('layer', 'unknown')
+            layer_key = f'Layer_{layer_id}'
+            
+            # Initialize layer dict if needed
+            if layer_key not in result:
+                result[layer_key] = {'equatorial': [], 'axial': []}
+            
+            # Reconstruct X atom indices using the same method as distortions.py
+            central_pos = atom_positions[central_idx]
+            
+            # Find 6 nearest X atoms using PBC (same as in distortions.py)
+            nearest_x_indices, nearest_x_positions, nearest_distances, image_labels = find_nearest_image_positions(
+                reference_position=central_pos,
+                candidate_positions=all_x_positions,
+                candidate_indices=all_x_indices,
+                cell=cell,
+                n_neighbors=6,
+                pbc=True,
+            )
+            
+            # Check geometry of each X atom from graph
+            x_geometry = {}  # x_idx -> 'equatorial' or 'axial' or 'interlayer'
+            for x_idx in nearest_x_indices:
+                atom_node = f"atom_{x_idx}"
+                node_data = graph.nodes.get(atom_node, {})
+                
+                # Check if interlayer (bridging between layers)
+                if node_data.get('is_interlayer', False):
+                    x_geometry[x_idx] = 'interlayer'
+                # Check if axial
+                elif node_data.get('is_axial', False):
+                    x_geometry[x_idx] = 'axial'
+                # Otherwise equatorial
+                else:
+                    x_geometry[x_idx] = 'equatorial'
+            
+            # Classify bond_angles by geometry
+            # The order matches distortions.py: for i in range(len(x_positions)):
+            #     for j in range(i + 1, len(x_positions)):
+            bond_angles_array = np.array(bond_angles) if hasattr(bond_angles, '__iter__') and not isinstance(bond_angles, str) else bond_angles
+            
+            angle_idx = 0
+            for i in range(len(nearest_x_indices)):
+                for j in range(i + 1, len(nearest_x_indices)):
+                    if angle_idx >= len(bond_angles_array):
+                        break
+                    
+                    x_i_idx = nearest_x_indices[i]
+                    x_j_idx = nearest_x_indices[j]
+                    angle = bond_angles_array[angle_idx]
+                    
+                    # Classify angle based on X atom geometry
+                    geom_i = x_geometry.get(x_i_idx, 'equatorial')
+                    geom_j = x_geometry.get(x_j_idx, 'equatorial')
+                    
+                    # Equatorial: both X atoms are equatorial
+                    # Axial/Interlayer: at least one X atom is axial or interlayer
+                    if geom_i == 'equatorial' and geom_j == 'equatorial':
+                        result[layer_key]['equatorial'].append(angle)
+                    else:
+                        # At least one is axial or interlayer
+                        result[layer_key]['axial'].append(angle)
+                    
+                    angle_idx += 1
+        
+        # Convert lists to numpy arrays
+        for layer_key in result:
+            result[layer_key]['equatorial'] = np.array(result[layer_key]['equatorial']) if result[layer_key]['equatorial'] else np.array([])
+            result[layer_key]['axial'] = np.array(result[layer_key]['axial']) if result[layer_key]['axial'] else np.array([])
+        
+        return result
+
+    def get_xbx_angles_by_layer_separated(
+        self,
+        octahedra: Optional[List[str]] = None,
+        layer: Optional[str] = None,
+        layers: Optional[List[str]] = None,
+    ) -> Dict[str, Dict[str, np.ndarray]]:
+        """
+        Get X-B-X (XBX) angles separated by angle type (90° vs 180°) and geometry.
+        
+        This method separates XBX angles into:
+        - 90° type: angles < 135° (ideal = 90°)
+        - 180° type: angles ≥ 135° (ideal = 180°)
+        
+        Further classified by X-atom geometry:
+        - eq_eq: both X atoms are equatorial
+        - eq_ax: one equatorial, one axial/interlayer
+        - ax_ax: both axial/interlayer (only exists for 180° angles)
+        
+        Parameters
+        ----------
+        octahedra : list of str, optional
+            Specific octahedra IDs to include
+        layer : str, optional
+            Single layer ID to filter by
+        layers : list of str, optional
+            Multiple layer IDs to filter by
+        
+        Returns
+        -------
+        dict
+            Dictionary with structure:
+            {
+                'Layer_0': {
+                    '90_eq_eq': np.ndarray,
+                    '90_eq_ax': np.ndarray,
+                    '180_eq_eq': np.ndarray,
+                    '180_eq_ax': np.ndarray,
+                    '180_ax_ax': np.ndarray
+                },
+                'Layer_1': {...},
+                'global': {
+                    '90': np.ndarray,  # all 90° angles
+                    '180': np.ndarray  # all 180° angles
+                }
+            }
+        """
+        from ...utils.geometry.pbc_distances import find_nearest_image_positions
+        from ..characterization.distortions import _get_octahedral_distortions_detailed
+        
+        self._ensure_analyzed()
+        
+        # Get all octahedral distortions (contains XBX angles in 'bond_angles')
+        all_octahedra_distortions = _get_octahedral_distortions_detailed(
+            self, octahedra=octahedra, layer=layer, layers=layers
+        )
+        
+        if not all_octahedra_distortions:
+            return {}
+        
+        # Get graph and positions to determine X atom geometry
+        graph = self.get_graph()
+        atom_positions = self.cell.get_positions()
+        cell = np.array(self.cell.get_cell())
+        
+        # Get all X atom positions for PBC calculations
+        b_x_data = self.get_b_x_atoms()
+        all_x_indices = b_x_data['x_indices']
+        all_x_positions = b_x_data['x_positions']
+        
+        # Result structure: layer_id -> {angle_type_geometry: [...]}
+        result = {}
+        
+        # Global collectors
+        global_90 = []
+        global_180 = []
+        
+        # Process each octahedron
+        for oct_id, oct_data in all_octahedra_distortions.items():
+            central_idx = oct_data.get('central_atom_index')
+            if central_idx is None:
+                continue
+            
+            # Use already-calculated bond_angles from get_octahedral_distortions()
+            bond_angles = oct_data.get('bond_angles')
+            if bond_angles is None or len(bond_angles) == 0:
+                continue
+            
+            layer_id = oct_data.get('layer', 'unknown')
+            layer_key = f'Layer_{layer_id}'
+            
+            # Initialize layer dict if needed
+            if layer_key not in result:
+                result[layer_key] = {
+                    '90_eq_eq': [],
+                    '90_eq_ax': [],
+                    '180_eq_eq': [],
+                    '180_eq_ax': [],
+                    '180_ax_ax': []
+                }
+            
+            # Reconstruct X atom indices and positions (minimum-image)
+            central_pos = atom_positions[central_idx]
+            nearest_x_indices, nearest_x_positions, nearest_distances, image_labels = find_nearest_image_positions(
+                reference_position=central_pos,
+                candidate_positions=all_x_positions,
+                candidate_indices=all_x_indices,
+                cell=cell,
+                n_neighbors=6,
+                pbc=True,
+            )
+            nearest_x_positions = np.asarray(nearest_x_positions)
+
+            # Bulk only (3D, no terminals): classify 180° by X-X pair vector alignment. Axial = X-X along Z (c), equatorial = X-X in XY.
+            use_geometric_bulk = (getattr(self, '_structure_type', None) == 'bulk')
+            c_hat = None
+            if use_geometric_bulk:
+                c_vec = np.array(cell[2], dtype=np.float64)
+                c_norm = np.linalg.norm(c_vec)
+                c_hat = c_vec / c_norm if c_norm >= 1e-10 else np.array([0.0, 0.0, 1.0])
+
+            x_geometry = {}
+            if not use_geometric_bulk:
+                for x_idx in nearest_x_indices:
+                    atom_node = f"atom_{x_idx}"
+                    node_data = graph.nodes.get(atom_node, {})
+                    if 'is_axial' in node_data:
+                        x_geometry[x_idx] = 'axial'
+                    elif 'is_equatorial' in node_data:
+                        x_geometry[x_idx] = 'equatorial'
+                    elif 'is_interlayer' in node_data:
+                        x_geometry[x_idx] = 'axial'
+                    else:
+                        x_geometry[x_idx] = 'equatorial'
+
+            bond_angles_array = np.array(bond_angles) if hasattr(bond_angles, '__iter__') and not isinstance(bond_angles, str) else bond_angles
+            angle_idx = 0
+            for i in range(len(nearest_x_indices)):
+                for j in range(i + 1, len(nearest_x_indices)):
+                    if angle_idx >= len(bond_angles_array):
+                        break
+                    angle = bond_angles_array[angle_idx]
+                    x_i_idx = nearest_x_indices[i]
+                    x_j_idx = nearest_x_indices[j]
+
+                    if angle < 135.0:
+                        angle_type = '90'
+                        global_90.append(angle)
+                        if use_geometric_bulk:
+                            geom_class = 'eq_ax'
+                        else:
+                            geom_i = x_geometry.get(x_i_idx, 'equatorial')
+                            geom_j = x_geometry.get(x_j_idx, 'equatorial')
+                            if geom_i == 'equatorial' and geom_j == 'equatorial':
+                                geom_class = 'eq_eq'
+                            elif geom_i == 'axial' and geom_j == 'axial':
+                                geom_class = 'ax_ax'
+                            else:
+                                geom_class = 'eq_ax'
+                    else:
+                        angle_type = '180'
+                        global_180.append(angle)
+                        if use_geometric_bulk and c_hat is not None:
+                            vec_xx = nearest_x_positions[j] - nearest_x_positions[i]
+                            vec_xx_norm = np.linalg.norm(vec_xx) + 1e-9
+                            axis_xx = vec_xx / vec_xx_norm
+                            if np.abs(np.dot(axis_xx, c_hat)) >= 0.7:
+                                geom_class = 'ax_ax'
+                            else:
+                                geom_class = 'eq_eq'
+                        else:
+                            geom_i = x_geometry.get(x_i_idx, 'equatorial')
+                            geom_j = x_geometry.get(x_j_idx, 'equatorial')
+                            if geom_i == 'equatorial' and geom_j == 'equatorial':
+                                geom_class = 'eq_eq'
+                            elif geom_i == 'axial' and geom_j == 'axial':
+                                geom_class = 'ax_ax'
+                            else:
+                                geom_class = 'eq_ax'
+
+                    key = f'{angle_type}_{geom_class}'
+                    if key in result[layer_key]:
+                        result[layer_key][key].append(angle)
+                    angle_idx += 1
+        
+        # Convert lists to numpy arrays
+        for layer_key in result:
+            for angle_key in result[layer_key]:
+                result[layer_key][angle_key] = np.array(result[layer_key][angle_key]) if result[layer_key][angle_key] else np.array([])
+        
+        # Add global statistics
+        result['global'] = {
+            '90': np.array(global_90) if global_90 else np.array([]),
+            '180': np.array(global_180) if global_180 else np.array([])
+        }
+        
+        return result
+
+    def get_xbx_angles_global_separated(
+        self,
+        octahedra: Optional[List[str]] = None,
+    ) -> Dict[str, np.ndarray]:
+        """
+        Get X-B-X (XBX) angles globally separated by equatorial/axial geometry.
+
+        This method extracts ALL XBX angles from all octahedra and classifies them
+        by geometry WITHOUT layer separation. This is useful for structures where
+        layer-specific classification may fail (e.g., some Br-based structures).
+
+        Classification:
+        - For bulk structures (3D): Uses geometric classification based on X-X vector
+          alignment with c-axis. If |dot(X-X_vector, c_hat)| >= 0.7, it's axial.
+        - For layered structures (DJ/RP): Uses graph node attributes (is_equatorial, is_axial).
+
+        Parameters
+        ----------
+        octahedra : list of str, optional
+            Specific octahedra IDs to include. If None, includes all octahedra.
+
+        Returns
+        -------
+        dict
+            Dictionary with structure:
+            {
+                '180_equatorial': np.ndarray,  # 180° angles between equatorial X atoms
+                '180_axial': np.ndarray,       # 180° angles between axial X atoms
+                '90_all': np.ndarray,          # all 90° angles (not separated by geometry)
+                '180_all': np.ndarray          # all 180° angles (for validation)
+            }
+
+        Examples
+        --------
+        >>> analyzer = q2D_analyzer("structure.cif")
+        >>> analyzer.analyze()
+        >>> xbx_global = analyzer.get_xbx_angles_global_separated()
+        >>> eq_angles = xbx_global['180_equatorial']
+        >>> ax_angles = xbx_global['180_axial']
+        >>> print(f"Mean equatorial deviation: {np.mean(np.abs(eq_angles - 180)):.2f}°")
+        >>> print(f"Mean axial deviation: {np.mean(np.abs(ax_angles - 180)):.2f}°")
+        """
+        from ...utils.geometry.pbc_distances import find_nearest_image_positions
+        from ..characterization.distortions import _get_octahedral_distortions_detailed
+
+        self._ensure_analyzed()
+
+        # Get all octahedral distortions (contains XBX angles in 'bond_angles')
+        all_octahedra_distortions = _get_octahedral_distortions_detailed(
+            self, octahedra=octahedra, layer=None, layers=None
+        )
+
+        if not all_octahedra_distortions:
+            return {
+                '180_equatorial': np.array([]),
+                '180_axial': np.array([]),
+                '90_all': np.array([]),
+                '180_all': np.array([])
+            }
+
+        # Get graph and positions to determine X atom geometry
+        graph = self.get_graph()
+        atom_positions = self.cell.get_positions()
+        cell = np.array(self.cell.get_cell())
+
+        # Get all X atom positions for PBC calculations
+        b_x_data = self.get_b_x_atoms()
+        all_x_indices = b_x_data['x_indices']
+        all_x_positions = b_x_data['x_positions']
+
+        # Global collectors
+        global_180_equatorial = []
+        global_180_axial = []
+        global_90_all = []
+        global_180_all = []
+
+        # Determine classification method
+        use_geometric_bulk = (getattr(self, '_structure_type', None) == 'bulk')
+        c_hat = None
+        if use_geometric_bulk:
+            c_vec = np.array(cell[2], dtype=np.float64)
+            c_norm = np.linalg.norm(c_vec)
+            c_hat = c_vec / c_norm if c_norm >= 1e-10 else np.array([0.0, 0.0, 1.0])
+
+        # Process each octahedron
+        for oct_id, oct_data in all_octahedra_distortions.items():
+            central_idx = oct_data.get('central_atom_index')
+            if central_idx is None:
+                continue
+
+            # Use already-calculated bond_angles from get_octahedral_distortions()
+            bond_angles = oct_data.get('bond_angles')
+            if bond_angles is None or len(bond_angles) == 0:
+                continue
+
+            # Reconstruct X atom indices and positions (minimum-image)
+            central_pos = atom_positions[central_idx]
+            nearest_x_indices, nearest_x_positions, nearest_distances, image_labels = find_nearest_image_positions(
+                reference_position=central_pos,
+                candidate_positions=all_x_positions,
+                candidate_indices=all_x_indices,
+                cell=cell,
+                n_neighbors=6,
+                pbc=True,
+            )
+            nearest_x_positions = np.asarray(nearest_x_positions)
+
+            # Build X atom geometry classification
+            x_geometry = {}
+            if not use_geometric_bulk:
+                for x_idx in nearest_x_indices:
+                    atom_node = f"atom_{x_idx}"
+                    node_data = graph.nodes.get(atom_node, {})
+                    if 'is_axial' in node_data:
+                        x_geometry[x_idx] = 'axial'
+                    elif 'is_equatorial' in node_data:
+                        x_geometry[x_idx] = 'equatorial'
+                    elif 'is_interlayer' in node_data:
+                        x_geometry[x_idx] = 'axial'
+                    else:
+                        x_geometry[x_idx] = 'equatorial'
+
+            # Process all angles
+            bond_angles_array = np.array(bond_angles) if hasattr(bond_angles, '__iter__') and not isinstance(bond_angles, str) else bond_angles
+            angle_idx = 0
+            for i in range(len(nearest_x_indices)):
+                for j in range(i + 1, len(nearest_x_indices)):
+                    if angle_idx >= len(bond_angles_array):
+                        break
+                    angle = bond_angles_array[angle_idx]
+                    x_i_idx = nearest_x_indices[i]
+                    x_j_idx = nearest_x_indices[j]
+
+                    if angle < 135.0:
+                        # 90° angle - collect all without geometry separation
+                        global_90_all.append(angle)
+                    else:
+                        # 180° angle - classify by geometry
+                        global_180_all.append(angle)
+
+                        if use_geometric_bulk and c_hat is not None:
+                            # Geometric classification for bulk structures
+                            vec_xx = nearest_x_positions[j] - nearest_x_positions[i]
+                            vec_xx_norm = np.linalg.norm(vec_xx) + 1e-9
+                            axis_xx = vec_xx / vec_xx_norm
+                            if np.abs(np.dot(axis_xx, c_hat)) >= 0.7:
+                                global_180_axial.append(angle)
+                            else:
+                                global_180_equatorial.append(angle)
+                        else:
+                            # Graph-based classification for layered structures
+                            geom_i = x_geometry.get(x_i_idx, 'equatorial')
+                            geom_j = x_geometry.get(x_j_idx, 'equatorial')
+                            if geom_i == 'equatorial' and geom_j == 'equatorial':
+                                global_180_equatorial.append(angle)
+                            elif geom_i == 'axial' and geom_j == 'axial':
+                                global_180_axial.append(angle)
+                            # Note: eq_ax mixed angles are not included in either category
+
+                    angle_idx += 1
+
+        return {
+            '180_equatorial': np.array(global_180_equatorial) if global_180_equatorial else np.array([]),
+            '180_axial': np.array(global_180_axial) if global_180_axial else np.array([]),
+            '90_all': np.array(global_90_all) if global_90_all else np.array([]),
+            '180_all': np.array(global_180_all) if global_180_all else np.array([])
+        }
 
     @property
     def structure_type(self) -> str:
@@ -1125,7 +2502,7 @@ class q2D_analyzer:
         >>> for i, result in enumerate(results):
         ...     print(f"Spacer {i}: compression={result.compression_factor:.2f}")
         """
-        from q2D_Materials.analyzer.characterization.spacer_analysis import SpacerAnalysis
+        from ..molecular_processing.spacer_analysis import SpacerAnalysis
         from q2D_Materials.modifier.graph_view import GraphView
 
         self._ensure_analyzed()
@@ -1213,7 +2590,7 @@ class q2D_analyzer:
         >>> result = analyzer.mol_validate("NCCCCC", spacer_type="RP")
         >>> print(f"Valid: {result.is_valid}")
         """
-        from ..characterization.molecule_candidates import analyze_molecule_candidate
+        from ..molecular_processing.molecule_candidates import analyze_molecule_candidate
         return analyze_molecule_candidate(
             molecule,
             spacer_type=spacer_type.upper(),
@@ -1254,7 +2631,7 @@ class q2D_analyzer:
         >>> # If NH2 groups detected
         >>> modified = analyzer.convert_molecule_nh2_to_nh3(result.original_atoms)
         """
-        from ..characterization.molecule_candidates import convert_nh2_to_nh3, clean_molecule
+        from ..molecular_processing.molecule_candidates import convert_nh2_to_nh3, clean_molecule
 
         # If no specific indices, use clean_molecule to convert all NH2 to NH3
         if n_indices is None:
@@ -1354,10 +2731,13 @@ class q2D_analyzer:
         Export graph visualization data as JSON.
 
         Exports the structural analysis as a JSON file containing:
-        - Nodes (octahedra and layers) with metadata
-        - Edges (connections between components)
+        - Nodes (octahedra, layers, atoms, molecules, structure, cavities) with ALL properties
+        - Edges (connections between components) with ALL properties
         - Structure metadata (type, counts, formula)
         - Atom details for detailed inspection
+
+        All properties from nodes and edges are exported automatically by iterating
+        over the graph data dictionaries (similar to what's shown in hover tooltips).
 
         This data can be consumed by the q2D Materials Analyzer web interface
         or other visualization tools.
@@ -1405,102 +2785,41 @@ class q2D_analyzer:
         node_id_map = {}
         node_counter = 0
 
-        element_colors = {
-            'Ti': '#8be9fd', 'Sn': '#50fa7b', 'Pb': '#ff5555', 'Ge': '#ffb86c',
-            'Zr': '#bd93f9', 'Hf': '#ff79c6', 'Nb': '#f1fa8c', 'Ta': '#6272a4'
-        }
-        default_color = '#44475a'
-
-        octahedra = self.get_octahedra()
-        for oct in octahedra:
-            node_id = oct['id']
-            node_id_map[node_id] = node_counter
-            b_element = oct.get('central_atom_symbol', 'Unknown')
-            color = element_colors.get(b_element, default_color)
-
-            nodes.append({
+        # Export ALL nodes with ALL their properties - just iterate over the dictionary
+        for node_id, node_data in self._graph.nodes(data=True):
+            # Start with the node ID and type
+            node_entry = {
                 'id': int(node_counter),
                 'original_id': str(node_id),
-                'type': 'octahedron',
-                'label': f"Oct-{b_element}",
-                'b_element': str(b_element),
-                'color': str(color),
-                'central_atom_index': to_native(oct.get('central_atom_index')),
-            })
-            node_counter += 1
-
-        layers = self.get_layers()
-        for layer_id, layer_info in layers.items():
-            node_id = f"layer_{layer_id}"
+            }
+            
+            # Add ALL properties from node_data dictionary
+            for key, value in node_data.items():
+                node_entry[key] = to_native(value)
+            
             node_id_map[node_id] = node_counter
-
-            nodes.append({
-                'id': int(node_counter),
-                'original_id': str(node_id),
-                'type': 'layer',
-                'label': f"Layer-{layer_id}",
-                'layer_id': str(layer_id),
-                'z_coord': to_native(layer_info.get('z_coord')),
-                'octahedra': to_native(layer_info.get('octahedra', [])),
-                'octahedra_count': int(layer_info.get('octahedra_count', 0)),
-                'color': '#ff79c6'
-            })
+            nodes.append(node_entry)
             node_counter += 1
-        
-        # Add molecule nodes
-        for node, data in self._graph.nodes(data=True):
-            if data.get('node_type') == 'molecule':
-                node_id_map[node] = node_counter
-                mol_type = data.get('molecule_type', 'unknown')
-                formula = data.get('formula', 'Unknown')
-                color = '#50fa7b' if mol_type == 'a_site' else '#f1fa8c'
-                
-                nodes.append({
-                    'id': int(node_counter),
-                    'original_id': str(node),
-                    'type': 'molecule',
-                    'label': f"{mol_type}: {formula}",
-                    'molecule_type': str(mol_type),
-                    'formula': str(formula),
-                    'color': str(color),
-                })
-                node_counter += 1
-        
-        # Add Structure root node
-        for node, data in self._graph.nodes(data=True):
-            if data.get('node_type') == 'structure':
-                node_id_map[node] = node_counter
-                nodes.append({
-                    'id': int(node_counter),
-                    'original_id': str(node),
-                    'type': 'structure',
-                    'label': f"Structure: {data.get('formula', 'Unknown')}",
-                    'formula': str(data.get('formula', '')),
-                    'thickness': int(data.get('thickness', 0)),
-                    'a': to_native(data.get('a')),
-                    'b': to_native(data.get('b')),
-                    'c': to_native(data.get('c')),
-                    'alpha': to_native(data.get('alpha')),
-                    'beta': to_native(data.get('beta')),
-                    'gamma': to_native(data.get('gamma')),
-                    'layer_count': int(data.get('layer_count', 0)),
-                    'octahedra_count': int(data.get('octahedra_count', 0)),
-                    'molecule_count': int(data.get('molecule_count', 0)),
-                    'atom_count': int(data.get('atom_count', 0)),
-                    'color': '#bd93f9',  # Purple for structure node
-                })
-                node_counter += 1
 
+        # Export ALL edges with ALL their properties - just iterate over the dictionary
         edges = []
-        for source, target in self._graph.edges():
+        for source, target, edge_data in self._graph.edges(data=True):
             if source in node_id_map and target in node_id_map:
-                edges.append({
+                # Start with connection info
+                edge_entry = {
                     'from': int(node_id_map[source]),
                     'to': int(node_id_map[target]),
                     'source_id': str(source),
-                    'target_id': str(target)
-                })
+                    'target_id': str(target),
+                }
+                
+                # Add ALL properties from edge_data dictionary
+                for key, value in edge_data.items():
+                    edge_entry[key] = to_native(value)
+                
+                edges.append(edge_entry)
 
+        # Additional atom information (for backward compatibility)
         atom_positions = self.cell.get_positions()
         atom_symbols = self.cell.get_chemical_symbols()
         atoms = []
@@ -1545,8 +2864,8 @@ class q2D_analyzer:
                 'structure_type': str(self._structure_type),
                 'total_atoms': int(len(self.cell)),
                 'formula': str(self.cell.get_chemical_formula()),
-                'octahedra_count': int(len(octahedra)),
-                'layers_count': int(len(layers)),
+                'octahedra_count': len([n for n in nodes if n.get('node_type') == 'octahedron']),
+                'layers_count': len([n for n in nodes if n.get('node_type') == 'layer']),
                 'spacers_count': int(len(spacers)),
                 'a_sites_count': int(len(a_sites)),
                 'cell': to_native(self.cell.get_cell()),
@@ -1563,4 +2882,306 @@ class q2D_analyzer:
             json.dump(graph_data, f, indent=2)
 
         return os.path.abspath(output_path)
+    
+    def export_graph_svg(
+        self,
+        output_path: Optional[str] = None,
+        exclude_atoms: bool = True,
+        show_properties: bool = True,
+        figsize: Tuple[float, float] = (16, 12),
+        dpi: int = 300,
+    ) -> str:
+        """
+        Export structure graph as publication-ready SVG visualization.
+
+        Creates an SVG file with:
+        - Color-coded nodes by type (octahedra, layers, molecules, etc.)
+        - Color-coded edges by relationship type (contains, bonded_to, shares_atoms, etc.)
+        - Optional property annotations (formula, z-coordinate, etc.)
+        - Automatic legend with node and edge types
+        - Spring layout for natural clustering
+
+        Parameters
+        ----------
+        output_path : str, optional
+            Path to save the SVG file. If None, uses '{experiment_name}_graph.svg'
+        exclude_atoms : bool, optional
+            If True (default), exclude atom nodes for cleaner visualization.
+            Show only structural nodes (octahedra, layers, molecules).
+        show_properties : bool, optional
+            If True (default), show key properties as annotations near nodes
+        figsize : tuple, optional
+            Figure size in inches (default: 16x12 for publication quality)
+        dpi : int, optional
+            DPI for output (default: 300 for publication)
+
+        Returns
+        -------
+        str
+            Absolute path to created SVG file
+
+        Examples
+        --------
+        >>> analyzer = q2D_analyzer("structure.vasp")
+        >>> analyzer.analyze()
+        >>> # Export with default settings (structural nodes only, with annotations)
+        >>> svg_path = analyzer.export_graph_svg("structure_graph.svg")
+        >>>
+        >>> # Export with all atoms included
+        >>> svg_path = analyzer.export_graph_svg("structure_graph_full.svg", exclude_atoms=False)
+        >>>
+        >>> # Export without property annotations
+        >>> svg_path = analyzer.export_graph_svg("structure_graph_clean.svg", show_properties=False)
+        """
+        self._ensure_analyzed()
+
+        from ...utils.other.graph_svg_export import export_structure_svg
+
+        if output_path is None:
+            output_path = f"{self.experiment_name}_graph.svg"
+
+        return export_structure_svg(
+            self._graph,
+            output_path,
+            exclude_atoms=exclude_atoms,
+            show_properties=show_properties,
+            figsize=figsize,
+            dpi=dpi,
+        )
+    
+    # ========================================================================
+    # Spacer Molecule Export Methods
+    # ========================================================================
+    
+    def export_molecules_individual(self) -> List[Atoms]:
+        """Export each spacer molecule as a separate ASE Atoms object.
+        
+        Each molecule is reconstructed with correct PBC coordinates but returned
+        as an isolated Atoms object without periodic boundary conditions.
+        
+        Returns
+        -------
+        list of ase.Atoms
+            Each element is a separate spacer molecule in cartesian coordinates.
+            Molecules are ordered by their appearance in the structure.
+            
+        Examples
+        --------
+        >>> analyzer = q2D_analyzer("structure.cif")
+        >>> analyzer.analyze()
+        >>> molecules = analyzer.export_molecules_individual()
+        >>> for i, mol in enumerate(molecules):
+        ...     mol.write(f'molecule_{i}.xyz')
+        """
+        self._ensure_analyzed()
+        
+        spacers = self.get_spacers()
+        if not spacers:
+            return []
+        
+        molecules = []
+        for spacer in spacers:
+            try:
+                mol = self._reconstruct_spacer_molecule(spacer)
+                molecules.append(mol)
+            except Exception as e:
+                import warnings
+                warnings.warn(f"Failed to reconstruct spacer molecule: {e}")
+                # Fall back to original spacer atoms without PBC reconstruction
+                molecules.append(spacer.copy())
+        
+        return molecules
+    
+    def export_molecules_cartesian(self) -> Atoms:
+        """Export all spacer molecules combined in cartesian coordinates.
+        
+        All spacer molecules are reconstructed with correct PBC coordinates
+        and combined into a single Atoms object. The result has no periodic
+        boundary conditions (all atoms in cartesian space).
+        
+        Returns
+        -------
+        ase.Atoms
+            Combined spacer molecules in cartesian coordinates.
+            
+        Examples
+        --------
+        >>> analyzer = q2D_analyzer("structure.cif")
+        >>> analyzer.analyze()
+        >>> all_molecules = analyzer.export_molecules_cartesian()
+        >>> all_molecules.write('all_molecules.xyz')
+        """
+        self._ensure_analyzed()
+        
+        spacers = self.get_spacers()
+        if not spacers:
+            return Atoms()
+        
+        all_symbols = []
+        all_positions = []
+        
+        for spacer in spacers:
+            try:
+                mol = self._reconstruct_spacer_molecule(spacer)
+            except Exception as e:
+                import warnings
+                warnings.warn(f"Failed to reconstruct spacer molecule: {e}")
+                mol = spacer.copy()
+            
+            all_symbols.extend(mol.get_chemical_symbols())
+            all_positions.extend(mol.get_positions())
+        
+        # Create combined Atoms object without PBC
+        combined = Atoms(symbols=all_symbols, positions=all_positions)
+        return combined
+    
+    def export_molecules_pbc(self, z_vacuum: float = 10.0) -> Atoms:
+        """Export all spacer molecules with PBC (inherits XY cell, controllable Z vacuum).
+        
+        All spacer molecules are reconstructed and combined into a single Atoms object
+        with periodic boundary conditions. The cell parameters are inherited from the
+        original structure in the XY plane, and a new Z cell parameter is calculated
+        to accommodate all molecules with the specified vacuum.
+        
+        B and X (halide) atoms are filtered out; only spacer molecule atoms are included.
+        
+        Parameters
+        ----------
+        z_vacuum : float, default=10.0
+            Z-direction vacuum to add around the molecules in Angstroms.
+            
+        Returns
+        -------
+        ase.Atoms
+            Combined spacer molecules with PBC (Z direction is periodic).
+            Only contains molecule atoms (no B or X atoms).
+            
+        Examples
+        --------
+        >>> analyzer = q2D_analyzer("structure.cif")
+        >>> analyzer.analyze()
+        >>> # Z vacuum = 15 Å
+        >>> pbc_molecules = analyzer.export_molecules_pbc(z_vacuum=15.0)
+        >>> pbc_molecules.write('molecules_pbc.xyz')
+        """
+        self._ensure_analyzed()
+        
+        spacers = self.get_spacers()
+        if not spacers:
+            return Atoms()
+        
+        # Get original cell (XY plane)
+        original_cell = self.cell.get_cell()
+        a = original_cell[0]
+        b = original_cell[1]
+        
+        # Reconstruct all spacers and collect positions
+        all_symbols = []
+        all_positions = []
+        
+        for spacer in spacers:
+            try:
+                mol = self._reconstruct_spacer_molecule(spacer)
+            except Exception as e:
+                import warnings
+                warnings.warn(f"Failed to reconstruct spacer molecule: {e}")
+                mol = spacer.copy()
+            
+            all_symbols.extend(mol.get_chemical_symbols())
+            all_positions.extend(mol.get_positions())
+        
+        # Calculate Z cell parameter based on molecule positions
+        if all_positions:
+            all_positions_array = np.array(all_positions)
+            z_min = np.min(all_positions_array[:, 2])
+            z_max = np.max(all_positions_array[:, 2])
+            z_height = z_max - z_min + z_vacuum
+        else:
+            z_height = z_vacuum
+        
+        # Create new cell: inherit XY, new Z
+        c = np.array([0, 0, z_height])
+        new_cell = np.array([a, b, c])
+        
+        # Create combined Atoms object with PBC
+        combined = Atoms(symbols=all_symbols, positions=all_positions, cell=new_cell, pbc=True)
+        
+        # Translate Z coordinates so that molecules are centered in the cell
+        if all_positions:
+            z_center = (z_min + z_max) / 2.0
+            z_shift = z_height / 2.0 - z_center
+            positions = combined.get_positions()
+            positions[:, 2] += z_shift
+            combined.set_positions(positions)
+        
+        return combined
+    
+    def _reconstruct_spacer_molecule(self, spacer: Atoms) -> Atoms:
+        """Reconstruct a spacer molecule with correct PBC coordinates.
+        
+        Uses the PBC reconstruction module to handle molecules that span
+        periodic boundaries. Starts from NH3 groups when available.
+        
+        Parameters
+        ----------
+        spacer : ase.Atoms
+            Spacer molecule to reconstruct
+            
+        Returns
+        -------
+        ase.Atoms
+            Reconstructed spacer in PBC-unwrapped coordinates (isolated molecule)
+        """
+        from ...utils.molecules.pbc_reconstruction import (
+            reconstruct_molecule_pbc,
+            reconstruct_molecule_from_nh3
+        )
+        
+        original_indices = spacer.info.get('original_indices', list(range(len(spacer))))
+        
+        # Try to reconstruct from NH3 groups first
+        try:
+            # Get geometric center of spacer
+            spacer_positions = spacer.get_positions()
+            geometric_center = np.mean(spacer_positions, axis=0)
+            
+            # Try NH3-aware reconstruction
+            reconstructed_dict = reconstruct_molecule_from_nh3(
+                original_indices,
+                geometric_center,
+                self._graph,
+                self.cell.get_positions(),
+                self.cell.get_chemical_symbols(),
+                self.cell.get_cell(),
+                pbc=True
+            )
+        except Exception as e:
+            # Fall back to regular reconstruction
+            spacer_positions = spacer.get_positions()
+            geometric_center = np.mean(spacer_positions, axis=0)
+            
+            reconstructed_dict = reconstruct_molecule_pbc(
+                original_indices,
+                geometric_center,
+                self._graph,
+                self.cell.get_positions(),
+                self.cell.get_chemical_symbols(),
+                self.cell.get_cell(),
+                pbc=True
+            )
+        
+        # Convert reconstructed positions to Atoms object
+        symbols = [self.cell[idx].symbol for idx in original_indices]
+        positions = []
+        for idx in original_indices:
+            if idx in reconstructed_dict:
+                pos, _ = reconstructed_dict[idx]
+                positions.append(pos)
+            else:
+                positions.append(self.cell[idx].position)
+        
+        reconstructed_atoms = Atoms(symbols=symbols, positions=positions)
+        reconstructed_atoms.info['original_indices'] = original_indices
+        
+        return reconstructed_atoms
     

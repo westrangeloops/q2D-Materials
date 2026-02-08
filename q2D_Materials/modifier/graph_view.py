@@ -122,9 +122,13 @@ class GraphView:
                 molecule_atoms = a_site.get('molecule_atoms', [])
                 if len(molecule_atoms) > 1:
                     # Create Atoms object for A-site molecule
+                    # Include cell and pbc from parent structure to enable
+                    # PBC-aware bond detection in graph construction.
                     a_site_atoms = Atoms(
                         symbols=[self.full_structure[i].symbol for i in molecule_atoms],
                         positions=[self.full_structure[i].position for i in molecule_atoms],
+                        cell=self.full_structure.get_cell(),
+                        pbc=self.full_structure.get_pbc(),
                     )
                     a_site_atoms.info['original_indices'] = molecule_atoms
 

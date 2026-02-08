@@ -19,16 +19,18 @@ import networkx as nx
 def _infer_structure_type_from_graph(
     slab_info: dict,
     spacers: list,
-    bx_graph: nx.Graph,
     cell: np.ndarray,
+    graph: nx.Graph = None,
+    octahedra: list = None,
 ) -> str:
     """
-    Infer structure type from the B-X network graph and slab information.
+    Infer structure type from slab information.
     
-    - bulk: Single continuous slab with no discontinuities, PBC-connected
-    - dj: Multiple slabs with spacers in discontinuity regions (bifunctional)
-    - rp: Multiple slabs with spacers in discontinuity regions (monofunctional)
-    - monolayer: Single slab with vacuum (no PBC connectivity in z)
+    Classification priority:
+    1. Check for octahedra - bulk needs at least one
+    2. Check for terminal X atoms - monolayer should have no terminal X
+    3. Classify DJ/RP based on NH3 count in spacers (2+ NH3 = DJ, 1 NH3 = RP)
+    4. Default to bulk if not others
     
     Parameters
     ----------
@@ -36,16 +38,47 @@ def _infer_structure_type_from_graph(
         Output from _identify_slabs_by_continuity
     spacers : list
         List of classified spacer molecules
-    bx_graph : nx.Graph
-        B-X network graph
     cell : np.ndarray
         Unit cell matrix
+    graph : nx.Graph, optional
+        Structural graph (needed for terminal X detection)
+    octahedra : list, optional
+        List of octahedra information (needed for bulk check)
         
     Returns
     -------
     str
         One of: 'bulk', 'dj', 'rp', 'monolayer', 'unknown'
     """
+    # Step 1: Check for octahedra - bulk needs at least one
+    n_octahedra = 0
+    if octahedra:
+        n_octahedra = len(octahedra)
+    elif graph:
+        # Count octahedra from graph
+        for node in graph.nodes():
+            if graph.nodes[node].get('node_type') == 'octahedron':
+                n_octahedra += 1
+    
+    # If no octahedra, cannot be bulk
+    if n_octahedra == 0:
+        return 'unknown'
+    
+    # Step 2: Check for terminal X atoms
+    # Monolayer structures have terminal X atoms (passivators on surface)
+    # Bulk structures typically have no terminal X (all X atoms are shared between octahedra)
+    has_terminal_x = False
+    if graph:
+        from .graph_construction import get_terminal_atoms
+        terminal_atoms = get_terminal_atoms(graph)
+        has_terminal_x = len(terminal_atoms) > 0
+    
+    # If no terminal X atoms and has octahedra, it's likely bulk
+    # (all X atoms are shared between octahedra in 3D network)
+    if not has_terminal_x and n_octahedra > 0:
+        # No terminal X and has octahedra = bulk (will be confirmed by other checks)
+        pass  # Continue with other checks
+    
     slabs = slab_info.get('slabs', {})
     slab_z_ranges = slab_info.get('slab_z_ranges', {})
     discontinuity_regions = slab_info.get('discontinuity_regions', [])
@@ -55,10 +88,14 @@ def _infer_structure_type_from_graph(
     n_spacers = len(spacers)
     
     if n_slabs == 0:
-        return 'unknown'
+        # No slabs but has octahedra - default to bulk
+        return 'bulk' if n_octahedra > 0 else 'unknown'
     
-    # Check for vacuum at cell boundaries
+    # Check for vacuum at cell boundaries and PBC connectivity
     cell_z = cell[2, 2]
+    is_pbc_connected = False
+    has_vacuum = False
+    
     if slab_z_ranges:
         all_z_min = min(z[0] for z in slab_z_ranges.values())
         all_z_max = max(z[1] for z in slab_z_ranges.values())
@@ -79,14 +116,15 @@ def _infer_structure_type_from_graph(
         else:
             has_vacuum = (gap_at_bottom > expected_layer_spacing * 0.5 or 
                           gap_at_top > expected_layer_spacing * 0.5)
-    else:
-        has_vacuum = False
-        is_pbc_connected = False
     
-    # Check for monolayer: single slab with significant vacuum
-    # Monolayer has vacuum > 2x expected layer spacing on at least one side
+    # PRIORITY: If PBC-connected and has octahedra, it's bulk (regardless of other factors)
+    if is_pbc_connected and n_octahedra > 0:
+        return 'bulk'
+    
+    # Check for monolayer: single slab with significant vacuum AND terminal X atoms
+    # Monolayer has vacuum > 2x expected layer spacing AND terminal X atoms (passivators)
     is_monolayer = False
-    if n_slabs == 1 and has_vacuum:
+    if n_slabs == 1 and has_vacuum and has_terminal_x:
         if slab_z_ranges:
             all_z_min = min(z[0] for z in slab_z_ranges.values())
             all_z_max = max(z[1] for z in slab_z_ranges.values())
@@ -111,37 +149,51 @@ def _infer_structure_type_from_graph(
             return 'bulk'
     
     elif n_spacers > 0:
-        # Check for organic spacers vs atomic (passivator) "spacers"
-        # If all spacers are atomic (single atoms) and vacuum is present, likely monolayer
-        organic_spacers = [s for s in spacers if s.info.get('mol_type') != 'atomic']
-        atomic_spacers = [s for s in spacers if s.info.get('mol_type') == 'atomic']
-        
-        # If only atomic "spacers" and significant vacuum, it's likely monolayer
-        # (the "spacers" are actually passivators or uncoordinated atoms)
-        if len(organic_spacers) == 0 and has_vacuum and n_slabs == 1:
-            return 'monolayer'
-        
-        # Has real organic spacers - determine DJ vs RP based on spacer type
-        # DJ: bifunctional spacers (2 attachment points)
-        # RP: monofunctional spacers (1 attachment point)
+        # Step 3: Classify DJ/RP based on NH3 count in spacers
+        # DJ: 2+ NH3 groups (bifunctional)
+        # RP: 1 NH3 group (monofunctional)
         
         dj_count = 0
         rp_count = 0
         
         for spacer in spacers:
-            n_attach = spacer.info.get('n_attachments', 0)
-            spacer_type = spacer.info.get('spacer_type', '')
+            # Check for NH3 count in spacer info or graph
+            nh3_count = 0
             
-            if spacer_type == 'dj' or n_attach >= 2:
+            # Try to get NH3 count from spacer info
+            if hasattr(spacer, 'info'):
+                nh3_count = spacer.info.get('nh3_count', 0)
+                # Also check n_attachments as fallback
+                if nh3_count == 0:
+                    n_attach = spacer.info.get('n_attachments', 0)
+                    if n_attach >= 2:
+                        nh3_count = 2  # Assume DJ
+                    elif n_attach == 1:
+                        nh3_count = 1  # Assume RP
+            
+            # If still no count, try to count from graph
+            if nh3_count == 0 and graph:
+                # Find spacer node in graph
+                spacer_symbols = spacer.get_chemical_symbols()
+                n_count = spacer_symbols.count('N')
+                # Rough estimate: if 2+ N atoms, likely DJ; 1 N atom, likely RP
+                if n_count >= 2:
+                    nh3_count = 2
+                elif n_count == 1:
+                    nh3_count = 1
+            
+            # Classify based on NH3 count
+            if nh3_count >= 2:
                 dj_count += 1
-            elif spacer_type == 'rp' or n_attach == 1:
+            elif nh3_count == 1:
                 rp_count += 1
             else:
-                # Atomic spacers need different treatment
-                if spacer.info.get('mol_type') == 'atomic':
-                    # Atomic in interlayer = DJ-like
+                # Unknown - check if atomic spacer
+                if hasattr(spacer, 'info') and spacer.info.get('mol_type') == 'atomic':
+                    # Atomic spacers default to DJ-like
                     dj_count += 1
                 else:
+                    # Default to RP for unknown
                     rp_count += 1
         
         if dj_count > rp_count:
@@ -150,15 +202,23 @@ def _infer_structure_type_from_graph(
             return 'rp'
         else:
             # Default to DJ if equal or unknown
-            return 'dj' if dj_count > 0 else 'rp'
+            return 'dj' if dj_count > 0 else 'bulk'
     
     elif n_slabs > 1:
         # Multiple slabs but no spacers detected
-        # This might be a DJ/RP with atomic spacers not yet identified
-        if has_vacuum or len(discontinuity_regions) > 0:
-            return 'dj'  # Default to DJ for multi-slab structures
+        # If PBC-connected, it's bulk (already checked above)
+        # Otherwise, check for vacuum/discontinuities
+        if has_vacuum or (len(discontinuity_regions) > 0 and not is_pbc_connected):
+            # Has vacuum or discontinuities and NOT PBC-connected = likely DJ/RP
+            # But if no spacers, default to bulk if has octahedra
+            return 'bulk' if n_octahedra > 0 else 'dj'
         else:
+            # Multiple slabs but PBC-connected = bulk
             return 'bulk'
+    
+    # Step 4: Default to bulk if has octahedra and no other classification
+    if n_octahedra > 0:
+        return 'bulk'
     
     return 'unknown'
 

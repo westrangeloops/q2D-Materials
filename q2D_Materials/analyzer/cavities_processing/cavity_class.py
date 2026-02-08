@@ -5,8 +5,11 @@ detected in 2D perovskite materials.
 """
 
 import numpy as np
-from typing import List, Dict, Any, Optional, Iterator
+from typing import List, Dict, Any, Optional, Iterator, Union, TYPE_CHECKING
 import networkx as nx
+
+if TYPE_CHECKING:
+    from ..molecular_processing.spacer_analysis import SpacerAnalysisResult
 
 
 class Cavity:
@@ -119,20 +122,129 @@ class Cavity:
             return None
         return self.hull_data.get('hull_volume')
     
-    def get_deformation(self) -> Optional[Dict[str, Any]]:
-        """Get cavity deformation metrics from cached data.
+    def get_deformation(
+        self, 
+        b_cation: Optional[Union[str, List[str]]] = None, 
+        x_anion: Optional[Union[str, List[str]]] = None,
+        bx_distance: Optional[float] = None,
+        mode: str = 'delta',
+        full: bool = False
+    ) -> Optional[Dict[str, Any]]:
+        """Get cavity deformation metrics (Eta, Kappa, Nu, Omega, Delta Volume).
+        
+        Calculates deformation metrics using analytical formulas based on BX distance.
+        B and X species are automatically extracted from the cavity subgraph if not provided.
+        
+        Parameters
+        ----------
+        b_cation : str or list of str, optional
+            B-site cation symbol(s). If not provided, auto-extracted from subgraph.
+        x_anion : str or list of str, optional
+            X-site anion symbol(s). If not provided, auto-extracted from subgraph.
+        bx_distance : float, optional
+            Ideal B-X bond distance in Angstroms. If not provided, calculated from
+            b_cation and x_anion using ionic radii database.
+        mode : str, optional
+            Output mode: 'delta' (default) or 'absolute'
+            - 'delta': Returns deviations from ideal (η, κ, ν, Ω, ΔV)
+            - 'absolute': Returns raw measurements without comparison
+        full : bool, optional
+            If True, include per-face/edge detailed data
         
         Returns
         -------
         dict or None
-            Deformation metrics if available
+            Deformation metrics. Returns None if calculation fails.
+            
+            Delta mode (default):
+                {
+                    'eta': float,           # 90 - mean(square_angle_deviations)
+                    'kappa': float,         # 60 - mean(triangle_angle_deviations)
+                    'nu': float,            # Distance from A-site to X-cage center (Å)
+                    'omega': float,         # Mean X-X edge deviation (Å)
+                    'delta_volume': float,  # Volume deviation (Ų)
+                }
+            
+            Absolute mode:
+                {
+                    'square_angles': {'mean': float, 'std': float, 'values': [list]},
+                    'triangle_angles': {'mean': float, 'std': float, 'values': [list]},
+                    'nu': float,
+                    'edge_lengths': {'mean': float, 'std': float, 'values': [list], 'ideal': float},
+                    'volume': float,
+                    'surface_area': float,
+                    'ideal_volume': float,
+                    'ideal_surface_area': float,
+                    'cavity_type': str,
+                }
+        
+        Examples
+        --------
+        Fully automatic (delta mode):
+            >>> cavity.get_deformation()
+            {'eta': 88.5, 'kappa': 59.2, 'nu': 0.15, 'omega': 0.08, 'delta_volume': -2.3}
+        
+        Absolute measurements:
+            >>> cavity.get_deformation(mode='absolute')
+            {
+                'square_angles': {'mean': 88.5, 'std': 2.1, 'values': [...]},
+                'triangle_angles': {'mean': 59.2, 'std': 1.5, 'values': [...]},
+                'nu': 0.15,
+                'edge_lengths': {'mean': 4.25, 'std': 0.08, 'values': [...], 'ideal': 4.24},
+                ...
+            }
+        
+        Custom BX distance:
+            >>> cavity.get_deformation(bx_distance=3.0)
+            {'eta': 88.5, 'kappa': 59.2, 'nu': 0.15, 'omega': 0.08, 'delta_volume': -2.3}
+        
+        Full deformation data:
+            >>> cavity.get_deformation(full=True)
+            {
+                'eta': 88.5, 'kappa': 59.2, 'nu': 0.15, 'omega': 0.08, 'delta_volume': -2.3,
+                'square_angles_detail': [...],
+                'triangle_angles_detail': [...],
+                'edge_lengths_detail': [...],
+                'cavity_type': 'a_site'
+            }
         """
-        if self.hull_data is None:
+        # Import here to avoid circular dependency
+        from .cavity_deformation import (
+            calculate_cavity_deformation,
+            _extract_b_species,
+            _extract_x_species,
+            _calculate_mean_bx_distance,
+        )
+        
+        # Determine BX distance
+        if bx_distance is None:
+            # Auto-extract species if not provided
+            if b_cation is None:
+                try:
+                    b_cation = _extract_b_species(self)
+                except ValueError as e:
+                    print(f"Warning: {e}")
+                    return None
+            
+            if x_anion is None:
+                try:
+                    x_anion = _extract_x_species(self)
+                except ValueError as e:
+                    print(f"Warning: {e}")
+                    return None
+            
+            # Calculate mean BX distance for potentially mixed compositions
+            try:
+                bx_distance = _calculate_mean_bx_distance(b_cation, x_anion)
+            except Exception as e:
+                print(f"Warning: BX distance calculation failed for {self.id}: {e}")
+                return None
+        
+        try:
+            return calculate_cavity_deformation(self, bx_distance, mode=mode, full=full)
+        except Exception as e:
+            print(f"Warning: Deformation calculation failed for {self.id}: {e}")
             return None
-        return {
-            'volume': self.hull_data.get('hull_volume'),
-            'surface_area': self.hull_data.get('surface_area'),
-        }
     
     def is_point_inside(self, point: np.ndarray, tolerance: float = 1e-12) -> bool:
         """Check if a point is inside the cavity.
@@ -155,6 +267,116 @@ class Cavity:
         hull_equations = np.array(self.hull_data['hull_equations'])
         # Check if point satisfies all hull plane equations (normal . point + offset <= 0)
         return all(np.dot(eq[:-1], point) + eq[-1] <= tolerance for eq in hull_equations)
+    
+    @staticmethod
+    def _find_nh3_groups_in_subgraph(subgraph: nx.Graph, anchor_node_id: str = None) -> List[Dict[str, Union[int, List[int]]]]:
+        """Find NH3 groups within anchor nodes using graph traversal.
+        
+        Parameters
+        ----------
+        subgraph : nx.Graph
+            The cavity subgraph
+        anchor_node_id : str, optional
+            Specific anchor node ID. If None, finds all anchor nodes.
+            
+        Returns
+        -------
+        list of dict
+            List of NH3 groups: [{'n_index': int, 'h_indices': [int, int, int]}, ...]
+        """
+        nh3_groups = []
+        
+        # Find anchor nodes
+        if anchor_node_id is None:
+            anchor_nodes = [
+                node for node in subgraph.nodes()
+                if subgraph.nodes[node].get('node_type') == 'anchor'
+            ]
+        else:
+            anchor_nodes = [anchor_node_id] if anchor_node_id in subgraph else []
+        
+        for anchor_node in anchor_nodes:
+            # Get all atoms belonging to the anchor via CONTAINS edges
+            anchor_atoms = [
+                neighbor for neighbor in subgraph.neighbors(anchor_node)
+                if subgraph.get_edge_data(anchor_node, neighbor).get('edge_type') == 'contains'
+            ]
+            
+            # Identify Nitrogen atoms within this anchor
+            n_nodes = [
+                node for node in anchor_atoms 
+                if subgraph.nodes[node].get('symbol') == 'N'
+            ]
+            
+            for n_node in n_nodes:
+                h_neighbors = []
+                
+                # Check bonded neighbors of the Nitrogen atom
+                for neighbor in subgraph.neighbors(n_node):
+                    edge_data = subgraph.get_edge_data(n_node, neighbor)
+                    
+                    if edge_data.get('edge_type') == 'bonded_to':
+                        if subgraph.nodes[neighbor].get('symbol') == 'H':
+                            atom_idx = subgraph.nodes[neighbor].get('vasp_index') or subgraph.nodes[neighbor].get('original_index')
+                            if atom_idx is not None:
+                                h_neighbors.append(atom_idx)
+                
+                # Validation: Exactly 3 Hydrogen atoms bonded to 1 Nitrogen
+                if len(h_neighbors) == 3:
+                    n_idx = subgraph.nodes[n_node].get('vasp_index') or subgraph.nodes[n_node].get('original_index')
+                    if n_idx is not None:
+                        nh3_groups.append({
+                            'n_index': n_idx,
+                            'h_indices': h_neighbors
+                        })
+                
+        return nh3_groups
+    
+    @staticmethod
+    def _calculate_penetration_depth_svd(
+        membrane_points: np.ndarray, 
+        query_point: np.ndarray
+    ) -> tuple:
+        """Calculate signed distance (penetration) of a query point relative to 
+        the best-fit plane of 4 membrane points using SVD.
+        
+        Parameters
+        ----------
+        membrane_points : np.ndarray
+            4x3 array of terminal atom coordinates
+        query_point : np.ndarray
+            1x3 array of the NH3 center position
+            
+        Returns
+        -------
+        tuple
+            (signed_distance, plane_centroid, plane_normal)
+        """
+        if membrane_points.shape != (4, 3):
+            raise ValueError(f"Expected 4x3 array of membrane points, got {membrane_points.shape}")
+        
+        # Calculate centroid of the 4 points
+        centroid = np.mean(membrane_points, axis=0)
+        
+        # Center the points
+        centered_points = membrane_points - centroid
+        
+        # Compute surface normal using SVD
+        u, s, vh = np.linalg.svd(centered_points, full_matrices=True)
+        normal = vh[-1, :]  # Last row corresponds to smallest singular value
+        
+        # Enforce consistent orientation (upward-pointing normal)
+        if normal[2] < 0:
+            normal = -normal
+        
+        # Normalize to unit vector
+        normal = normal / np.linalg.norm(normal)
+        
+        # Calculate signed distance
+        vec_to_point = query_point - centroid
+        signed_distance = np.dot(vec_to_point, normal)
+        
+        return float(signed_distance), centroid, normal
     
     def calculate_penetration_depth(self) -> Dict[str, Any]:
         """Calculate NH3 penetration depth into terminal atom planes.
@@ -241,43 +463,64 @@ class Cavity:
                         if node_data.get('is_terminal', False):
                             terminal_x_nodes.append((node, pos))
         
-        # Calculate NH3 centers from a_site atoms in subgraph
-        nh3_centers = []
-        nh_bond_cutoff = 1.2
-        
-        # Collect A-site atoms (molecule atoms) with their positions
-        a_site_nodes = []  # List of (node_id, symbol, position)
+        # Calculate NH3 centers using graph-based detection
+        # Find anchor nodes in subgraph (for spacer cavities)
+        anchor_nodes = []
         for node in self.subgraph.nodes():
             node_data = self.subgraph.nodes[node]
-            if node_data.get('node_type') == 'atom':
-                original_idx = node_data.get('original_index')
-                if original_idx in self.a_site_indices:
-                    symbol = node_data.get('symbol', '')
-                    pbc_pos = node_data.get('pbc_position')
-                    if pbc_pos is not None:
-                        a_site_nodes.append((node, symbol, np.array(pbc_pos)))
+            if node_data.get('node_type') == 'anchor':
+                anchor_nodes.append(node)
         
-        # Find NH3 groups (N with 3 H neighbors)
-        n_nodes = [(n, pos) for n, sym, pos in a_site_nodes if sym == 'N']
+        if not anchor_nodes:
+            raise ValueError(
+                f"Could not find anchor nodes in subgraph. Cannot use graph-based NH3 detection."
+            )
         
-        for n_node, n_pos in n_nodes:
-            # Find H atoms bonded to this N
-            h_positions = []
-            for h_node, h_sym, h_pos in a_site_nodes:
-                if h_sym == 'H':
-                    distance = np.linalg.norm(h_pos - n_pos)
-                    if distance < nh_bond_cutoff:
-                        h_positions.append(h_pos)
+        # Extract NH3 groups directly from anchor node connections
+        # Each anchor node is connected to exactly 1 N atom and 3 H atoms
+        nh3_centers = []
+        for anchor_node in anchor_nodes:
+            # Get all atoms connected to this anchor node via 'contains' edge
+            anchor_atoms = [
+                neighbor for neighbor in self.subgraph.neighbors(anchor_node)
+                if self.subgraph.get_edge_data(anchor_node, neighbor).get('edge_type') == 'contains'
+            ]
             
-            # If 3 H atoms nearby, it's an NH3 group
-            if len(h_positions) == 3:
+            # Find N and H atoms directly from connected atoms
+            n_pos = None
+            h_positions = []
+            
+            for atom_node in anchor_atoms:
+                atom_data = self.subgraph.nodes[atom_node]
+                symbol = atom_data.get('symbol', '')
+                pbc_pos = atom_data.get('pbc_position')
+                
+                if pbc_pos is None:
+                    continue
+                
+                if symbol == 'N':
+                    n_pos = np.array(pbc_pos)
+                elif symbol == 'H':
+                    h_positions.append(np.array(pbc_pos))
+            
+            # Calculate NH3 center from N and 3 H atoms directly connected to anchor
+            if n_pos is not None and len(h_positions) == 3:
                 # Center of mass: (N + 3H) / 4
                 center = (n_pos + np.sum(h_positions, axis=0)) / 4.0
                 nh3_centers.append(center)
+            else:
+                # Log warning if anchor doesn't have expected structure
+                import sys
+                print(
+                    f"Warning: Anchor {anchor_node} does not have expected NH3 structure "
+                    f"(found N: {n_pos is not None}, H count: {len(h_positions)}). "
+                    f"Skipping this anchor.",
+                    file=sys.stderr
+                )
         
         if not nh3_centers:
             raise ValueError(
-                f"Could not find any NH3 groups in spacer molecule with atoms {self.a_site_indices}"
+                f"Could not calculate NH3 centers from {len(anchor_nodes)} anchor nodes found in spacer cavity"
             )
         
         # Helper function to calculate penetration using positions directly
@@ -285,9 +528,8 @@ class Cavity:
             if len(terminal_positions_array) != 4:
                 raise ValueError(f"Expected 4 terminal atom positions, got {len(terminal_positions_array)}")
             
-            # Import the penetration calculation function
-            from ..detection.cavity_tracing import _calculate_penetration_depth
-            signed_dist, plane_centroid, plane_normal = _calculate_penetration_depth(
+            # Calculate penetration depth using SVD
+            signed_dist, plane_centroid, plane_normal = self._calculate_penetration_depth_svd(
                 terminal_positions_array, nh3_pos
             )
             
@@ -404,6 +646,87 @@ class Cavity:
                 'bottom_terminal_nodes': bottom_node_ids,
                 'cavity_type': 'spacer_dj'
             }
+    
+    def get_spacer_analysis(self, spacer_type: Optional[str] = None) -> 'SpacerAnalysisResult':  # type: ignore
+        """Get spacer analysis results for this cavity.
+        
+        Only works for spacer cavities (spacer_rp and spacer_dj).
+        Creates a SpacerAnalysis instance using this cavity's PBC-unwrapped
+        molecule data and returns the analysis results.
+        
+        Parameters
+        ----------
+        spacer_type : str, optional
+            Type of spacer ("DJ" or "RP"). If None, inferred from cavity_type.
+            
+        Returns
+        -------
+        SpacerAnalysisResult
+            Complete spacer analysis with compression, volume, backbone, etc.
+            
+        Raises
+        ------
+        ValueError
+            If cavity is not a spacer cavity (spacer_rp or spacer_dj)
+            
+        Examples
+        --------
+        >>> analyzer = q2D_analyzer("structure.cif")
+        >>> analyzer.analyze()
+        >>> cavities = analyzer.get_cavities()
+        >>> 
+        >>> # Get spacer analysis for a DJ spacer cavity
+        >>> dj_cavity = cavities.filter(cavity_type='spacer_dj')[0]
+        >>> analysis = dj_cavity.get_spacer_analysis()
+        >>> print(f"Compression: {analysis.compression:.2f} Å")
+        >>> print(f"Backbone length: {analysis.backbone_length}")
+        """
+        if self.cavity_type not in ('spacer_rp', 'spacer_dj'):
+            raise ValueError(
+                f"get_spacer_analysis only works for spacer cavities "
+                f"(spacer_rp or spacer_dj), but got cavity type: {self.cavity_type}"
+            )
+        
+        # Import here to avoid circular dependency
+        from ..molecular_processing.spacer_analysis import SpacerAnalysis
+        from ...modifier.molecule_graph import MoleculeGraph
+        
+        # Determine spacer type
+        if spacer_type is None:
+            if self.cavity_type == 'spacer_dj':
+                spacer_type = 'DJ'
+            elif self.cavity_type == 'spacer_rp':
+                spacer_type = 'RP'
+            else:
+                spacer_type = 'DJ'  # Default
+        
+        # Extract molecule graph from cavity
+        # Create a minimal MoleculeGraph wrapper for compatibility
+        # The SpacerAnalysis will extract the graph from cavity
+        molecule_indices = self.a_site_indices
+        
+        # Create a dummy MoleculeGraph - SpacerAnalysis will use cavity graph instead
+        import networkx as nx
+        dummy_graph = nx.Graph()
+        dummy_mol_graph = MoleculeGraph(
+            graph=dummy_graph,
+            original_indices=molecule_indices,
+            attachment_points=[],
+            molecule_type='spacer',
+            molecule_index=0,
+            atoms_object=None,
+            parent_view=None
+        )
+        
+        # Create SpacerAnalysis with cavity
+        analyzer = SpacerAnalysis(
+            molecule_graph=dummy_mol_graph,
+            analyzer=None,  # Not needed when cavity is provided
+            spacer_type=spacer_type,
+            cavity=self
+        )
+        
+        return analyzer.compute()
     
     def __repr__(self) -> str:
         """String representation of Cavity."""

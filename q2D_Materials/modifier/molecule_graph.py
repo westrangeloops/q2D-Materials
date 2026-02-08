@@ -831,7 +831,7 @@ class MoleculeGraph:
         >>> analysis = spacer.analyze_spacer()
         >>> print(f"Compression: {analysis.compression_factor:.2f}")
         """
-        from q2D_Materials.analyzer.characterization.spacer_analysis import SpacerAnalysis
+        from q2D_Materials.analyzer.molecular_processing.spacer_analysis import SpacerAnalysis
 
         # Use provided analyzer or try to get from parent_view
         if analyzer is None and hasattr(self.parent_view, 'analyzer'):

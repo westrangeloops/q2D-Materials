@@ -15,7 +15,11 @@ from typing import Dict, List, Tuple, Optional, Union
 import numpy as np
 from scipy.spatial.transform import Rotation
 from ...utils.geometry.geometry import _calculate_distances
-from ..detection.octahedral_detection import find_shared_atoms
+from ..octahedral_processing.octahedral_detection import find_shared_atoms
+from ..octahedral_processing.tilt_calculations import (
+    calculate_euler_angles_from_bonds,
+    get_reference_axes,
+)
 from ...builders.glazer_notation import get_space_group_from_notation, get_conventional_pattern
 from ..utils.geometry_helpers import (
     apply_pbc_to_vector,
@@ -325,179 +329,9 @@ def _calculate_phase_relationship(
     return (-1) ** shift_diff[axis]
 
 
-def _calculate_euler_angles_from_bonds(
-    v_x: Optional[np.ndarray],
-    v_y: Optional[np.ndarray],
-    v_z: Optional[np.ndarray],
-    ref_axes: np.ndarray
-) -> List[float]:
-    """
-    Calculate Euler angles (XYZ convention) from octahedral bond vectors.
-
-    Uses scipy's Rotation class to properly decompose the rotation matrix,
-    matching the builder's convention: R_total = R_z @ R_y @ R_x.
-
-    Parameters
-    ----------
-    v_x, v_y, v_z : np.ndarray or None
-        Bond vectors along each axis (in Cartesian coordinates)
-    ref_axes : np.ndarray
-        Reference axes defining the ideal (untilted) orientation (3x3 matrix)
-
-    Returns
-    -------
-    List[float]
-        Euler angles [alpha, beta, gamma] in degrees, where:
-        - alpha = rotation about X-axis
-        - beta = rotation about Y-axis
-        - gamma = rotation about Z-axis
-    """
-    # Build actual bond matrix from available vectors
-    # Use ref_axes-aligned ideal vectors as fallback for missing bonds
-    actual_bonds = []
-    ideal_bonds = []
-
-    # Normalize reference axes for ideal bond directions
-    ref_x = ref_axes[0] / np.linalg.norm(ref_axes[0])
-    ref_y = ref_axes[1] / np.linalg.norm(ref_axes[1])
-    ref_z = ref_axes[2] / np.linalg.norm(ref_axes[2])
-
-    if v_x is not None:
-        actual_bonds.append(v_x / np.linalg.norm(v_x))
-        ideal_bonds.append(ref_x)
-    if v_y is not None:
-        actual_bonds.append(v_y / np.linalg.norm(v_y))
-        ideal_bonds.append(ref_y)
-    if v_z is not None:
-        actual_bonds.append(v_z / np.linalg.norm(v_z))
-        ideal_bonds.append(ref_z)
-
-    if len(actual_bonds) < 2:
-        # Not enough bonds to determine rotation
-        return [0.0, 0.0, 0.0]
-
-    # Convert to arrays
-    actual_matrix = np.array(actual_bonds).T  # Shape (3, n)
-    ideal_matrix = np.array(ideal_bonds).T    # Shape (3, n)
-
-    # Find rotation matrix using Kabsch algorithm (SVD-based)
-    # R transforms ideal_matrix to actual_matrix: actual = R @ ideal
-    H = ideal_matrix @ actual_matrix.T  # Covariance matrix
-    U, S, Vt = np.linalg.svd(H)
-    R = Vt.T @ U.T
-
-    # Ensure proper rotation (det = +1, not reflection)
-    if np.linalg.det(R) < 0:
-        Vt[-1, :] *= -1
-        R = Vt.T @ U.T
-
-    # Decompose rotation matrix to Euler angles using XYZ convention
-    # This matches the builder's order: R_total = R_z @ R_y @ R_x
-    # scipy uses 'xyz' for extrinsic (fixed frame) which gives the same result
-    try:
-        rot = Rotation.from_matrix(R)
-        # Use 'xyz' extrinsic (lowercase) to match R_z @ R_y @ R_x order
-        euler_angles = rot.as_euler('xyz', degrees=True)
-        return euler_angles.tolist()
-    except Exception:
-        # Fallback to zero if decomposition fails
-        return [0.0, 0.0, 0.0]
-
-
-def _get_reference_axes(atom_positions: np.ndarray, cell: np.ndarray, octahedra: List[Dict]) -> np.ndarray:
-    """
-    Determine the reference axes (pseudo-cubic axes) of the octahedral network.
-
-    CRITICAL FIX: Use CELL vectors as the primary reference frame, not tilted bond vectors.
-    This ensures that measured tilts are relative to the IDEAL (untilted) structure,
-    which is essential for correct sign detection in Glazer pattern analysis.
-
-    For sqrt(2)×sqrt(2) rotated supercells, we detect the rotation by examining
-    bond orientations and apply the appropriate transformation.
-    """
-    # Primary approach: Use cell vectors as reference (handles standard supercells)
-    cell_dirs = np.array([
-        cell[0] / np.linalg.norm(cell[0]),
-        cell[1] / np.linalg.norm(cell[1]),
-        cell[2] / np.linalg.norm(cell[2])
-    ])
-
-    # Check if this is a sqrt(2)×sqrt(2) rotated supercell by examining bond orientations
-    # In such cells, the octahedral bonds are rotated 45° relative to cell vectors
-    is_rotated_supercell = False
-    rotation_angle = 0.0
-
-    for oct_data in octahedra:
-        b_idx = oct_data.get("central_atom_index")
-        if b_idx is None:
-            continue
-
-        b_pos = atom_positions[b_idx]
-        x_indices = get_all_x_atoms_from_octahedron(oct_data)
-
-        if len(x_indices) < 3:
-            continue
-
-        # Get bond vectors with PBC using shared utility
-        inv_cell = np.linalg.inv(cell)
-        bond_vectors = []
-        for x_idx in x_indices:
-            v = atom_positions[x_idx] - b_pos
-            v = apply_pbc_to_vector(v, cell, inv_cell=inv_cell)
-            bond_vectors.append(v)
-
-        # Check alignment of bonds with cell directions
-        # For a non-rotated cell, at least one bond should align well with each cell axis
-        # For a 45° rotated cell, bonds align with diagonal directions
-        max_alignments = [0.0, 0.0, 0.0]
-        for v in bond_vectors:
-            v_norm = v / (np.linalg.norm(v) + 1e-9)
-            for k in range(3):
-                align = abs(np.dot(v_norm, cell_dirs[k]))
-                if align > max_alignments[k]:
-                    max_alignments[k] = align
-
-        # If bonds don't align well with any cell direction (align < 0.7 for all),
-        # this might be a rotated supercell
-        if max_alignments[0] < 0.7 and max_alignments[1] < 0.7:
-            # Check for 45° rotation in XY plane
-            diag1 = (cell_dirs[0] + cell_dirs[1]) / np.sqrt(2)
-            diag2 = (cell_dirs[0] - cell_dirs[1]) / np.sqrt(2)
-
-            diag_alignments = [0.0, 0.0]
-            for v in bond_vectors:
-                v_norm = v / (np.linalg.norm(v) + 1e-9)
-                d1 = abs(np.dot(v_norm, diag1))
-                d2 = abs(np.dot(v_norm, diag2))
-                if d1 > diag_alignments[0]:
-                    diag_alignments[0] = d1
-                if d2 > diag_alignments[1]:
-                    diag_alignments[1] = d2
-
-            if diag_alignments[0] > 0.7 and diag_alignments[1] > 0.7:
-                is_rotated_supercell = True
-                rotation_angle = 45.0
-
-        break  # Only need to check one octahedron
-
-    if is_rotated_supercell:
-        # For 45° rotated supercells, use diagonal directions as reference
-        # The pseudo-cubic axes are along [110] and [1-10] directions
-        ref_axes = np.array([
-            (cell_dirs[0] + cell_dirs[1]) / np.sqrt(2),  # [110] direction
-            (cell_dirs[0] - cell_dirs[1]) / np.sqrt(2),  # [1-10] direction (or [-110])
-            cell_dirs[2]                                   # [001] direction
-        ])
-
-        # Ensure right-handed coordinate system
-        if np.dot(np.cross(ref_axes[0], ref_axes[1]), ref_axes[2]) < 0:
-            ref_axes[1] = -ref_axes[1]
-
-        return ref_axes
-    else:
-        # Standard supercell: use cell vectors directly as reference
-        # This ensures tilts are measured relative to the IDEAL untilted structure
-        return cell_dirs
+# Functions _calculate_euler_angles_from_bonds and _get_reference_axes
+# have been moved to octahedral_processing.tilt_calculations
+# and are now imported as calculate_euler_angles_from_bonds and get_reference_axes
 
 
 def _detect_glazer_pattern(
@@ -510,6 +344,10 @@ def _detect_glazer_pattern(
 ) -> Dict[str, Union[str, List[str], List[float], Optional[str], Dict]]:
     """
     Detect Glazer pattern from structure by analyzing octahedral tilting.
+
+    **IMPORTANT**: This function is only valid for 3D bulk perovskites.
+    For quasi-2D perovskite structures (Ruddlesden-Popper, Dion-Jacobson,
+    or monolayer), use alternative distortion metrics instead.
 
     Analyzes the rotation of octahedra relative to the unit cell axes
     to determine the Glazer notation.
@@ -545,6 +383,13 @@ def _detect_glazer_pattern(
         - 'magnitudes': List of magnitude symbols ['a', 'b', 'a']
         - 'space_group': Inferred space group (if available)
         - 'tolerance_info': dict with tolerance values used (for documentation)
+
+    Raises
+    ------
+    ValueError
+        If the structure is identified as a quasi-2D perovskite (Ruddlesden-Popper,
+        Dion-Jacobson, or monolayer). Glazer notation is only defined for 3D bulk
+        perovskites with infinite corner-sharing octahedral networks.
 
     Notes
     -----
@@ -595,6 +440,35 @@ def _detect_glazer_pattern(
         'magnitude_equivalence_threshold': mag_eq_thresh,
         'bond_selection_threshold': bond_selection_threshold,
     }
+
+    # VALIDATE: Glazer notation is only valid for 3D bulk structures
+    structure_type = analyzer.structure_type
+    if structure_type in ('dj', 'rp', 'monolayer'):
+        # Get number of layers for error message
+        layers = analyzer.get_layers()
+        num_layers = len(layers) if layers else 'unknown'
+
+        # Build structure type description
+        type_descriptions = {
+            'dj': 'Dion-Jacobson (DJ) quasi-2D',
+            'rp': 'Ruddlesden-Popper (RP) quasi-2D',
+            'monolayer': 'monolayer quasi-2D',
+        }
+        type_desc = type_descriptions.get(structure_type, 'quasi-2D')
+
+        raise ValueError(
+            f"Glazer notation is not applicable to {type_desc} perovskites "
+            f"(detected {num_layers} inorganic layers). Glazer notation was designed "
+            f"for 3D bulk perovskites with infinite corner-sharing octahedral networks.\n\n"
+            f"For q2D structures, consider using alternative distortion metrics:\n"
+            f"  - analyzer.compute_delta(group_by='layer')  # Distortion parameter Δ\n"
+            f"  - analyzer.compute_sigma(group_by='layer')  # Variance σ²\n"
+            f"  - analyzer.compute_lambda(group_by='layer') # Elongation λ\n"
+            f"  - analyzer.get_bxb_angles(group_by='layer') # B-X-B bond angles\n"
+            f"\n"
+            f"A dedicated q2D octahedral tilting characterization metric is under development."
+        )
+
     # Get octahedra and structure data
     octahedra = analyzer.get_octahedra()
     if not octahedra:
@@ -611,7 +485,7 @@ def _detect_glazer_pattern(
     inv_cell = np.linalg.inv(cell)
     
     # Get reference axes (pseudo-cubic basis)
-    ref_axes = _get_reference_axes(atom_positions, cell, octahedra)
+    ref_axes = get_reference_axes(atom_positions, cell, octahedra)
 
     # 1. Calculate local tilts for each octahedron
     local_tilts = []  # List of [alpha, beta, gamma] for each oct
@@ -666,7 +540,7 @@ def _detect_glazer_pattern(
         # The Kabsch algorithm finds the best rotation matrix that transforms
         # ideal bond vectors to actual bond vectors, then scipy's Rotation
         # decomposes this into Euler angles using the matching convention.
-        tilts = _calculate_euler_angles_from_bonds(v_x, v_y, v_z, ref_axes)
+        tilts, _ = calculate_euler_angles_from_bonds(v_x, v_y, v_z, ref_axes)
         local_tilts.append(tilts)
 
     # Safety check: ensure local_tilts has the same length as octahedra

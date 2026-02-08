@@ -16,6 +16,7 @@ from .geometry_helpers import (
     calculate_angle_between_vectors,
     get_all_x_atoms_from_octahedron,
     extract_bx_bond_vectors,
+    normalize_layer_id,
 )
 from .clifford_embedding import (
     embed_to_6d,
@@ -37,6 +38,7 @@ __all__ = [
     'calculate_angle_between_vectors',
     'get_all_x_atoms_from_octahedron',
     'extract_bx_bond_vectors',
+    'normalize_layer_id',
     'embed_to_6d',
     'clifford_distance',
     'clifford_angle',

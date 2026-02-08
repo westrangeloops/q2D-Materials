@@ -25,6 +25,9 @@ from ...utils.geometry.structural_utils import (
     distance_matrix_handler,
     periodicity_fold,
 )
+from ...utils.geometry.pbc_distances import (
+    calculate_pbc_distances,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -993,7 +996,28 @@ def simply_calc_distortion(
             rmsd[b_site] = np.nan
             disto = np.concatenate((disto, a), axis=0)
         else:
-            raw = xpos[neigh_list[b_site, :].astype(int), :] - bpos[b_site, :]
+            # Get X atom indices for this octahedron
+            # Note: neigh_list contains indices into x_index (the X atom subset)
+            x_indices_oct = neigh_list[b_site, :].astype(int)
+            x_positions_oct = xpos[x_indices_oct, :]
+            b_position = bpos[b_site, :]
+            
+            # Calculate bond vectors using PBC-aware distance calculation
+            # This ensures each X atom is in the closest periodic image relative to B
+            # Using return_vectors=True gives us the PBC-wrapped vectors directly
+            _, raw = calculate_pbc_distances(
+                b_position,
+                x_positions_oct,
+                mymat,
+                pbc=True,
+                mode='extended',
+                return_vectors=True
+            )
+            
+            # octahedra_coords_into_bond_vectors normalizes by mean bond length
+            # The vectors from calculate_pbc_distances are already PBC-wrapped,
+            # so we can pass them directly (octahedra_coords_into_bond_vectors
+            # will apply PBC again, but that's idempotent for already-wrapped vectors)
             bx = octahedra_coords_into_bond_vectors(raw, mymat)
             dist_val, rotmat, rmsd_val = calc_distortions_from_bond_vectors_full(bx, dict_basis)
             rmat[b_site, :] = rotmat
@@ -1009,4 +1033,363 @@ def simply_calc_distortion(
             temp_dist[i] = 0
     
     return temp_dist, temp_std
+
+
+def calculate_octahedral_volumes_convex_hull(
+    struct,
+    neigh_list: np.ndarray,
+    b_index: List[int],
+    x_index: List[int],
+    mode: str = 'global',
+    octahedra_ids: Optional[List[str]] = None,
+) -> Union[Tuple[float, float], Tuple[Dict[str, float], Dict[str, float]], Tuple[np.ndarray, np.ndarray]]:
+    """Calculate octahedral volumes and B displacement from centroid using convex hull of X atoms.
+    
+    For each octahedron:
+    1. Get the 6 X atoms bonded to B from neigh_list.
+    2. Put each X in PBC (minimum image relative to B); X_positions_pbc = B + PBC_vectors(B → X).
+    3. Centroid = arithmetic mean of the 6 X positions (in PBC).
+    4. B displacement = PBC distance from B to that centroid.
+    5. Convex hull volume of the 6 X atoms (using the same PBC positions).
+    
+    So: centroid is the mean of all X in PBC conditions, and the displacement of B is
+    the distance of B to that centroid also in PBC conditions.
+    
+    Parameters
+    ----------
+    struct : pymatgen.Structure
+        Structure to analyze
+    neigh_list : np.ndarray
+        Octahedra connectivity, shape (N_B, 6)
+        Each row contains indices into x_index for the 6 X atoms bonded to that B atom
+    b_index : list of int
+        B-site atom indices in the full structure
+    x_index : list of int
+        X-site atom indices in the full structure
+    mode : str, default='global'
+        Calculation mode:
+        - 'global': Return mean volume and mean displacement for all octahedra (tuple of floats)
+        - 'local': Return volume and displacement per octahedron (tuple of dicts)
+        - 'raw': Return raw arrays of volumes and displacements (tuple of np.ndarray, shape (N_B,))
+    octahedra_ids : list of str, optional
+        List of octahedron IDs (e.g., ['octahedron_0', 'octahedron_1'])
+        Only used in 'local' mode to map volumes to octahedron IDs.
+        If None in 'local' mode, uses generic IDs like 'octahedron_0', 'octahedron_1', etc.
+    
+    Returns
+    -------
+    tuple
+        - If mode='global': (mean_volume, mean_displacement) in Å³ and Å (tuple of floats)
+        - If mode='local': (volumes_dict, displacements_dict) (tuple of dicts)
+        - If mode='raw': (volumes_array, displacements_array) (tuple of np.ndarray, shape (N_B,))
+        All values with NaN for invalid octahedra
+    
+    Examples
+    --------
+    >>> from q2D_Materials.analyzer import q2D_analyzer
+    >>> analyzer = q2D_analyzer("structure.cif")
+    >>> analyzer.analyze()
+    >>> 
+    >>> # Get connectivity from analyzer
+    >>> neigh_list = analyzer.octahedra_connectivity  # (N_B, 6)
+    >>> b_indices = analyzer.b_indices
+    >>> x_indices = analyzer.x_indices
+    >>> 
+    >>> # Global mode: mean volume and displacement
+    >>> mean_volume, mean_displacement = calculate_octahedral_volumes_convex_hull(
+    ...     analyzer.structure, neigh_list, b_indices, x_indices, mode='global'
+    ... )
+    >>> print(f"Mean octahedral volume: {mean_volume:.2f} Å³")
+    >>> print(f"Mean B displacement from centroid: {mean_displacement:.4f} Å")
+    >>> 
+    >>> # Local mode: per-octahedron volumes and displacements
+    >>> oct_ids = [f'octahedron_{i}' for i in range(len(b_indices))]
+    >>> volumes_dict, displacements_dict = calculate_octahedral_volumes_convex_hull(
+    ...     analyzer.structure, neigh_list, b_indices, x_indices,
+    ...     mode='local', octahedra_ids=oct_ids
+    ... )
+    >>> for oct_id in oct_ids:
+    ...     print(f"{oct_id}: volume={volumes_dict[oct_id]:.2f} Å³, "
+    ...           f"displacement={displacements_dict[oct_id]:.4f} Å")
+    >>> 
+    >>> # Raw mode: arrays of volumes and displacements
+    >>> volumes_array, displacements_array = calculate_octahedral_volumes_convex_hull(
+    ...     analyzer.structure, neigh_list, b_indices, x_indices, mode='raw'
+    ... )
+    >>> print(f"Volumes shape: {volumes_array.shape}, Displacements shape: {displacements_array.shape}")
+    """
+    from scipy.spatial import ConvexHull
+    
+    bpos = struct.cart_coords[b_index, :]
+    xpos = struct.cart_coords[x_index, :]
+    mymat = struct.lattice.matrix
+    
+    volumes = np.zeros(len(b_index))
+    displacements = np.zeros(len(b_index))
+    
+    for b_site in range(len(b_index)):
+        if np.isnan(neigh_list[b_site, :]).any():
+            volumes[b_site] = np.nan
+            displacements[b_site] = np.nan
+            continue
+        
+        # Get X atom indices for this octahedron
+        # Note: neigh_list contains indices into x_index (the X atom subset)
+        x_indices_oct = neigh_list[b_site, :].astype(int)
+        x_positions_oct = xpos[x_indices_oct, :]
+        b_position = bpos[b_site, :]
+        
+        # Calculate PBC-wrapped positions using calculate_pbc_distances
+        # This ensures each X atom is in the closest periodic image relative to B
+        # Using return_vectors=True gives us the PBC-wrapped vectors directly
+        _, vectors = calculate_pbc_distances(
+            b_position,
+            x_positions_oct,
+            mymat,
+            pbc=True,
+            mode='extended',
+            return_vectors=True
+        )
+        
+        # X positions in PBC (minimum image relative to B)
+        x_positions_pbc = b_position + vectors
+        
+        # Centroid = arithmetic mean of all X in PBC
+        x_centroid = np.mean(x_positions_pbc, axis=0)
+        
+        # B displacement = distance of B from centroid in PBC conditions
+        dist_b_to_centroid = calculate_pbc_distances(
+            b_position,
+            x_centroid.reshape(1, 3),
+            mymat,
+            pbc=True,
+            mode='extended',
+        )
+        displacements[b_site] = float(dist_b_to_centroid[0])
+        
+        # Calculate convex hull volume of the 6 X atoms
+        # Need at least 4 points for 3D convex hull, but we always have 6
+        try:
+            hull = ConvexHull(x_positions_pbc)
+            volumes[b_site] = hull.volume
+        except Exception as e:
+            # Convex hull calculation failed (e.g., coplanar points, degenerate octahedron)
+            logger.warning(
+                f"ConvexHull failed for B atom {b_index[b_site]} (site {b_site}): {e}. "
+                f"Setting volume to NaN."
+            )
+            volumes[b_site] = np.nan
+    
+    # Return based on mode
+    if mode == 'global':
+        # Return mean volume and mean displacement, ignoring NaN values
+        valid_mask = ~np.isnan(volumes)
+        if np.sum(valid_mask) == 0:
+            return (np.nan, np.nan)
+        mean_volume = float(np.mean(volumes[valid_mask]))
+        mean_displacement = float(np.mean(displacements[valid_mask]))
+        return (mean_volume, mean_displacement)
+    
+    elif mode == 'local':
+        # Return dicts mapping octahedron_id -> volume and displacement
+        if octahedra_ids is None:
+            # Generate generic IDs
+            octahedra_ids = [f'octahedron_{i}' for i in range(len(b_index))]
+        
+        if len(octahedra_ids) != len(volumes):
+            raise ValueError(
+                f"Length mismatch: {len(octahedra_ids)} octahedra IDs but {len(volumes)} volumes"
+            )
+        
+        volumes_dict = {oct_id: float(vol) for oct_id, vol in zip(octahedra_ids, volumes)}
+        displacements_dict = {oct_id: float(disp) for oct_id, disp in zip(octahedra_ids, displacements)}
+        return (volumes_dict, displacements_dict)
+    
+    elif mode == 'raw':
+        # Return raw arrays
+        return (volumes, displacements)
+    
+    else:
+        raise ValueError(f"Unknown mode '{mode}'. Use 'global', 'local', or 'raw'.")
+
+
+def calculate_xeq_xeq_and_xax_xax_distances(
+    struct,
+    graph,
+    mode: str = 'global',
+) -> Union[Tuple[float, float], Tuple[Dict[str, float], Dict[str, float]]]:
+    """Calculate Xeq-Xeq and Xax-Xax distances for octahedra using graph structure.
+    
+    For each octahedron:
+    1. Gets B atom from octahedron node (via CONTAINS edge with role='center')
+    2. Gets X atoms from B atom (via BONDED_TO edges with role='ligand')
+    3. Classifies X atoms as equatorial/axial from node attributes (is_equatorial, is_axial)
+    4. Calculates minimum distance between any two equatorial X atoms (Xeq-Xeq)
+    5. Calculates distance between the two axial X atoms (Xax-Xax)
+    
+    Uses PBC-aware distance calculations to ensure accurate measurements.
+    
+    Parameters
+    ----------
+    struct : pymatgen.Structure
+        Structure to analyze
+    graph : networkx.Graph
+        Structural graph with octahedra, atoms, and connectivity
+    mode : str, default='global'
+        Calculation mode:
+        - 'global': Return mean distances for all octahedra (tuple of floats)
+        - 'local': Return distances per octahedron (tuple of dicts)
+    
+    Returns
+    -------
+    tuple
+        - If mode='global': (mean_xeq_xeq, mean_xax_xax) in Å (tuple of floats)
+        - If mode='local': (xeq_xeq_dict, xax_xax_dict) (tuple of dicts mapping octahedron_id -> distance)
+    """
+    mymat = struct.lattice.matrix
+    
+    # Get all octahedra from graph
+    octahedra_nodes = [node for node, data in graph.nodes(data=True) 
+                       if data.get('node_type') == 'octahedron']
+    
+    xeq_xeq_dict = {}
+    xax_xax_dict = {}
+    
+    for oct_node in octahedra_nodes:
+        # Get B atom - octahedra are always connected to B atoms via CONTAINS edge
+        b_atom_node = next((n for n in graph.neighbors(oct_node) 
+                           if graph.get_edge_data(oct_node, n).get('role') == 'center'), None)
+        
+        if b_atom_node is None:
+            xeq_xeq_dict[oct_node] = np.nan
+            xax_xax_dict[oct_node] = np.nan
+            continue
+        
+        # Get B atom position
+        b_vasp_idx = graph.nodes[b_atom_node]['vasp_index']
+        b_position = struct.cart_coords[b_vasp_idx]
+        
+        # Get all X atoms from B atom (BONDED_TO edges with role='ligand')
+        x_atoms_data = []  # List of (vasp_idx, is_equatorial, is_axial, position_pbc)
+        
+        for neighbor in graph.neighbors(b_atom_node):
+            edge_data = graph.get_edge_data(b_atom_node, neighbor)
+            if (edge_data and 
+                edge_data.get('edge_type') == 'bonded_to' and 
+                edge_data.get('role') == 'ligand'):
+                
+                neighbor_data = graph.nodes[neighbor]
+                x_vasp_idx = neighbor_data['vasp_index']
+                x_position = struct.cart_coords[x_vasp_idx]
+                
+                # Get PBC-wrapped position relative to B
+                _, vector = calculate_pbc_distances(
+                    b_position,
+                    x_position.reshape(1, -1),
+                    mymat,
+                    pbc=True,
+                    mode='extended',
+                    return_vectors=True
+                )
+                x_position_pbc = b_position + vector[0]
+                
+                # DEBUG: Print edge geometry and node attributes for first octahedron
+                if oct_node == octahedra_nodes[0]:
+                    edge_geom = edge_data.get('geometry', 'unknown')
+                    is_eq = neighbor_data.get('is_equatorial', False)
+                    is_ax = neighbor_data.get('is_axial', False)
+                    is_term = neighbor_data.get('is_terminal', False)
+                    is_inter = neighbor_data.get('is_interlayer', False)
+                    print(f"  X atom {x_vasp_idx}: edge_geom={edge_geom}, is_eq={is_eq}, is_ax={is_ax}, is_term={is_term}, is_inter={is_inter}")
+                
+                x_atoms_data.append({
+                    'vasp_idx': x_vasp_idx,
+                    'is_equatorial': neighbor_data.get('is_equatorial', False),
+                    'is_axial': neighbor_data.get('is_axial', False),
+                    'position_pbc': x_position_pbc
+                })
+        
+        if len(x_atoms_data) != 6:
+            xeq_xeq_dict[oct_node] = np.nan
+            xax_xax_dict[oct_node] = np.nan
+            continue
+        
+        # Find opposite pairs using X-B-X angles > 130° (close to 180° for ideal octahedra)
+        # For each X atom, find its opposite partner
+        equatorial_pairs = []
+        axial_pairs = []
+        
+        for i, x1_data in enumerate(x_atoms_data):
+            for j, x2_data in enumerate(x_atoms_data):
+                if i >= j:
+                    continue
+                
+                # Calculate X-B-X angle
+                vec1 = x1_data['position_pbc'] - b_position
+                vec2 = x2_data['position_pbc'] - b_position
+                
+                # Normalize vectors
+                vec1_norm = vec1 / np.linalg.norm(vec1)
+                vec2_norm = vec2 / np.linalg.norm(vec2)
+                
+                # Calculate angle in degrees
+                cos_angle = np.dot(vec1_norm, vec2_norm)
+                cos_angle = np.clip(cos_angle, -1.0, 1.0)
+                angle = np.degrees(np.arccos(cos_angle))
+                
+                # Opposite pairs have angles > 130° (close to 180°)
+                if angle > 130.0:
+                    # Check if both are equatorial or both are axial
+                    if x1_data['is_equatorial'] and x2_data['is_equatorial']:
+                        equatorial_pairs.append((i, j))
+                    elif x1_data['is_axial'] and x2_data['is_axial']:
+                        axial_pairs.append((i, j))
+        
+        # Calculate Xeq-Xeq distance (distance between opposite equatorial X atoms)
+        # In an ideal octahedron, there are 2 pairs of opposite equatorial atoms
+        if len(equatorial_pairs) >= 1:
+            # Calculate distances for all opposite equatorial pairs
+            eq_distances = []
+            for i, j in equatorial_pairs:
+                pos1 = x_atoms_data[i]['position_pbc']
+                pos2 = x_atoms_data[j]['position_pbc']
+                
+                # Direct distance (already PBC-wrapped relative to B)
+                dist = np.linalg.norm(pos2 - pos1)
+                eq_distances.append(dist)
+            
+            # Use mean of opposite pair distances
+            xeq_xeq_dict[oct_node] = float(np.mean(eq_distances))
+        else:
+            xeq_xeq_dict[oct_node] = np.nan
+        
+        # Calculate Xax-Xax distance (distance between the two opposite axial X atoms)
+        # In an ideal octahedron, there is 1 pair of opposite axial atoms
+        if len(axial_pairs) == 1:
+            i, j = axial_pairs[0]
+            pos1 = x_atoms_data[i]['position_pbc']
+            pos2 = x_atoms_data[j]['position_pbc']
+            
+            # Direct distance (already PBC-wrapped relative to B)
+            dist = np.linalg.norm(pos2 - pos1)
+            xax_xax_dict[oct_node] = float(dist)
+        else:
+            xax_xax_dict[oct_node] = np.nan
+    
+    # Return based on mode
+    if mode == 'global':
+        # Return mean distances, ignoring NaN values
+        xeq_values = [v for v in xeq_xeq_dict.values() if not np.isnan(v)]
+        xax_values = [v for v in xax_xax_dict.values() if not np.isnan(v)]
+        
+        mean_xeq_xeq = float(np.mean(xeq_values)) if xeq_values else np.nan
+        mean_xax_xax = float(np.mean(xax_values)) if xax_values else np.nan
+        
+        return (mean_xeq_xeq, mean_xax_xax)
+    
+    elif mode == 'local':
+        return (xeq_xeq_dict, xax_xax_dict)
+    
+    else:
+        raise ValueError(f"Unknown mode '{mode}'. Use 'global' or 'local'.")
 

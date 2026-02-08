@@ -133,7 +133,14 @@ def extract_molecular_components(
         mol_symbols = [atoms[i].symbol for i in crystal_indices]
         mol_positions = np.array([atoms[i].position for i in crystal_indices])
 
-        mol_atoms = Atoms(symbols=mol_symbols, positions=mol_positions)
+        # Include cell and pbc from parent structure to enable PBC-aware
+        # bond detection in downstream graph construction.
+        mol_atoms = Atoms(
+            symbols=mol_symbols,
+            positions=mol_positions,
+            cell=atoms.get_cell() if atoms.cell is not None else None,
+            pbc=atoms.get_pbc() if atoms.cell is not None else None,
+        )
         mol_atoms.info['original_indices'] = list(crystal_indices)
         molecules.append((crystal_indices, mol_atoms))
 

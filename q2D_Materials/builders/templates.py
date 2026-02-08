@@ -42,6 +42,11 @@ class FloorSchema:
     xy_expansion: Tuple[int, int]
 
 
+def _count_b_in_floors(floors: "OrderedDict[str, List[List[float]]]") -> int:
+    """Count B-site entries across all floors (each B = one octahedron)."""
+    return sum(1 for entries in floors.values() for entry in entries if entry[0] == "B")
+
+
 def build_floor_schema(
     template_name: str | Dict,
     BX_dist: float = 3.0,
@@ -85,14 +90,19 @@ def build_floor_schema(
             entries.append([site, float(cart[0]), float(cart[1]), float(cart[2])])
         floors[floor_key] = entries
 
-    if xy_expansion != (1, 1):
-        floors, cell_matrix = _apply_xy_expansion(floors, cell_matrix, xy_expansion)
+    n_b_unit = _count_b_in_floors(floors)
 
     if glazer_pattern is not None:
         floors, cell_matrix, lattice_lengths = _apply_glazer_to_floors(
-            floors, lattice_lengths, glazer_angles, glazer_pattern,
-            xy_expansion=xy_expansion, BX_dist=BX_dist
+            floors, lattice_lengths, glazer_angles, glazer_pattern, BX_dist=BX_dist
         )
+        n_b_after_glazer = _count_b_in_floors(floors)
+
+    if xy_expansion != (1, 1):
+        floors, cell_matrix = _apply_xy_expansion(floors, cell_matrix, xy_expansion)
+        lattice_lengths = tuple(float(x) for x in np.linalg.norm(cell_matrix, axis=1))
+        n_b_after_expansion = _count_b_in_floors(floors)
+        nx, ny = xy_expansion
 
     return FloorSchema(
         floors=floors,
@@ -336,45 +346,38 @@ def _apply_glazer_to_floors(
     lattice_lengths: Tuple[float, float, float],
     glazer_angles: Optional[List[float]],
     glazer_pattern: List[str] | str,
-    xy_expansion: Tuple[int, int] = (1, 1),
     BX_dist: float = 3.0,
 ) -> Tuple["OrderedDict[str, List[List[float]]]", np.ndarray, Tuple[float, float, float]]:
-    """Apply Glazer tilting to X-sites and return updated floors and cell."""
-    # Build position matrix grouped by site
+    """Apply Glazer tilting to unit-cell floors. XY expansion is applied later by build_floor_schema."""
+    # Build position matrix grouped by site (unit-cell positions)
     position_matrix: Dict[str, List[List[float]]] = {}
     for entries in floors.values():
         for site, x, y, z in entries:
             position_matrix.setdefault(site, []).append([x, y, z])
     original_positions = {k: [list(p) for p in v] for k, v in position_matrix.items()}
 
+    a, b, c = lattice_lengths
     if (
         "X" not in position_matrix
         or len(position_matrix["X"]) == 0
         or "B" not in position_matrix
         or len(position_matrix["B"]) == 0
     ):
-        a, b, c = lattice_lengths
-        nx, ny = xy_expansion
         cell_matrix = cell_matrix_from_parameters(a, b, c, 90.0, 90.0, 90.0)
-        cell_matrix[0] *= nx
-        cell_matrix[1] *= ny
-        return floors, cell_matrix, (a*nx, b*ny, c)
+        return floors, cell_matrix, lattice_lengths
 
-    a_unit = lattice_lengths[0]
-    b_unit = lattice_lengths[1]
     c_unit_ref = 2.0 * BX_dist
     total_height = lattice_lengths[2]
     nz = max(1, int(round(total_height / c_unit_ref)))
     c_unit = total_height / nz
-    
-    unit_lattice_vectors = (a_unit, b_unit, c_unit)
-    supercell_dims = (xy_expansion[0], xy_expansion[1], nz)
+    lattice_vectors = (a, b, c_unit)
+    supercell_dims = (1, 1, nz)
 
     if isinstance(glazer_pattern, str):
         notation = resolve_glazer_input(glazer_pattern)
         tilted_positions, lv_unit, cell_lengths = apply_glazer_tilt_from_notation(
             position_matrix,
-            lattice_vectors=unit_lattice_vectors,
+            lattice_vectors=lattice_vectors,
             supercell=supercell_dims,
             glazer_notation=notation,
             angles=glazer_angles,
@@ -382,16 +385,12 @@ def _apply_glazer_to_floors(
         )
     else:
         if glazer_angles is None:
-             a, b, c = lattice_lengths
-             nx, ny = xy_expansion
-             cell_matrix = cell_matrix_from_parameters(a, b, c, 90.0, 90.0, 90.0)
-             cell_matrix[0] *= nx
-             cell_matrix[1] *= ny
-             return floors, cell_matrix, (a*nx, b*ny, c)
+            cell_matrix = cell_matrix_from_parameters(a, b, c, 90.0, 90.0, 90.0)
+            return floors, cell_matrix, lattice_lengths
 
         tilted_positions, lv_unit, cell_lengths = apply_glazer_tilt(
             position_matrix,
-            lattice_vectors=unit_lattice_vectors,
+            lattice_vectors=lattice_vectors,
             supercell=supercell_dims,
             angles=glazer_angles,
             tilt_pattern=glazer_pattern,
@@ -415,10 +414,11 @@ def _apply_glazer_to_floors(
                 pos = orig[0]
                 new_entries.append([site, pos[0], pos[1], pos[2]])
         updated_floors[floor_key] = new_entries
-    nx, ny, nz = supercell_dims
-    full_lengths = (lv_unit[0] * nx, lv_unit[1] * ny, lv_unit[2] * nz)
+
+    _, _, nz = supercell_dims
+    full_lengths = (lv_unit[0], lv_unit[1], lv_unit[2] * nz)
     cell_matrix = np.diag(full_lengths)
-    
+
     return updated_floors, cell_matrix, full_lengths
 
 

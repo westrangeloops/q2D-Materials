@@ -208,8 +208,16 @@ def apply_glazer_tilt(
     if "Ap" in position_matrix:
         positions_out["Ap"] = [list(p) for p in position_matrix.get("Ap", [])]
 
+    cell_len = lv * np.asarray(supercell, dtype=float)
+    # Always wrap positions into [0, cell_len) so we never output negative or out-of-cell coords
+    for k, plist in positions_out.items():
+        if not plist:
+            continue
+        arr = np.asarray(plist, dtype=float)
+        arr = np.mod(arr, cell_len)
+        positions_out[k] = arr.tolist()
+
     if adjust_cell:
-        cell_len = lv * np.asarray(supercell, dtype=float)
         padding = np.maximum(cell_len * cell_padding_factor, min_cell_padding)
         for k, plist in positions_out.items():
             if k == "Ap":
@@ -217,13 +225,12 @@ def apply_glazer_tilt(
             if not plist:
                 continue
             arr = np.asarray(plist, dtype=float)
-            arr = np.mod(arr, cell_len)
             arr = np.clip(arr, 0.0, cell_len - padding)
             positions_out[k] = arr.tolist()
 
         return positions_out, tuple(lv.tolist()), tuple(cell_len.tolist())
 
-    return positions_out, tuple(lv.tolist()), tuple((lv * np.asarray(supercell)).tolist())
+    return positions_out, tuple(lv.tolist()), tuple(cell_len.tolist())
 
 
 def apply_glazer_tilt_from_notation(

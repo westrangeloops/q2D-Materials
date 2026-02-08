@@ -111,7 +111,14 @@ def create_bulk_perovskite(
         spacer_orientation=spacer_orientation,
         collision_strategy=collision_strategy,
     )
-    
+
+    nx, ny = xy_expansion
+    expected_oct = nx * ny * thickness
+    b_sym = (B[0] if isinstance(B, list) and B else B) if B else None
+    if hasattr(b_sym, "get_chemical_symbols"):
+        b_sym = b_sym.get_chemical_symbols()[0]
+    n_b = sum(1 for s in atoms.get_chemical_symbols() if s == b_sym) if isinstance(b_sym, str) else 0
+
     return atoms
 
 def create_monolayer_perovskite(
@@ -171,6 +178,12 @@ def create_monolayer_perovskite(
         )
 
     tpl = get_template(template)
+    # Default attachment_end to 'both' for monolayers when passivator is provided
+    # This ensures Ap-sites are created on both top and bottom surfaces
+    effective_attachment_end = attachment_end
+    if passivator is not None and attachment_end is None:
+        effective_attachment_end = 'both'
+    
     cell_data = build_cell_positions(
         tpl,
         BX_dist=BX_dist,
@@ -179,7 +192,7 @@ def create_monolayer_perovskite(
         xy_expansion=xy_expansion,
         penetration=penetration,
         spacer_provided=passivator is not None,
-        attachment_end=attachment_end,
+        attachment_end=effective_attachment_end,
         glazer_angles=glazer_angles,
         glazer_pattern=glazer_pattern,
         sharp_spacer_span=sharp_spacer_span,

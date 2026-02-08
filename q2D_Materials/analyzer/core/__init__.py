@@ -6,11 +6,20 @@ from .structure_classification import (
     _infer_structure_type,
     _infer_structure_type_from_graph,
 )
+from .layers_wrapper import Layers
+from .layer_analysis import (
+    get_intralayer_bxb,
+    get_interlayer_bxb,
+    get_all_interlayer_bxb,
+)
 
 __all__ = [
     'q2D_analyzer',
     '_graph_inorganic_ontology',
     '_infer_structure_type',
     '_infer_structure_type_from_graph',
+    'Layers',
+    'get_intralayer_bxb',
+    'get_interlayer_bxb',
+    'get_all_interlayer_bxb',
 ]
-

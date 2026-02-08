@@ -38,9 +38,13 @@ def get_template(template_name: str | Dict) -> str | Dict:
         
     name = template_name.lower()
     valid = available_templates()
-    if name not in valid:
+    # Case-insensitive comparison: convert valid templates to lowercase for matching
+    valid_lower = [v.lower() for v in valid]
+    if name not in valid_lower:
         raise ValueError(f"template must be one of {valid} or a valid JSON/dict")
-    return name
+    # Return the original case template name
+    valid_map = {v.lower(): v for v in valid}
+    return valid_map[name]
 
 
 def auto_calculate_BX_distance(B: str, X: str) -> float:

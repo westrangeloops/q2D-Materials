@@ -52,7 +52,7 @@ Example
 >>> molecules = extract_molecular_components(atoms, exclude_indices)
 >>> 
 >>> # For classified 2D perovskites, use the layer-aware classifier
->>> from q2D_Materials.analyzer.detection.molecule_classification import _classify_molecules_by_continuity
+>>> from q2D_Materials.analyzer.molecular_processing.molecule_classification import _classify_molecules_by_continuity
 >>> spacers, a_sites = _classify_molecules_by_continuity(molecules, slab_info, positions, cell)
 """
 
@@ -64,7 +64,6 @@ from ase import Atoms
 
 from ...utils.geometry.geometry import _calculate_distances
 from ..utils.pymatgen_utils import build_molecular_graph, extract_molecular_components
-from .cavity_tracing import is_point_in_cavity, get_octahedra_data
 
 
 def _classify_molecules_by_continuity(
@@ -126,10 +125,6 @@ def _classify_molecules_by_continuity(
 
     z_tolerance = expected_layer_spacing * 0.25
 
-    octahedra_data = None
-    if cavities and graph:
-        octahedra_data = get_octahedra_data(graph)
-
     for mol in molecules:
         original_indices = mol.info.get('original_indices', [])
         if not original_indices:
@@ -137,21 +132,6 @@ def _classify_molecules_by_continuity(
 
         mol_z_coords = [atom_positions[idx][2] for idx in original_indices]
         mol_center_z = np.mean(mol_z_coords)
-        
-        # Check cavity containment if available (strongest evidence for A-site)
-        is_in_cavity = False
-        if cavities and octahedra_data:
-            mol_center = np.mean(atom_positions[original_indices], axis=0)
-            for cavity in cavities:
-                if is_point_in_cavity(mol_center, cavity, octahedra_data, atom_positions, cell):
-                    is_in_cavity = True
-                    break
-        
-        if is_in_cavity:
-            mol.info['classification'] = 'a_site'
-            mol.info['region'] = 'cavity'
-            a_sites.append(mol)
-            continue
 
         is_in_discontinuity = False
         for z_start, z_end in discontinuity_regions:

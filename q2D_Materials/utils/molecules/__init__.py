@@ -14,6 +14,10 @@ from .graph_converter import (
     validate_conserved_atoms,
     validate_smiles,
 )
+from .pbc_reconstruction import (
+    reconstruct_molecule_pbc,
+    reconstruct_molecule_from_nh3,
+)
 
 __all__ = [
     'smiles_to_ase_atoms',
@@ -27,5 +31,8 @@ __all__ = [
     'transfer_coordinates',
     'validate_conserved_atoms',
     'validate_smiles',
+    # PBC reconstruction functions
+    'reconstruct_molecule_pbc',
+    'reconstruct_molecule_from_nh3',
 ]
 

@@ -7,15 +7,15 @@ and edge-sharing relationships between octahedra.
 import numpy as np
 import networkx as nx
 
-from .octahedral_detection import _calculate_avg_bx_distance
+from ..octahedral_processing.octahedral_detection import _calculate_avg_bx_distance
 
 
 def _identify_slabs_by_continuity(
-    bx_graph: nx.Graph,
     octahedra_info: list,
+    shared_atoms: dict,
     atom_positions: np.ndarray,
 ) -> dict:
-    """Partition octahedra into slabs based on z-continuity in the B-X network.
+    """Partition octahedra into slabs based on z-continuity.
 
     A slab is a connected group of octahedra where z-changes between
     adjacent octahedra are smooth (within expected layer spacing).
@@ -23,10 +23,10 @@ def _identify_slabs_by_continuity(
 
     Parameters
     ----------
-    bx_graph : nx.Graph
-        B-X network graph from _build_bx_network
     octahedra_info : list
-        List of octahedra dictionaries
+        List of octahedra dictionaries with 'central_atom_index' key
+    shared_atoms : dict
+        Dictionary mapping (oct_i, oct_j) -> list of shared atom indices
     atom_positions : np.ndarray
         Array of all atom positions
 
@@ -40,7 +40,7 @@ def _identify_slabs_by_continuity(
         - 'max_z_jump_threshold': calculated threshold for discontinuity
         - 'expected_layer_spacing': expected layer spacing
     """
-    if len(bx_graph.nodes) == 0:
+    if len(octahedra_info) == 0:
         return {
             'slabs': {},
             'slab_z_ranges': {},
@@ -49,6 +49,7 @@ def _identify_slabs_by_continuity(
             'expected_layer_spacing': 7.0,
         }
 
+    # Calculate expected layer spacing from B-X distances
     max_bx_distance = 5.0
     bx_distances = []
     for oct_data in octahedra_info:
@@ -71,21 +72,40 @@ def _identify_slabs_by_continuity(
 
     max_z_jump = expected_layer_spacing * 1.3
 
-    continuous_graph = nx.Graph()
-    continuous_graph.add_nodes_from(bx_graph.nodes(data=True))
+    # Build graph of octahedra with z-coordinates
+    oct_graph = nx.Graph()
+    oct_z_coords = {}
+    
+    for oct_idx, oct_data in enumerate(octahedra_info):
+        central_idx = oct_data.get('central_atom_index')
+        if central_idx is not None:
+            z_coord = atom_positions[central_idx][2]
+            oct_graph.add_node(oct_idx, z_coord=z_coord)
+            oct_z_coords[oct_idx] = z_coord
 
-    for u, v, edge_data in bx_graph.edges(data=True):
-        z_diff = edge_data.get('z_difference', 0)
-        if z_diff <= max_z_jump:
-            continuous_graph.add_edge(u, v, **edge_data)
+    # Add edges between octahedra that share atoms, filtering by z-difference
+    for (oct_i, oct_j), shared in shared_atoms.items():
+        if oct_i in oct_z_coords and oct_j in oct_z_coords:
+            z_i = oct_z_coords[oct_i]
+            z_j = oct_z_coords[oct_j]
+            z_diff = abs(z_j - z_i)
+            
+            # Only connect if z-difference is within threshold (same slab)
+            if z_diff <= max_z_jump:
+                oct_graph.add_edge(
+                    oct_i, oct_j,
+                    z_difference=z_diff,
+                    n_shared_atoms=len(shared),
+                    shared_atoms=shared,
+                )
 
     slabs = {}
     slab_z_ranges = {}
 
-    for slab_id, component in enumerate(nx.connected_components(continuous_graph)):
+    for slab_id, component in enumerate(nx.connected_components(oct_graph)):
         oct_indices = list(component)
         slabs[slab_id] = oct_indices
-        z_coords = [bx_graph.nodes[idx]['z_coord'] for idx in oct_indices]
+        z_coords = [oct_z_coords[idx] for idx in oct_indices]
         slab_z_ranges[slab_id] = (min(z_coords), max(z_coords))
 
     discontinuity_regions = []
@@ -306,6 +326,9 @@ def _identify_layers(
     layers = {}
     
     # Calculate average Z for each component to sort them
+    # Note: Uses Cartesian Z-coordinates for sorting. This is a heuristic for layer ordering.
+    # For non-orthogonal cells, this approximates the stacking direction.
+    # Layers are primarily identified by connectivity (edge-sharing), not Z-distance.
     comp_z_coords = []
     for comp in components:
         oct_indices = list(comp)

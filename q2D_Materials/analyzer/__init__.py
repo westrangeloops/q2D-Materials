@@ -15,17 +15,28 @@ Example
 >>> glazer = analyzer.get_glazer_pattern()
 >>> bxb_angles = analyzer.get_bxb_angles()
 >>> rdf = analyzer.get_partial_rdf([["Pb", "I"]])
+>>>
+>>> # New: Layer-specific B-X-B analysis
+>>> intra_layer = analyzer.layers.get_bxb(index=0)
+>>> print(f"Layer 0 B-X-B mean: {intra_layer['bxb_mean']:.2f}°")
+>>> inter_layer = analyzer.layers.get_interlayer_bxb('0', '1')
+>>> print(f"Inter-layer B-X-B mean: {inter_layer['bxb_mean']:.2f}°")
 """
 
 from .core.analyzer_class import q2D_analyzer
 from .core.graph_construction import _graph_inorganic_ontology
-from .detection.layer_identification import _identify_layers, _identify_slabs_by_continuity
-from .detection.molecule_classification import (
+from .core.layer_identification import _identify_layers, _identify_slabs_by_continuity
+from .core.layers_wrapper import Layers
+from .core.layer_analysis import (
+    get_intralayer_bxb,
+    get_interlayer_bxb,
+    get_all_interlayer_bxb,
+)
+from .molecular_processing.molecule_classification import (
     _classify_molecules_by_continuity,
     _find_molecular_components,
 )
-from .characterization.network_analysis import _build_bx_network
-from .detection.octahedral_detection import _count_octahedra, find_shared_atoms
+from .octahedral_processing.octahedral_detection import _count_octahedra, find_shared_atoms
 from .utils.perovskite_constants import (
     PEROVSKITE_BOND_RADII,
     get_bond_cutoff,
@@ -37,6 +48,10 @@ from .core.structure_classification import (
 
 __all__ = [
     'q2D_analyzer',
+    'Layers',
+    'get_intralayer_bxb',
+    'get_interlayer_bxb',
+    'get_all_interlayer_bxb',
     'PEROVSKITE_BOND_RADII',
     'get_bond_cutoff',
     '_count_octahedra',
@@ -44,7 +59,6 @@ __all__ = [
     '_graph_inorganic_ontology',
     '_identify_layers',
     '_identify_slabs_by_continuity',
-    '_build_bx_network',
     '_find_molecular_components',
     '_classify_molecules_by_continuity',
     '_infer_structure_type',

@@ -26,26 +26,23 @@ from .characterization import (
     find_paths,
     get_subgraph,
 )
-from .network_analysis import _build_bx_network
 from .a_site_analysis import (
     centmass_organic,
     centmass_organic_vec,
     find_b_cage_and_disp,
     match_mixed_halide_octa_dot,
 )
-from .molecule_candidates import (
+# Re-export from molecular_processing for backward compatibility
+from ..molecular_processing import (
     analyze_molecule_candidate,
     analyze_dj_candidate,
     analyze_rp_candidate,
     convert_nh2_to_nh3,
+    clean_molecule,
     SpacerCandidateResult,
     TerminalGroup,
-)
-from .smarts_validator import (
     find_smarts_matches,
     validate_smarts_pattern,
-)
-from .spacer_analysis import (
     SpacerAnalysis,
     SpacerAnalysisResult,
     BackboneQuery,
@@ -75,7 +72,6 @@ __all__ = [
     'get_layer_octahedra',
     'find_paths',
     'get_subgraph',
-    '_build_bx_network',
     'centmass_organic',
     'centmass_organic_vec',
     'find_b_cage_and_disp',
@@ -84,6 +80,7 @@ __all__ = [
     'analyze_dj_candidate',
     'analyze_rp_candidate',
     'convert_nh2_to_nh3',
+    'clean_molecule',
     'SpacerCandidateResult',
     'TerminalGroup',
     'find_smarts_matches',

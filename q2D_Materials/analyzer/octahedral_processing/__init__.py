@@ -31,6 +31,22 @@ from .octahedral_analysis import (
     find_polytype_network,
     simply_calc_distortion,
 )
+from .tilt_calculations import (
+    OctahedralTiltData,
+    compute_octahedral_tilts,
+    calculate_euler_angles_from_bonds,
+    get_reference_axes,
+    compute_inclination_from_rotations,
+    compute_out_of_plane_inclination,
+)
+from .tilting_properties import (
+    compute_mean_tilt_profile,
+    compute_gearing_correlation,
+)
+from .volume_calculations import (
+    compute_octahedral_volume,
+    compute_all_octahedral_volumes,
+)
 
 __all__ = [
     'tqdm_joblib',
@@ -54,5 +70,18 @@ __all__ = [
     'fit_octahedral_network_defect_tol_non_orthogonal',
     'find_polytype_network',
     'simply_calc_distortion',
+    # Tilt calculations (refactored from glazer_detection)
+    'OctahedralTiltData',
+    'compute_octahedral_tilts',
+    'calculate_euler_angles_from_bonds',
+    'get_reference_axes',
+    'compute_inclination_from_rotations',
+    'compute_out_of_plane_inclination',
+    # Tilting properties (new advanced metrics)
+    'compute_mean_tilt_profile',
+    'compute_gearing_correlation',
+    # Volume calculations
+    'compute_octahedral_volume',
+    'compute_all_octahedral_volumes',
 ]
 

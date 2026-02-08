@@ -839,6 +839,11 @@ def populate_structure(
     else:
         sharp_spacer_normalized = None
     
+    n_b_input = 0
+    if hasattr(matrix, "positions") and matrix.positions and "B" in matrix.positions:
+        pos_b = matrix.positions["B"]
+        n_b_input = pos_b.shape[0] if hasattr(pos_b, "shape") else len(pos_b)
+
     # Assign ions to positions using patterns with site labels
     assignments = assign_ions_to_sites(
         matrix.positions,
@@ -858,10 +863,13 @@ def populate_structure(
         assignment_lookup[key] = (st, ion, pos, label)
 
     floors: List[Tuple[float, List[Tuple[str, Union[str, Atoms], np.ndarray, str]]]] = []
+    n_entries_total = sum(len(f) for f in floors_cart)
+    n_skipped = 0
     for floor_entries in floors_cart:
         resolved: List[Tuple[str, Union[str, Atoms], np.ndarray, str]] = []
         for entry in floor_entries:
             if len(entry) < 4:
+                n_skipped += 1
                 continue
             st, x, y, z = entry[0], float(entry[1]), float(entry[2]), float(entry[3])
             x_round, y_round, z_round = round(x, 4), round(y, 4), round(z, 4)
@@ -878,13 +886,18 @@ def populate_structure(
                         chosen = v
                         break
             if chosen is None:
+                n_skipped += 1
                 continue
             st_r, ion_r, pos_r, label_r = chosen
             # S# sites will have ion_r=None from assign_ions_to_sites - will be assigned per floor pair
             resolved.append((st_r, ion_r, np.array([x, y, z], dtype=float), label_r))
         if resolved:
             floors.append((resolved[0][2][2], resolved))
-    
+
+    if n_skipped > 0:
+        import sys
+        print(f"[populate_structure] WARNING: {n_skipped} floor entries skipped (no assignment match); total entries={n_entries_total}", file=sys.stderr, flush=True)
+
     # Prepare ordered slabs (ground/sky metadata)
     floors.sort(key=lambda x: x[0])
     resolved_floors = [entries for _, entries in floors]
@@ -910,6 +923,13 @@ def populate_structure(
             spacer_orientation=spacer_orientation,
             collision_strategy=collision_strategy,
         )
+
+    _b = B_ions[0] if isinstance(B_ions, list) and B_ions else B_ions
+    b_sym = _b.get_chemical_symbols()[0] if hasattr(_b, "get_chemical_symbols") else (_b if isinstance(_b, str) else None)
+    n_b_final = sum(1 for s in structure.get_chemical_symbols() if s == b_sym) if b_sym else 0
+
+    # Ensure all positions are inside the cell (no negative or > L coords from Glazer/spacer)
+    structure.wrap()
 
     return structure
 
