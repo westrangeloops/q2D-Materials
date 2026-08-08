@@ -130,8 +130,14 @@ class q2D_creator:
                 collision_strategy=collision_strategy,
             )
         elif structure_type.lower() == "monolayer":
+            # For monolayers with thickness=1 and passivator, automatically set A_ions to None
+            # so only passivator molecules are placed on surfaces (no A-sites in middle)
+            effective_A_ions = A_ions
+            if passivator is not None and thickness == 1:
+                effective_A_ions = None
+            
             atoms = create_monolayer_perovskite(
-                A=A_ions,
+                A=effective_A_ions,
                 B=B_ions,
                 X=X_ions,
                 xy_expansion=xy_expansion,

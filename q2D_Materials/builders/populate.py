@@ -740,11 +740,14 @@ def populate_sharp(
         else:
             # Mono spacers: no global optimization needed
             # Note: orientation alignment was already applied above for the template
+            # Check if spacer is atomic (single atom) - skip collision resolution for atomic spacers
+            is_atomic_spacer = len(spacer_template) == 1
+            
             for entry in ground_entries:
                 placed = _place_mono_sharp_spacer(spacer_template.copy(), entry["position"], 'bottom')
                 if placed is not None and len(placed) > 0:
-                    # Check for and resolve collisions before adding to structure
-                    if collision_strategy != "off":
+                    # Skip collision resolution for atomic spacers (they must stay at exact positions)
+                    if collision_strategy != "off" and not is_atomic_spacer:
                         placed, collision_resolved = resolve_collisions(
                             placed, structure, cell=cell, strategy=collision_strategy
                         )
@@ -755,8 +758,8 @@ def populate_sharp(
             for entry in sky_entries:
                 placed = _place_mono_sharp_spacer(spacer_template.copy(), entry["position"], 'top')
                 if placed is not None and len(placed) > 0:
-                    # Check for and resolve collisions before adding to structure
-                    if collision_strategy != "off":
+                    # Skip collision resolution for atomic spacers (they must stay at exact positions)
+                    if collision_strategy != "off" and not is_atomic_spacer:
                         placed, collision_resolved = resolve_collisions(
                             placed, structure, cell=cell, strategy=collision_strategy
                         )
@@ -799,6 +802,8 @@ def populate_structure(
     BX_dist: Optional[float] = None,
     spacer_orientation: Optional[List[str]] = None,
     collision_strategy: str = "rotate",
+    wrap_atoms: bool = True,
+    pbc_z: bool = True,
 ) -> Atoms:
     """
     Populate structure matrix with atoms based on site labels (A, B, X, Ap, S#).
@@ -815,6 +820,10 @@ def populate_structure(
         - "optimize": Use geometry optimization to push atoms apart (slowest but most robust)
         - "reject": Raise warning and skip placement if collisions detected
         - "off": Skip collision detection entirely
+    wrap_atoms : bool, default True
+        Whether to wrap atoms back into the cell after population
+    pbc_z : bool, default True
+        Whether to enable periodic boundary conditions in Z direction
     """
     # Normalize A-site ions (convert molecular strings to Atoms objects)
     A_ions = _normalize_ion_list(A_ions, normalize_a_site)
@@ -906,7 +915,7 @@ def populate_structure(
     # Initialize structure and cell
     structure = Atoms()
     structure.set_cell(matrix.cell_vectors)
-    structure.pbc = [1, 1, 1]
+    structure.pbc = [1, 1, pbc_z]
 
     sharp_sequence = _SharpSpacerSequence(sharp_spacer_normalized) if sharp_spacer_normalized else None
 
@@ -929,7 +938,9 @@ def populate_structure(
     n_b_final = sum(1 for s in structure.get_chemical_symbols() if s == b_sym) if b_sym else 0
 
     # Ensure all positions are inside the cell (no negative or > L coords from Glazer/spacer)
-    structure.wrap()
+    # For monolayers (pbc_z=False), skip wrapping to avoid molecules wrapping around Z
+    if wrap_atoms:
+        structure.wrap()
 
     return structure
 

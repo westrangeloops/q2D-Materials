@@ -353,6 +353,8 @@ def populate_positions(
     BX_dist=None,
     spacer_orientation: Optional[List[str]] = None,
     collision_strategy: str = "rotate",
+    wrap_atoms: bool = True,
+    pbc_z: bool = True,
 ) -> Atoms:
     """Populate ions using the population toolchain."""
     positions_np = {site: np.asarray(coords, dtype=float) for site, coords in positions.items()}
@@ -370,6 +372,8 @@ def populate_positions(
         BX_dist=BX_dist,
         spacer_orientation=spacer_orientation,
         collision_strategy=collision_strategy,
+        wrap_atoms=wrap_atoms,
+        pbc_z=pbc_z,
     )
 
 
@@ -451,6 +455,16 @@ def default_layer_sequence(layer_sequence: Optional[str | List[str]], thickness:
         elif structure_type.lower() == "bulk" and thickness == 1:
             return "L2-M1-M1", None
     elif isinstance(layer_sequence, str) and layer_sequence.upper() == "RP":
+        if structure_type.lower() == "bulk" and thickness > 1:
+            parts_below = ["L2", "L1"] * thickness
+            parts_above = ["RP0", "RP2"] * thickness
+            parts_below = parts_below[:-1] # remove the last L1
+            parts_above = parts_above[1:] # remove the first RP0
+            parts_above = ["RP1"] + parts_above
+            join_below = "-".join(parts_below) + "-M1"
+            join_above = "-".join(parts_above) + "-RP1-M1"
+            base_sequence = f"{join_below}-{join_above}"
+            return base_sequence, None
         # RP keyword: fixed sequence using RP layers
         return "L2-M1-RP1-RP2-RP1-M1", None
     else:

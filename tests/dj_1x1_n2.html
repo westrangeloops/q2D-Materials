@@ -1,0 +1,127 @@
+<html>
+    <head>
+        <meta charset="utf-8">
+        
+            <script src="lib/bindings/utils.js"></script>
+            <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.2/dist/dist/vis-network.min.css" integrity="sha512-WgxfT5LWjfszlPHXRmBWHkV2eceiWTOBvrKCNbdgDYTHrT2AeLCGbF4sZlZw3UMN3WtL0tGUoIAKsu8mllg/XA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.2/dist/vis-network.min.js" integrity="sha512-LnvoEWDFrqGHlHmDD2101OrLcbsfkrzoSpvtSQtxK3RMnRV0eOkhhBN2dXHKRrUU8p2DGRTk35n4O8nWSVe1mQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+            
+        
+<center>
+<h1></h1>
+</center>
+
+<!-- <link rel="stylesheet" href="../node_modules/vis/dist/vis.min.css" type="text/css" />
+<script type="text/javascript" src="../node_modules/vis/dist/vis.js"> </script>-->
+        <link
+          href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta3/dist/css/bootstrap.min.css"
+          rel="stylesheet"
+          integrity="sha384-eOJMYsd53ii+scO/bJGFsiCZc+5NDVN2yr8+0RDqr0Ql0h+rP48ckxlpbzKgwra6"
+          crossorigin="anonymous"
+        />
+        <script
+          src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta3/dist/js/bootstrap.bundle.min.js"
+          integrity="sha384-JEW9xMcG8R+pH31jmWH6WWP0WintQrMb4s7ZOdauHnUtxwoG2vI5DkLtS3qm9Ekf"
+          crossorigin="anonymous"
+        ></script>
+
+
+        <center>
+          <h1></h1>
+        </center>
+        <style type="text/css">
+
+             #mynetwork {
+                 width: 100%;
+                 height: 800px;
+                 background-color: #222222;
+                 border: 1px solid lightgray;
+                 position: relative;
+                 float: left;
+             }
+
+             
+
+             
+
+             
+        </style>
+    </head>
+
+
+    <body>
+        <div class="card" style="width: 100%">
+            
+            
+            <div id="mynetwork" class="card-body"></div>
+        </div>
+
+        
+        
+
+        <script type="text/javascript">
+
+              // initialize global variables.
+              var edges;
+              var nodes;
+              var allNodes;
+              var allEdges;
+              var nodeColors;
+              var originalNodes;
+              var network;
+              var container;
+              var options, data;
+              var filter = {
+                  item : '',
+                  property : '',
+                  value : []
+              };
+
+              
+
+              
+
+              // This method is responsible for drawing the graph, returns the drawn network
+              function drawGraph() {
+                  var container = document.getElementById('mynetwork');
+
+                  
+
+                  // parsing and collecting nodes and edges from the python
+                  nodes = new vis.DataSet([{"color": "#49ADB6", "font": {"color": "white"}, "id": "layer_0", "label": "Layer 0", "shape": "box", "size": 30, "title": "node_type: layer | position: surface | terminal_atoms_count: 4 | z_coord: 0.0000"}, {"color": "#49ADB6", "font": {"color": "white"}, "id": "layer_1", "label": "Layer 1", "shape": "box", "size": 30, "title": "node_type: layer | position: surface | terminal_atoms_count: 3 | z_coord: 7.1800"}, {"color": "#C3D1D1", "font": {"color": "white"}, "id": "atom_0", "label": "Pb0", "shape": "dot", "size": 10, "title": "is_X: False | node_type: atom | symbol: Pb | vasp_index: 0 | x: 3.5900 | y: 3.5900 | z: 0.0000"}, {"color": "#8F26AB", "font": {"color": "white"}, "id": "atom_1", "label": "I1", "shape": "dot", "size": 10, "title": "is_X: True | is_axial: True | is_terminal: True | node_type: atom | symbol: I | vasp_index: 1 | x: 0.0000 | y: 3.5900 | z: 0.0000"}, {"color": "#8F26AB", "font": {"color": "white"}, "id": "atom_2", "label": "I2", "shape": "dot", "size": 10, "title": "is_X: True | is_axial: True | is_terminal: True | node_type: atom | symbol: I | vasp_index: 2 | x: 3.5900 | y: 0.0000 | z: 0.0000"}, {"color": "#64748b", "font": {"color": "white"}, "id": "atom_3", "label": "C3", "shape": "dot", "size": 10, "title": "hybridization: sp3 | is_X: False | node_type: atom | role: functional_group | symbol: C | vasp_index: 3 | x: 0.0000 | y: 0.0000 | z: 2.8189"}, {"color": "#3b82f6", "font": {"color": "white"}, "id": "atom_4", "label": "N4", "shape": "dot", "size": 10, "title": "is_X: False | node_type: atom | role: functional_group | symbol: N | vasp_index: 4 | x: 0.0000 | y: 0.0000 | z: 4.2764"}, {"color": "#e2e8f0", "font": {"color": "white"}, "id": "atom_5", "label": "H5", "shape": "dot", "size": 10, "title": "is_X: False | node_type: atom | symbol: H | vasp_index: 5 | x: 0.9438 | y: 6.7324 | z: 2.4393"}, {"color": "#e2e8f0", "font": {"color": "white"}, "id": "atom_6", "label": "H6", "shape": "dot", "size": 10, "title": "is_X: False | node_type: atom | symbol: H | vasp_index: 6 | x: 6.3205 | y: 6.5865 | z: 2.4393"}, {"color": "#e2e8f0", "font": {"color": "white"}, "id": "atom_7", "label": "H7", "shape": "dot", "size": 10, "title": "is_X: False | node_type: atom | symbol: H | vasp_index: 7 | x: 7.0958 | y: 1.0411 | z: 2.4393"}, {"color": "#e2e8f0", "font": {"color": "white"}, "id": "atom_8", "label": "H8", "shape": "dot", "size": 10, "title": "is_X: False | node_type: atom | symbol: H | vasp_index: 8 | x: 6.2891 | y: 0.4226 | z: 4.6241"}, {"color": "#e2e8f0", "font": {"color": "white"}, "id": "atom_9", "label": "H9", "shape": "dot", "size": 10, "title": "is_X: False | node_type: atom | symbol: H | vasp_index: 9 | x: 0.0795 | y: 6.1972 | z: 4.6241"}, {"color": "#e2e8f0", "font": {"color": "white"}, "id": "atom_10", "label": "H10", "shape": "dot", "size": 10, "title": "is_X: False | node_type: atom | symbol: H | vasp_index: 10 | x: 0.8114 | y: 0.5603 | z: 4.6241"}, {"color": "#8F26AB", "font": {"color": "white"}, "id": "atom_11", "label": "I11", "shape": "dot", "size": 10, "title": "is_X: True | is_axial: True | is_interlayer: True | node_type: atom | symbol: I | vasp_index: 11 | x: 3.5900 | y: 3.5900 | z: 3.5900"}, {"color": "#C3D1D1", "font": {"color": "white"}, "id": "atom_12", "label": "Pb12", "shape": "dot", "size": 10, "title": "is_X: False | node_type: atom | symbol: Pb | vasp_index: 12 | x: 3.5900 | y: 3.5900 | z: 7.1800"}, {"color": "#8F26AB", "font": {"color": "white"}, "id": "atom_13", "label": "I13", "shape": "dot", "size": 10, "title": "is_X: True | is_axial: True | is_terminal: True | node_type: atom | symbol: I | vasp_index: 13 | x: 0.0000 | y: 3.5900 | z: 7.1800"}, {"color": "#8F26AB", "font": {"color": "white"}, "id": "atom_14", "label": "I14", "shape": "dot", "size": 10, "title": "is_X: True | is_axial: True | is_terminal: True | node_type: atom | symbol: I | vasp_index: 14 | x: 3.5900 | y: 0.0000 | z: 7.1800"}, {"color": "#8F26AB", "font": {"color": "white"}, "id": "atom_15", "label": "I15", "shape": "dot", "size": 10, "title": "is_X: True | is_axial: True | is_terminal: True | node_type: atom | symbol: I | vasp_index: 15 | x: 3.5900 | y: 3.5900 | z: 10.7700"}, {"color": "#3b82f6", "font": {"color": "white"}, "id": "atom_16", "label": "N16", "shape": "dot", "size": 10, "title": "is_X: False | node_type: atom | role: functional_group | symbol: N | vasp_index: 16 | x: 0.0000 | y: -0.0000 | z: 10.5176"}, {"color": "#64748b", "font": {"color": "white"}, "id": "atom_17", "label": "C17", "shape": "dot", "size": 10, "title": "hybridization: sp3 | is_X: False | node_type: atom | role: backbone | symbol: C | vasp_index: 17 | x: 6.9479 | y: 0.7954 | z: 11.7250"}, {"color": "#64748b", "font": {"color": "white"}, "id": "atom_18", "label": "C18", "shape": "dot", "size": 10, "title": "hybridization: sp3 | is_X: False | node_type: atom | role: backbone | symbol: C | vasp_index: 18 | x: 0.0050 | y: 7.1630 | z: 13.0089"}, {"color": "#64748b", "font": {"color": "white"}, "id": "atom_19", "label": "C19", "shape": "dot", "size": 10, "title": "hybridization: sp3 | is_X: False | node_type: atom | role: backbone | symbol: C | vasp_index: 19 | x: 6.9443 | y: 0.8079 | z: 14.2828"}, {"color": "#3b82f6", "font": {"color": "white"}, "id": "atom_20", "label": "N20", "shape": "dot", "size": 10, "title": "is_X: False | node_type: atom | role: functional_group | symbol: N | vasp_index: 20 | x: -0.0000 | y: 0.0000 | z: 15.4790"}, {"color": "#e2e8f0", "font": {"color": "white"}, "id": "atom_21", "label": "H21", "shape": "dot", "size": 10, "title": "is_X: False | node_type: atom | symbol: H | vasp_index: 21 | x: 7.0115 | y: 0.5774 | z: 9.6620"}, {"color": "#e2e8f0", "font": {"color": "white"}, "id": "atom_22", "label": "H22", "shape": "dot", "size": 10, "title": "is_X: False | node_type: atom | symbol: H | vasp_index: 22 | x: 6.5589 | y: 6.3397 | z: 10.5103"}, {"color": "#e2e8f0", "font": {"color": "white"}, "id": "atom_23", "label": "H23", "shape": "dot", "size": 10, "title": "is_X: False | node_type: atom | symbol: H | vasp_index: 23 | x: 0.9936 | y: 6.8543 | z: 10.5119"}, {"color": "#e2e8f0", "font": {"color": "white"}, "id": "atom_24", "label": "H24", "shape": "dot", "size": 10, "title": "is_X: False | node_type: atom | symbol: H | vasp_index: 24 | x: 5.8939 | y: 1.1515 | z: 11.7262"}, {"color": "#e2e8f0", "font": {"color": "white"}, "id": "atom_25", "label": "H25", "shape": "dot", "size": 10, "title": "is_X: False | node_type: atom | symbol: H | vasp_index: 25 | x: 0.4240 | y: 1.6940 | z: 11.7164"}, {"color": "#e2e8f0", "font": {"color": "white"}, "id": "atom_26", "label": "H26", "shape": "dot", "size": 10, "title": "is_X: False | node_type: atom | symbol: H | vasp_index: 26 | x: 1.0406 | y: 6.7585 | z: 13.0123"}, {"color": "#e2e8f0", "font": {"color": "white"}, "id": "atom_27", "label": "H27", "shape": "dot", "size": 10, "title": "is_X: False | node_type: atom | symbol: H | vasp_index: 27 | x: 6.4854 | y: 6.2988 | z: 13.0032"}, {"color": "#e2e8f0", "font": {"color": "white"}, "id": "atom_28", "label": "H28", "shape": "dot", "size": 10, "title": "is_X: False | node_type: atom | symbol: H | vasp_index: 28 | x: 5.8962 | y: 1.1818 | z: 14.2945"}, {"color": "#e2e8f0", "font": {"color": "white"}, "id": "atom_29", "label": "H29", "shape": "dot", "size": 10, "title": "is_X: False | node_type: atom | symbol: H | vasp_index: 29 | x: 0.4479 | y: 1.6843 | z: 14.2995"}, {"color": "#e2e8f0", "font": {"color": "white"}, "id": "atom_30", "label": "H30", "shape": "dot", "size": 10, "title": "is_X: False | node_type: atom | symbol: H | vasp_index: 30 | x: 7.0088 | y: 0.5867 | z: 16.3274"}, {"color": "#e2e8f0", "font": {"color": "white"}, "id": "atom_31", "label": "H31", "shape": "dot", "size": 10, "title": "is_X: False | node_type: atom | symbol: H | vasp_index: 31 | x: 0.9899 | y: 6.8423 | z: 15.4950"}, {"color": "#e2e8f0", "font": {"color": "white"}, "id": "atom_32", "label": "H32", "shape": "dot", "size": 10, "title": "is_X: False | node_type: atom | symbol: H | vasp_index: 32 | x: 6.5268 | y: 6.3632 | z: 15.4960"}, {"color": "#8F26AB", "font": {"color": "white"}, "id": "atom_33", "label": "I33", "shape": "dot", "size": 10, "title": "is_X: True | is_axial: True | is_terminal: True | node_type: atom | symbol: I | vasp_index: 33 | x: 3.5900 | y: 3.5900 | z: 15.2267"}, {"color": "#C3D1D1", "font": {"color": "white"}, "id": "octahedron_0", "label": "Oct0", "shape": "diamond", "size": 25, "title": "node_type: octahedron"}, {"color": "#C3D1D1", "font": {"color": "white"}, "id": "octahedron_1", "label": "Oct1", "shape": "diamond", "size": 25, "title": "node_type: octahedron"}, {"color": "#039FE5", "font": {"color": "white"}, "id": "spacer_0", "label": "CH6N", "shape": "ellipse", "size": 20, "title": "formula: CH6N | nh3_count: 3 | node_type: spacer"}, {"color": "#039FE5", "font": {"color": "white"}, "id": "spacer_1", "label": "C3H12N2", "shape": "ellipse", "size": 20, "title": "formula: C3H12N2 | nh3_count: 3 | node_type: spacer"}, {"color": "#94a3b8", "font": {"color": "white"}, "id": "structure_0", "label": "structure 0", "shape": "star", "size": 15, "title": "a: 7.1800 | a_site_count: 0 | alpha: 90.0000 | atom_count: 34 | b: 7.1800 | beta: 90.0000 | c: 18.8167 | formula: C4H18I7N3Pb2 | gamma: 90.0000 | layer_count: 2 | node_type: structure | octahedra_count: 2 | spacer_count: 2 | thickness: 2"}]);
+                  edges = new vis.DataSet([{"from": "layer_0", "label": null, "title": "edge_type: contains", "to": "octahedron_0"}, {"from": "layer_0", "label": null, "title": "edge_type: contains", "to": "structure_0"}, {"from": "layer_1", "label": null, "title": "edge_type: contains", "to": "octahedron_1"}, {"from": "layer_1", "label": null, "title": "edge_type: contains", "to": "structure_0"}, {"from": "atom_0", "label": null, "title": "edge_type: contains | role: center", "to": "octahedron_0"}, {"from": "atom_0", "label": "3.590\u00c5", "title": "bond_type: I-Pb | distance: 3.5900 | edge_type: bonded_to | geometry: axial | role: ligand", "to": "atom_1"}, {"from": "atom_0", "label": "3.590\u00c5", "title": "bond_type: I-Pb | distance: 3.5900 | edge_type: bonded_to | geometry: axial | role: ligand", "to": "atom_2"}, {"from": "atom_0", "label": "3.590\u00c5", "title": "bond_type: I-Pb | distance: 3.5900 | edge_type: bonded_to | geometry: axial | role: ligand", "to": "atom_11"}, {"from": "atom_0", "label": "3.590\u00c5", "title": "bond_type: I-Pb | distance: 3.5900 | edge_type: bonded_to | geometry: axial | role: ligand", "to": "atom_33"}, {"from": "atom_3", "label": "1.458\u00c5", "title": "bond_type: C-N | distance: 1.4575 | edge_type: bonded_to", "to": "atom_4"}, {"from": "atom_3", "label": "1.111\u00c5", "title": "bond_type: C-H | distance: 1.1114 | edge_type: bonded_to", "to": "atom_5"}, {"from": "atom_3", "label": "1.111\u00c5", "title": "bond_type: C-H | distance: 1.1113 | edge_type: bonded_to", "to": "atom_6"}, {"from": "atom_3", "label": "1.111\u00c5", "title": "bond_type: C-H | distance: 1.1113 | edge_type: bonded_to", "to": "atom_7"}, {"from": "atom_3", "label": null, "title": "edge_type: contains", "to": "spacer_0"}, {"from": "atom_4", "label": "1.046\u00c5", "title": "bond_type: H-N | distance: 1.0456 | edge_type: bonded_to", "to": "atom_8"}, {"from": "atom_4", "label": "1.046\u00c5", "title": "bond_type: H-N | distance: 1.0455 | edge_type: bonded_to", "to": "atom_9"}, {"from": "atom_4", "label": "1.046\u00c5", "title": "bond_type: H-N | distance: 1.0456 | edge_type: bonded_to", "to": "atom_10"}, {"from": "atom_4", "label": null, "title": "edge_type: contains", "to": "spacer_0"}, {"from": "atom_5", "label": null, "title": "edge_type: contains", "to": "spacer_0"}, {"from": "atom_6", "label": null, "title": "edge_type: contains", "to": "spacer_0"}, {"from": "atom_7", "label": null, "title": "edge_type: contains", "to": "spacer_0"}, {"from": "atom_8", "label": null, "title": "edge_type: contains", "to": "spacer_0"}, {"from": "atom_9", "label": null, "title": "edge_type: contains", "to": "spacer_0"}, {"from": "atom_10", "label": null, "title": "edge_type: contains", "to": "spacer_0"}, {"from": "atom_11", "label": "3.590\u00c5", "title": "bond_type: I-Pb | distance: 3.5900 | edge_type: bonded_to | geometry: axial | role: ligand", "to": "atom_12"}, {"from": "atom_12", "label": null, "title": "edge_type: contains | role: center", "to": "octahedron_1"}, {"from": "atom_12", "label": "3.590\u00c5", "title": "bond_type: I-Pb | distance: 3.5900 | edge_type: bonded_to | geometry: axial | role: ligand", "to": "atom_13"}, {"from": "atom_12", "label": "3.590\u00c5", "title": "bond_type: I-Pb | distance: 3.5900 | edge_type: bonded_to | geometry: axial | role: ligand", "to": "atom_14"}, {"from": "atom_12", "label": "3.590\u00c5", "title": "bond_type: I-Pb | distance: 3.5900 | edge_type: bonded_to | geometry: axial | role: ligand", "to": "atom_15"}, {"from": "atom_16", "label": "1.464\u00c5", "title": "bond_type: C-N | distance: 1.4643 | edge_type: bonded_to", "to": "atom_17"}, {"from": "atom_16", "label": "1.046\u00c5", "title": "bond_type: H-N | distance: 1.0458 | edge_type: bonded_to", "to": "atom_21"}, {"from": "atom_16", "label": "1.045\u00c5", "title": "bond_type: H-N | distance: 1.0450 | edge_type: bonded_to", "to": "atom_22"}, {"from": "atom_16", "label": "1.046\u00c5", "title": "bond_type: H-N | distance: 1.0456 | edge_type: bonded_to", "to": "atom_23"}, {"from": "atom_16", "label": null, "title": "edge_type: contains", "to": "spacer_1"}, {"from": "atom_17", "label": "1.538\u00c5", "title": "bond_type: C-C | distance: 1.5378 | edge_type: bonded_to", "to": "atom_18"}, {"from": "atom_17", "label": "1.113\u00c5", "title": "bond_type: C-H | distance: 1.1126 | edge_type: bonded_to", "to": "atom_24"}, {"from": "atom_17", "label": "1.113\u00c5", "title": "bond_type: C-H | distance: 1.1127 | edge_type: bonded_to", "to": "atom_25"}, {"from": "atom_17", "label": null, "title": "edge_type: contains", "to": "spacer_1"}, {"from": "atom_18", "label": "1.537\u00c5", "title": "bond_type: C-C | distance: 1.5366 | edge_type: bonded_to", "to": "atom_19"}, {"from": "atom_18", "label": "1.112\u00c5", "title": "bond_type: C-H | distance: 1.1118 | edge_type: bonded_to", "to": "atom_26"}, {"from": "atom_18", "label": "1.112\u00c5", "title": "bond_type: C-H | distance: 1.1119 | edge_type: bonded_to", "to": "atom_27"}, {"from": "atom_18", "label": null, "title": "edge_type: contains", "to": "spacer_1"}, {"from": "atom_19", "label": "1.463\u00c5", "title": "bond_type: C-N | distance: 1.4627 | edge_type: bonded_to", "to": "atom_20"}, {"from": "atom_19", "label": "1.113\u00c5", "title": "bond_type: C-H | distance: 1.1128 | edge_type: bonded_to", "to": "atom_28"}, {"from": "atom_19", "label": "1.112\u00c5", "title": "bond_type: C-H | distance: 1.1116 | edge_type: bonded_to", "to": "atom_29"}, {"from": "atom_19", "label": null, "title": "edge_type: contains", "to": "spacer_1"}, {"from": "atom_20", "label": "1.046\u00c5", "title": "bond_type: H-N | distance: 1.0456 | edge_type: bonded_to", "to": "atom_30"}, {"from": "atom_20", "label": "1.046\u00c5", "title": "bond_type: H-N | distance: 1.0460 | edge_type: bonded_to", "to": "atom_31"}, {"from": "atom_20", "label": "1.046\u00c5", "title": "bond_type: H-N | distance: 1.0460 | edge_type: bonded_to", "to": "atom_32"}, {"from": "atom_20", "label": null, "title": "edge_type: contains", "to": "spacer_1"}, {"from": "atom_21", "label": null, "title": "edge_type: contains", "to": "spacer_1"}, {"from": "atom_22", "label": null, "title": "edge_type: contains", "to": "spacer_1"}, {"from": "atom_23", "label": null, "title": "edge_type: contains", "to": "spacer_1"}, {"from": "atom_24", "label": null, "title": "edge_type: contains", "to": "spacer_1"}, {"from": "atom_25", "label": null, "title": "edge_type: contains", "to": "spacer_1"}, {"from": "atom_26", "label": null, "title": "edge_type: contains", "to": "spacer_1"}, {"from": "atom_27", "label": null, "title": "edge_type: contains", "to": "spacer_1"}, {"from": "atom_28", "label": null, "title": "edge_type: contains", "to": "spacer_1"}, {"from": "atom_29", "label": null, "title": "edge_type: contains", "to": "spacer_1"}, {"from": "atom_30", "label": null, "title": "edge_type: contains", "to": "spacer_1"}, {"from": "atom_31", "label": null, "title": "edge_type: contains", "to": "spacer_1"}, {"from": "atom_32", "label": null, "title": "edge_type: contains", "to": "spacer_1"}, {"from": "spacer_0", "label": null, "title": "edge_type: contains", "to": "structure_0"}, {"from": "spacer_1", "label": null, "title": "edge_type: contains", "to": "structure_0"}]);
+
+                  nodeColors = {};
+                  allNodes = nodes.get({ returnType: "Object" });
+                  for (nodeId in allNodes) {
+                    nodeColors[nodeId] = allNodes[nodeId].color;
+                  }
+                  allEdges = edges.get({ returnType: "Object" });
+                  // adding nodes and edges to the graph
+                  data = {nodes: nodes, edges: edges};
+
+                  var options = {"nodes": {"font": {"size": 12}, "scaling": {"min": 10, "max": 30}}, "edges": {"width": 2, "color": {"inherit": true}}, "physics": {"enabled": true, "barnesHut": {"gravitationalConstant": -2000, "centralGravity": 0.1, "springLength": 200, "springConstant": 0.04, "damping": 0.09}}};
+
+                  
+
+
+                  
+
+                  network = new vis.Network(container, data, options);
+
+                  
+
+                  
+
+                  
+
+
+                  
+
+                  return network;
+
+              }
+              drawGraph();
+        </script>
+    </body>
+</html>

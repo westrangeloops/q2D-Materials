@@ -32,7 +32,7 @@ analyzer.analyze()
 
 ## The Graph Structure
 
-The analyzer builds a NetworkX graph with three types of nodes and various edge types:
+The analyzer builds a NetworkX graph with multiple types of nodes and various edge types:
 
 ### Node Types
 
@@ -56,7 +56,23 @@ The analyzer builds a NetworkX graph with three types of nodes and various edge 
      - `intralayer_atoms`: X atoms within the layer (includes `equatorial`)
    - **Note**: Each octahedron should have 2 axial atoms (top/bottom) and 4 equatorial atoms in ideal structures
 
-3. **Atom Nodes** (`node_type='atom'`)
+3. **A_Site Nodes** (`node_type='a_site'`)
+   - Represent A-site cations (atomic or molecular)
+   - Node ID format: `a_site_{id}`
+   - Attributes:
+     - `formula`: Chemical formula of the A-site
+     - `nh3_count`: Number of NH3 groups (for molecular A-sites, 0 for atomic)
+   - Connected to atoms via `contains` edges
+
+4. **Spacer Nodes** (`node_type='spacer'`)
+   - Represent spacer molecules between layers
+   - Node ID format: `spacer_{id}`
+   - Attributes:
+     - `formula`: Chemical formula of the spacer
+     - `nh3_count`: Number of NH3 groups (1 for RP, 2+ for DJ)
+   - Connected to atoms via `contains` edges
+
+5. **Atom Nodes** (`node_type='atom'`)
    - Represent individual atoms
    - Node ID format: `atom_{index}`
    - Attributes:
@@ -65,26 +81,25 @@ The analyzer builds a NetworkX graph with three types of nodes and various edge 
      - `direct_coordinates`: [x, y, z] coordinates
      - `x_atom_type`: Type of X atom (if applicable)
      - `x_connected_octahedra`: Octahedra connected to this X atom
-     - `is_spacer`: Whether atom belongs to a spacer molecule (set during pre-classification)
-     - `is_a_site`: Whether atom belongs to an A-site cation (set during pre-classification)
-     - `spacer_indices`: List of atom indices in the spacer molecule (if `is_spacer=True`)
-     - `a_site_indices`: List of atom indices in the A-site molecule (if `is_a_site=True`)
-     - `spacer_formula`, `a_site_formula`: Molecular formulas (if applicable)
-     - `spacer_type`: Type of spacer ('dj', 'rp', or 'unknown') - set during molecular classification
+     - `is_X`: Whether atom is an X-site atom
+     - `is_terminal`: Whether atom is terminal (not shared)
+     - `is_equatorial`: Whether atom is equatorial (intralayer)
+     - `is_interlayer`: Whether atom is interlayer (between layers)
+   - **Note**: The `is_A` and `is_S` properties have been removed. Use A_Site and Spacer nodes instead.
 
 ### Edge Types
 
-1. **`contains`**: Layer → Octahedron (layer contains octahedra)
+1. **`contains`**: 
+   - Structure → Layer (structure contains layers)
+   - Structure → A_Site (structure contains A-site nodes)
+   - Structure → Spacer (structure contains spacer nodes)
+   - Layer → Octahedron (layer contains octahedra)
+   - Octahedron → Atom (octahedron contains atoms, with `role='center'` for B atoms, `role='ligand'` for X atoms)
+   - A_Site → Atom (A-site contains atoms)
+   - Spacer → Atom (spacer contains atoms)
 2. **`interlayer_connection`**: Layer → Layer (adjacent layers connected via X atoms)
 3. **`shares_atoms`**: Octahedron → Octahedron (octahedra sharing X-site atoms)
-4. **`contains_atom`**: Octahedron → Atom (octahedron contains X atoms)
-   - Edge attributes:
-     - `geometry`: Geometry label (`axial_terminal`, `axial_interlayer`, or `equatorial`)
-     - `terminal`: Boolean indicating if atom is terminal (not shared)
-     - `clifford_distance`: 6D distance using Clifford embedding (PBC-aware)
-5. **`has_center`**: Octahedron → Atom (octahedron's B-site center)
-6. **`is_center_of`**: Atom → Octahedron (B-site atom is center of octahedron)
-7. **`covalent_bond`**: Atom → Atom (covalent bonds between atoms)
+4. **`bonded_to`**: Atom → Atom (covalent bonds between atoms, with `role='ligand'` for B-X bonds)
 
 ## Accessing the Graph
 
@@ -98,10 +113,15 @@ layer_nodes = [n for n, d in graph.nodes(data=True)
                if d.get('node_type') == 'layer']
 octahedra_nodes = [n for n, d in graph.nodes(data=True) 
                    if d.get('node_type') == 'octahedron']
+a_site_nodes = [n for n, d in graph.nodes(data=True) 
+                if d.get('node_type') == 'a_site']
+spacer_nodes = [n for n, d in graph.nodes(data=True) 
+                if d.get('node_type') == 'spacer']
 atom_nodes = [n for n, d in graph.nodes(data=True) 
               if d.get('node_type') == 'atom']
 
-print(f"Graph has {len(layer_nodes)} layers, {len(octahedra_nodes)} octahedra, {len(atom_nodes)} atoms")
+print(f"Graph has {len(layer_nodes)} layers, {len(octahedra_nodes)} octahedra, "
+      f"{len(a_site_nodes)} A-sites, {len(spacer_nodes)} spacers, {len(atom_nodes)} atoms")
 ```
 
 ## Graph Decomposition Process
@@ -120,11 +140,12 @@ The `analyze()` method performs several steps:
      - `axial/intralayer`: Does not exist (axial atoms are by definition interlayer)
 3. **Layer Identification**: Groups octahedra into layers based on z-coordinates
 4. **Graph Construction**: Builds the NetworkX graph with nodes and edges
-5. **Molecular Pre-Classification**: Pre-classifies molecules as A-sites or spacers based on Z-coordinates:
-   - Molecules within slab zones (Z-center within layer's inorganic atoms) → `is_a_site=True`
-   - Molecules between layers (Z-center outside slab zones) → `is_spacer=True`
-   - Sets `a_site_indices` or `spacer_indices` accordingly
-6. **Molecular Classification**: Refines classification using continuity analysis and sets `spacer_type` ('dj' or 'rp')
+5. **A_Site and Spacer Node Creation**: Creates A_Site and Spacer nodes:
+   - Classifies molecules as A-sites or spacers based on proximity to terminal X atoms
+   - Creates `a_site_{id}` nodes for A-site cations
+   - Creates `spacer_{id}` nodes for spacer molecules
+   - Connects atoms to their respective A_Site or Spacer nodes via `contains` edges
+   - Handles isolated atoms in cavities by creating A_Site nodes for them
 7. **Structure Type Inference**: Determines structure type from graph patterns
 
 ## Extracting Components from the Graph
@@ -204,6 +225,125 @@ The analyzer uses combined geometry/connectivity labels for X atoms:
 - In ideal octahedra: 2 axial (1 terminal + 1 interlayer) + 4 equatorial
 - In 1×1 unit cells: Special handling for self-shared equatorial atoms through PBC
 
+## Atom Classification Algorithm
+
+The classification uses **topology-based detection** (not geometry), relying on atom sharing patterns between octahedra. The algorithm determines atom types by analyzing how many octahedra share each atom and whether those octahedra belong to the same or different layers.
+
+### Primary Classification Table
+
+Based on the number of octahedra sharing each atom:
+
+| Number of Octahedra | Condition | Classification | Geometry Label |
+|---------------------|-----------|----------------|----------------|
+| **1 octahedron** | - | `'terminal'` | `'axial_terminal'` |
+| **2 octahedra** | Same layer | `'equatorial'` | `'equatorial'` |
+| **2 octahedra** | Different layers | `'axial_interlayer'` | `'axial_interlayer'` |
+| **>2 octahedra** | - | `'multi_shared'` | `'unknown'` |
+
+### Layer Detection Table
+
+Layers are identified by analyzing sharing patterns between octahedra pairs:
+
+| Sharing Count | Interpretation | Layer Relationship | Atom Type |
+|---------------|----------------|-------------------|-----------|
+| **≥ max_sharing** (typically 4) | High sharing | Same layer | Equatorial (intralayer) |
+| **< max_sharing** (typically 1-2) | Low sharing | Different layers | Axial (interlayer) |
+| **1 atom** (1×1 cells) | Single shared | Different layers | Axial (interlayer) |
+| **≥2 atoms** (1×1 cells) | Self-shared via PBC | Same layer | Equatorial |
+
+### Classification Decision Tree
+
+```
+For each atom:
+│
+├─ Number of octahedra = 1?
+│  └─ YES → 'terminal' → 'axial_terminal'
+│
+└─ Number of octahedra = 2?
+   │
+   ├─ Check layer membership of both octahedra
+   │  │
+   │  ├─ Same layer?
+   │  │  └─ YES → 'equatorial' → 'equatorial'
+   │  │
+   │  └─ Different layers?
+   │     └─ YES → 'axial_interlayer' → 'axial_interlayer'
+   │
+   └─ Number of octahedra > 2?
+      └─ YES → 'multi_shared' → 'unknown'
+```
+
+### Layer Formation Rules
+
+| Connection Type | Sharing Pattern | Forms Layer? | Connects Layers? |
+|----------------|-----------------|--------------|------------------|
+| **Equatorial** | High count (≥4 atoms) | ✅ YES | ❌ NO |
+| **Axial** | Low count (1-2 atoms) | ❌ NO | ✅ YES |
+
+**Key Insight:** Layers are formed by **equatorial connections** (high sharing count, same layer), while **axial atoms** connect different layers (low sharing count, interlayer).
+
+### Example Classifications
+
+| Atom | Octahedra | Layer IDs | Sharing Count | Classification | Geometry |
+|------|-----------|-----------|---------------|----------------|----------|
+| Atom_5 | [Oct_0] | - | 1 octahedron | `'terminal'` | `'axial_terminal'` |
+| Atom_12 | [Oct_0, Oct_1] | [0, 0] | 2, same layer | `'equatorial'` | `'equatorial'` |
+| Atom_23 | [Oct_0, Oct_2] | [0, 1] | 2, different layers | `'axial_interlayer'` | `'axial_interlayer'` |
+| Atom_34 | [Oct_0, Oct_1, Oct_2] | [0, 0, 1] | 3 octahedra | `'multi_shared'` | `'unknown'` |
+
+### Visual Connectivity Diagram
+
+```
+Layer 0 (Top Layer)
+┌─────────────────────────────────┐
+│  Oct_0  ────  Oct_1  ────  Oct_2  │  ← Equatorial connections (high sharing)
+│    │         │         │          │     (4+ atoms shared, same layer)
+│    │         │         │          │
+│    X         X         X          │  ← Equatorial atoms (intralayer)
+│    │         │         │          │
+└────┼─────────┼─────────┼──────────┘
+     │         │         │
+     │         │         │
+     X         X         X          ← Axial atoms (interlayer)
+     │         │         │          (1-2 atoms shared, different layers)
+     │         │         │
+┌────┼─────────┼─────────┼──────────┐
+│  Oct_3  ────  Oct_4  ────  Oct_5  │  ← Equatorial connections (high sharing)
+│    │         │         │          │     (4+ atoms shared, same layer)
+│    │         │         │          │
+│    X         X         X          │  ← Equatorial atoms (intralayer)
+│    │         │         │          │
+└─────────────────────────────────┘
+Layer 1 (Bottom Layer)
+
+Legend:
+  Oct_N  = Octahedron node
+  X      = X-site atom
+  ────   = Equatorial connection (high sharing, same layer)
+  │      = Axial connection (low sharing, different layers)
+```
+
+### Algorithm Steps
+
+1. **Build atom → octahedra mapping**: For each atom, record which octahedra it belongs to
+2. **Find sharing between pairs**: Identify pairs of octahedra that share atoms
+3. **Distinguish same-layer vs inter-layer pairs**: Use sharing count heuristic:
+   - High sharing count (≥4) → same layer (equatorial connection)
+   - Low sharing count (1-2) → different layers (axial connection)
+4. **Assign layer membership**: Use union-find algorithm to group octahedra into layers
+5. **Classify atoms**: Based on layer membership of the octahedra they connect
+
+### Special Case: 1×1 Unit Cells
+
+In 1×1 unit cells, equatorial atoms can appear to be shared with themselves through periodic boundary conditions. The algorithm handles this by:
+
+| Sharing Pattern | Count | Classification | Reason |
+|----------------|-------|---------------|--------|
+| Single atom shared | 1 | `'axial_interlayer'` | True inter-layer bridge |
+| Multiple atoms shared | ≥2 | `'equatorial'` | Self-shared via PBC (same layer) |
+
+This ensures that only true inter-layer connections (single shared atom) are classified as axial, while high-count sharing is recognized as equatorial self-sharing through PBC.
+
 ### Querying Atoms by Classification
 
 ```python
@@ -274,6 +414,184 @@ for layer_node in layer_nodes:
     print(f"{layer_node} contains {len(octahedra)} octahedra")
 ```
 
+### Find A_Site and Spacer Nodes
+
+```python
+# Find all A_Site nodes
+a_site_nodes = [n for n, d in graph.nodes(data=True) 
+                if d.get('node_type') == 'a_site']
+
+for a_site_node in a_site_nodes:
+    # Get atoms in this A-site
+    atoms = [n for n in graph.neighbors(a_site_node) 
+             if graph.nodes[n].get('node_type') == 'atom']
+    formula = graph.nodes[a_site_node].get('formula', 'unknown')
+    print(f"{a_site_node}: {formula} with {len(atoms)} atoms")
+
+# Find all Spacer nodes
+spacer_nodes = [n for n, d in graph.nodes(data=True) 
+                if d.get('node_type') == 'spacer']
+
+for spacer_node in spacer_nodes:
+    # Get atoms in this spacer
+    atoms = [n for n in graph.neighbors(spacer_node) 
+             if graph.nodes[n].get('node_type') == 'atom']
+    formula = graph.nodes[spacer_node].get('formula', 'unknown')
+    nh3_count = graph.nodes[spacer_node].get('nh3_count', 0)
+    print(f"{spacer_node}: {formula} with {len(atoms)} atoms, {nh3_count} NH3 groups")
+```
+
+## Structure-Level Features
+
+The graph can be used to calculate structure-level geometric features that characterize the entire material structure, not just individual components.
+
+### Interplane Distance
+
+Calculate the distance between terminal atom planes using the structure graph. Terminal atoms define the boundaries between the spacer molecule region and the inorganic slab region.
+
+```python
+# After analyzing the structure
+analyzer = q2D_analyzer(structure)
+analyzer.analyze()
+
+# Calculate interplane distance
+result = analyzer.inter_plane_distance()
+
+print(f"Interplane distance: {result['interplane_distance']:.3f} Å")
+print(f"Top terminal atoms: {result['top_atom_count']}")
+print(f"Bottom terminal atoms: {result['bottom_atom_count']}")
+print(f"Molecule mean Z: {result['molecule_mean_z']:.3f} Å")
+```
+
+**Algorithm:**
+1. Gets all terminal atoms from the structure graph (atoms belonging to exactly one octahedron)
+2. Samples up to 10 atoms per spacer molecule to determine molecule mean Z position
+3. Determines slab configuration:
+   - If molecule mean Z is between terminal Z range: splits terminals by median Z into top/bottom
+   - If molecule mean Z is outside terminal range: uses closest pair of terminals
+   - If no molecules: falls back to Z-clustering
+4. Fits planes via SVD with edge case handling:
+   - **X ≥ 4 atoms**: SVD plane fitting
+   - **X = 3 atoms**: SVD plane fitting (3 points define a plane)
+   - **X = 2 atoms**: Midpoint with vertical normal vector
+5. Calculates perpendicular distance between planes
+
+**Return Value:**
+```python
+{
+    'interplane_distance': float,      # Distance between planes (Å) or NaN if invalid
+    'top_centroid': list or None,      # [x, y, z] centroid of top plane
+    'bottom_centroid': list or None,   # [x, y, z] centroid of bottom plane
+    'top_atom_count': int,            # Number of atoms in top plane
+    'bottom_atom_count': int,         # Number of atoms in bottom plane
+    'molecule_mean_z': float or None,  # Mean Z position of sampled molecule atoms
+}
+```
+
+**Example Usage:**
+```python
+from q2D_Materials.analyzer import q2D_analyzer
+import numpy as np
+
+# Load and analyze a structure
+analyzer = q2D_analyzer("structure.vasp")
+analyzer.analyze()
+
+# Calculate interplane distance
+result = analyzer.inter_plane_distance()
+
+if not np.isnan(result['interplane_distance']):
+    print(f"Distance between terminal planes: {result['interplane_distance']:.3f} Å")
+    print(f"Top plane centroid: {result['top_centroid']}")
+    print(f"Bottom plane centroid: {result['bottom_centroid']}")
+else:
+    print("Could not calculate interplane distance (insufficient terminal atoms)")
+```
+
+**Physical Interpretation:**
+- **Interplane distance** represents the spacing between the top and bottom boundaries of the inorganic slab
+- This is a **cell-level feature** that characterizes the overall structure geometry
+- Useful for comparing layer spacing across different structures and compositions
+- Terminal atoms are the X-site atoms that form the interface between the spacer region and the slab region
+
+### Octahedral Volumes
+
+Calculate octahedral volumes using convex hull of X atoms with PBC-aware positioning. This method ensures that all X atoms are in the closest periodic image relative to the B atom, preventing errors from PBC wrapping that could distort the volume calculation.
+
+```python
+# After analyzing the structure
+analyzer = q2D_analyzer(structure)
+analyzer.analyze()
+
+# Global mode: mean volume for all octahedra
+mean_volume = analyzer.get_octahedral_volumes(mode='global')
+print(f"Mean octahedral volume: {mean_volume:.2f} Å³")
+
+# Local mode: volume per octahedron
+volumes_dict = analyzer.get_octahedral_volumes(mode='local')
+for oct_id, vol in volumes_dict.items():
+    print(f"{oct_id}: {vol:.2f} Å³")
+```
+
+**Algorithm:**
+1. For each B atom (octahedron center), gets the 6 X atoms bonded to it from the graph
+2. Uses PBC-aware distance calculations (`calculate_pbc_distances` with `return_vectors=True`) to ensure each X atom is in the closest periodic image relative to the B atom
+3. Calculates the convex hull volume of the 6 X atoms using `scipy.spatial.ConvexHull`
+4. Returns either mean volume (global mode) or per-octahedron volumes (local mode)
+
+**Parameters:**
+- `mode`: str, default='global'
+  - `'global'`: Return mean volume for all octahedra (single float)
+  - `'local'`: Return volume per octahedron (dict mapping octahedron_id -> volume)
+- `octahedra`: list of str, optional
+  - Specific octahedra IDs to include (e.g., ['octahedron_0', 'octahedron_1'])
+  - If None, computes all octahedra
+
+**Return Value:**
+- If `mode='global'`: Mean octahedral volume in Å³ (float)
+- If `mode='local'`: Dict mapping `octahedron_id -> volume` in Å³
+
+**Example Usage:**
+```python
+from q2D_Materials.analyzer import q2D_analyzer
+import numpy as np
+
+# Load and analyze a structure
+analyzer = q2D_analyzer("structure.vasp")
+analyzer.analyze()
+
+# Get mean octahedral volume
+mean_vol = analyzer.get_octahedral_volumes(mode='global')
+print(f"Mean octahedral volume: {mean_vol:.2f} Å³")
+
+# Get per-octahedron volumes
+volumes = analyzer.get_octahedral_volumes(mode='local')
+print(f"Found {len(volumes)} octahedra")
+for oct_id, vol in list(volumes.items())[:5]:  # Show first 5
+    print(f"  {oct_id}: {vol:.2f} Å³")
+
+# Calculate statistics
+vol_array = np.array(list(volumes.values()))
+print(f"Volume statistics:")
+print(f"  Mean: {np.nanmean(vol_array):.2f} Å³")
+print(f"  Std: {np.nanstd(vol_array):.2f} Å³")
+print(f"  Min: {np.nanmin(vol_array):.2f} Å³")
+print(f"  Max: {np.nanmax(vol_array):.2f} Å³")
+```
+
+**Physical Interpretation:**
+- **Octahedral volume** represents the volume enclosed by the 6 X atoms forming the octahedral cage
+- Calculated using convex hull, which gives the volume of the smallest convex polyhedron containing all 6 X atoms
+- PBC-aware calculations ensure accurate volumes even when X atoms are in different periodic images
+- Useful for characterizing octahedral distortion and comparing volumes across different structures
+- Volume changes can indicate structural phase transitions or chemical pressure effects
+
+**Important Notes:**
+- The method uses PBC-aware distance calculations to ensure all X atoms are in the minimum image relative to the B atom
+- This prevents errors from periodic boundary wrapping that could artificially inflate or distort volumes
+- Returns NaN for octahedra with invalid connectivity (e.g., fewer than 6 X atoms or degenerate geometry)
+- The convex hull method is more robust than pyramid decomposition for distorted octahedra
+
 ## Analysis Parameters
 
 Control the graph construction process:
@@ -322,6 +640,8 @@ print(f"  Total nodes: {graph.number_of_nodes()}")
 print(f"  Total edges: {graph.number_of_edges()}")
 print(f"  Layer nodes: {len([n for n, d in graph.nodes(data=True) if d.get('node_type') == 'layer'])}")
 print(f"  Octahedron nodes: {len([n for n, d in graph.nodes(data=True) if d.get('node_type') == 'octahedron'])}")
+print(f"  A_Site nodes: {len([n for n, d in graph.nodes(data=True) if d.get('node_type') == 'a_site'])}")
+print(f"  Spacer nodes: {len([n for n, d in graph.nodes(data=True) if d.get('node_type') == 'spacer'])}")
 print(f"  Atom nodes: {len([n for n, d in graph.nodes(data=True) if d.get('node_type') == 'atom'])}")
 ```
 
@@ -345,7 +665,7 @@ export_structure_pyvis(graph, 'my_structure_graph.html')
 The exported HTML file features:
 - **Interactive visualization** with drag-and-drop node positioning
 - **Physics simulation** for automatic node layout
-- **Node colors** based on type (layers=pink, octahedra=purple, atoms=elemental colors, molecules=orange)
+- **Node colors** based on type (layers=pink, octahedra=purple, atoms=elemental colors, a_sites=orange, spacers=green)
 - **Node sizes** scaled by type importance
 - **Hover tooltips** showing node information (type, symbol, index)
 - **Edge labels** showing relationship types (contains, shares_atoms, etc.)
@@ -398,6 +718,7 @@ webbrowser.open(f'file://{html_path}')
 3. **Access components** - Use getter methods or direct graph access
 4. **Traverse graph** - Use NetworkX functions for custom analysis
 5. **Extract information** - Query nodes and edges for specific properties
-6. **Export visualization** - Convert to interactive HTML for exploration
+6. **Calculate structure-level features** - Use characterization modules (e.g., interplane distance)
+7. **Export visualization** - Convert to interactive HTML for exploration
 
-The graph structure provides a foundation for all other analyses (Glazer detection, RDF, B-X-B angles) which operate on this graph representation.
+The graph structure provides a foundation for all other analyses (Glazer detection, RDF, B-X-B angles, interplane distance) which operate on this graph representation.

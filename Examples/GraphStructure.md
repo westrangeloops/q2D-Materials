@@ -19,7 +19,9 @@ Structure (root)
   │                └── CONTAINS → Octahedron
   │                                 ├── CONTAINS (role='center') → Atom (B-site)
   │                                 └── CONTAINS (role='ligand') → Atom (X-site)
-  └── CONTAINS → Molecule
+  ├── CONTAINS → A_Site
+  │                └── CONTAINS → Atom ← BONDED_TO → Atom
+  └── CONTAINS → Spacer
                    └── CONTAINS → Atom ← BONDED_TO → Atom
 ```
 
@@ -40,7 +42,8 @@ Structure (root)
 | `alpha`, `beta`, `gamma` | float | Cell angles in degrees |
 | `layer_count` | int | Number of layers |
 | `octahedra_count` | int | Number of octahedra |
-| `molecule_count` | int | Number of molecules (A-sites + spacers) |
+| `a_site_count` | int | Number of A-site molecules |
+| `spacer_count` | int | Number of spacer molecules |
 | `atom_count` | int | Total atoms |
 
 **Note**: There is exactly one Structure node per graph. Access via `graph.graph['structure_node']`.
@@ -99,17 +102,31 @@ Structure (root)
 
 ---
 
-### 4. Molecule Nodes (`molecule_*`)
+### 4. A_Site Nodes (`a_site_*`)
 
-**Purpose**: Represent organic molecules (A-site cations or spacers).
+**Purpose**: Represent A-site organic molecules (cations in cuboctahedral cavities).
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `node_type` | str | Always `'molecule'` |
-| `molecule_type` | str | Classification: `'a_site'` or `'spacer'` |
+| `node_type` | str | Always `'a_site'` |
 | `formula` | str | Chemical formula (Hill notation) |
+| `nh3_count` | int | Number of NH3 groups (0 for atomic A-sites like Cs, Rb, K) |
 
-**Example Node ID**: `molecule_0`, `molecule_1`
+**Example Node ID**: `a_site_0`, `a_site_1`
+
+---
+
+### 5. Spacer Nodes (`spacer_*`)
+
+**Purpose**: Represent spacer organic molecules (interact with membrane surface).
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `node_type` | str | Always `'spacer'` |
+| `formula` | str | Chemical formula (Hill notation) |
+| `nh3_count` | int | Number of NH3 groups (1 for RP, 2+ for DJ spacers) |
+
+**Example Node ID**: `spacer_0`, `spacer_1`
 
 ---
 
@@ -133,7 +150,7 @@ Structure (root)
 | `role` | str | `'center'` for B-site atom, `'ligand'` for X atoms |
 | `geometry` | str | *(Ligands only)* `'axial'`, `'equatorial'`, or `'unknown'` |
 
-#### Molecule → Atom
+#### A_Site/Spacer → Atom
 
 | Property | Type | Description |
 |----------|------|-------------|
@@ -145,7 +162,13 @@ Structure (root)
 |----------|------|-------------|
 | `edge_type` | str | Always `'contains'` |
 
-#### Structure → Molecule
+#### Structure → A_Site
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `edge_type` | str | Always `'contains'` |
+
+#### Structure → Spacer
 
 | Property | Type | Description |
 |----------|------|-------------|
@@ -221,11 +244,12 @@ ligands = get_ligand_atoms(graph, 'octahedron_0')
 axial = get_ligand_atoms(graph, 'octahedron_0', geometry='axial')
 ```
 
-### Atoms in a Molecule
+### Atoms in an A_Site or Spacer
 
 ```python
 from q2D_Materials.analyzer.core.graph_construction import get_molecule_atoms
-atoms = get_molecule_atoms(graph, 'molecule_0')
+atoms = get_molecule_atoms(graph, 'a_site_0')
+atoms = get_molecule_atoms(graph, 'spacer_0')
 ```
 
 ### Octahedra Sharing an Atom
@@ -261,7 +285,9 @@ Structure (root)
   │                └── CONTAINS → Octahedron
   │                                 ├── CONTAINS (role='center') → Atom (B-site)
   │                                 └── CONTAINS (role='ligand', geometry='axial'|'equatorial') → Atom (X-site)
-  └── CONTAINS → Molecule
+  ├── CONTAINS → A_Site
+  │                └── CONTAINS → Atom ← BONDED_TO → Atom
+  └── CONTAINS → Spacer
                    └── CONTAINS → Atom ← BONDED_TO → Atom
 ```
 
@@ -304,9 +330,14 @@ for node, data in graph.nodes(data=True):
     elif node_type == 'layer':
         z_coord = data.get('z_coord')
         
-    elif node_type == 'molecule':
-        mol_type = data.get('molecule_type')  # 'a_site' or 'spacer'
+    elif node_type == 'a_site':
         formula = data.get('formula')
+        nh3_count = data.get('nh3_count', 0)
+        atoms = get_molecule_atoms(graph, node)
+        
+    elif node_type == 'spacer':
+        formula = data.get('formula')
+        nh3_count = data.get('nh3_count', 0)
         atoms = get_molecule_atoms(graph, node)
 
 # Find terminal atoms
@@ -352,4 +383,4 @@ Molecules are classified based on 12 nearest X atoms around their center:
 - **Graph Construction**: `q2D_Materials/analyzer/core/graph_construction.py`
 - **Octahedra Detection**: `q2D_Materials/analyzer/detection/octahedral_detection.py`
 - **Layer Identification**: `q2D_Materials/analyzer/detection/layer_identification.py`
-- **Cavity Building**: `q2D_Materials/analyzer/detection/cavity_tracing.py`
+- **Cavity Detection**: `q2D_Materials/analyzer/cavities_processing/cavity_tracing.py`

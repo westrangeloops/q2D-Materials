@@ -1373,45 +1373,39 @@ if MATPLOTLIB_AVAILABLE:
     from q2D_Materials.analyzer.characterization.distortions import _compute_octahedral_distortions
     bxb_data = distortion_analyzer.get_bxb_angles()
     angles = bxb_data['bxb_angles']
+    ax1 = plt.subplot(2, 3, 1)
     if angles is not None and len(angles) > 0:
-        ax1 = plt.subplot(2, 3, 1)
         ax1.hist(angles, bins=50, alpha=0.7, color='steelblue', edgecolor='black')
         ax1.axvline(bxb_data['bxb_mean'], color='red', linestyle='--', linewidth=2)
-        ax1.set_xlabel('B-X-B Angle (degrees)')
-        ax1.set_ylabel('Frequency')
-        ax1.set_title('B-X-B Angles')
-        ax1.grid(alpha=0.3)
-        if STYLE_AVAILABLE:
-            style_axes(ax1)
+    ax1.set_xlabel('B-X-B Angle (degrees)')
+    ax1.set_ylabel('Frequency')
+    ax1.set_title('B-X-B Angles')
+    ax1.grid(alpha=0.3)
     
     # Plot 2: X-B-X angles - Get data and plot
     distortions = _compute_octahedral_distortions(distortion_analyzer)
     xbx_angles = distortions['bond_angles']
+    ax2 = plt.subplot(2, 3, 2)
     if len(xbx_angles) > 0:
-        ax2 = plt.subplot(2, 3, 2)
         ax2.hist(xbx_angles, bins=50, alpha=0.7, color='coral', edgecolor='black')
         ax2.axvline(distortions['mean_angle'], color='red', linestyle='--', linewidth=2)
         ax2.axvline(90, color='green', linestyle=':', linewidth=1, alpha=0.7)
         ax2.axvline(180, color='blue', linestyle=':', linewidth=1, alpha=0.7)
-        ax2.set_xlabel('X-B-X Angle (degrees)')
-        ax2.set_ylabel('Frequency')
-        ax2.set_title('X-B-X Angles')
-        ax2.grid(alpha=0.3)
-        if STYLE_AVAILABLE:
-            style_axes(ax2)
+    ax2.set_xlabel('X-B-X Angle (degrees)')
+    ax2.set_ylabel('Frequency')
+    ax2.set_title('X-B-X Angles')
+    ax2.grid(alpha=0.3)
     
     # Plot 3: B-X bond lengths - Get data and plot
     bond_lengths = distortions['bond_lengths']
+    ax3 = plt.subplot(2, 3, 3)
     if len(bond_lengths) > 0:
-        ax3 = plt.subplot(2, 3, 3)
         ax3.hist(bond_lengths, bins=50, alpha=0.7, color='mediumseagreen', edgecolor='black')
         ax3.axvline(distortions['mean_bond_length'], color='red', linestyle='--', linewidth=2)
-        ax3.set_xlabel('B-X Bond Length (Å)')
-        ax3.set_ylabel('Frequency')
-        ax3.set_title('B-X Bond Lengths')
-        ax3.grid(alpha=0.3)
-        if STYLE_AVAILABLE:
-            style_axes(ax3)
+    ax3.set_xlabel('B-X Bond Length (Å)')
+    ax3.set_ylabel('Frequency')
+    ax3.set_title('B-X Bond Lengths')
+    ax3.grid(alpha=0.3)
     
     # Plot 4: All distances - Get data and plot
     from ase.neighborlist import neighbor_list
@@ -1596,7 +1590,7 @@ if MATPLOTLIB_AVAILABLE:
     
     try:
         from q2D_Materials.analyzer import q2D_analyzer
-        from q2D_Materials.analyzer.detection.cavity_tracing import (
+        from q2D_Materials.analyzer.cavities_processing.cavity_tracing import (
             calculate_cavity_deformation,
             calculate_cavity_volume,
         )
@@ -1653,7 +1647,7 @@ if MATPLOTLIB_AVAILABLE:
         # Find a cavity that's fully inside the cell (not PBC-wrapped)
         selected_cavity = None
         for cavity in cavities:
-            if not cavity.get('is_pbc_wrapped', True):
+            if not getattr(cavity, 'is_pbc_wrapped', True):
                 selected_cavity = cavity
                 break
         
@@ -1662,29 +1656,22 @@ if MATPLOTLIB_AVAILABLE:
             selected_cavity = cavities[0]
         
         if selected_cavity:
-            # Get all atoms in the cavity
-            upper_octs = selected_cavity.get('upper_octahedra', [])
-            lower_octs = selected_cavity.get('lower_octahedra', [])
-            all_octs = upper_octs + lower_octs
+            # Get all atoms in the cavity using Cavity object attributes
+            # Get octahedra from octahedra_info
+            octahedra_info = getattr(selected_cavity, 'octahedra_info', {})
+            all_octs = list(octahedra_info.keys()) if octahedra_info else []
             
             # Collect cavity X atoms
             cavity_x_atoms = set()
             cavity_b_atoms = set()
             cavity_a_atoms = set()
             
-            for oct_idx in all_octs:
-                if oct_idx in octahedra_data:
-                    oct_data = octahedra_data[oct_idx]
-                    # B-site
-                    if oct_data.get('central_atom') is not None:
-                        cavity_b_atoms.add(oct_data['central_atom'])
-                    # X atoms
-                    cavity_x_atoms.update(oct_data.get('terminal_atoms', []))
-                    cavity_x_atoms.update(oct_data.get('interlayer_atoms', []))
-                    cavity_x_atoms.update(oct_data.get('intralayer_atoms', []))
+            # Use b_atom_indices and x_atom_indices directly from Cavity
+            cavity_b_atoms.update(getattr(selected_cavity, 'b_atom_indices', []))
+            cavity_x_atoms.update(getattr(selected_cavity, 'x_atom_indices', []))
             
             # Get A-site atoms in this cavity
-            a_site_indices = selected_cavity.get('a_site_indices', [])
+            a_site_indices = getattr(selected_cavity, 'a_site_indices', [])
             cavity_a_atoms.update(a_site_indices)
             
             # Create figure with 3D subplot
@@ -1829,7 +1816,7 @@ cavity_analyzer = q2D_analyzer(cavity_structure)
 cavity_analyzer.analyze()
 
 # Get cavities using on-demand detection
-cavities = cavity_analyzer.detect_cavities()
+cavities = cavity_analyzer.get_cavities()
 print(f"Found {len(cavities)} cavities")
 
 # Convert all cavities to ASE Atoms objects
@@ -1845,13 +1832,53 @@ for cavity_idx in cavity_indices_to_plot:
         # Get cavity info for filename and title
         if cavity_idx < len(cavities):
             cavity = cavities[cavity_idx]
-            cavity_type = cavity.get('cavity_type', 'unknown')
-            b_count = len(cavity.get('b_data_list', []))
-            x_count = len(cavity.get('x_data_list', []))
-            a_count = len(cavity.get('a_site_indices', []))
+            cavity_type = getattr(cavity, 'cavity_type', 'unknown')
+            
+            # Count atoms from subgraph using graph structure
+            subgraph = getattr(cavity, 'subgraph', None)
+            if subgraph is not None:
+                # Get B atom indices from octahedra_info (B atoms are octahedron centers)
+                octahedra_info = getattr(cavity, 'octahedra_info', {})
+                b_atom_indices = set(octahedra_info.keys())  # Keys are B atom indices
+                
+                # Find A atoms: nodes connected to molecule nodes via CONTAINS edges
+                a_atom_nodes = set()
+                for node in subgraph.nodes():
+                    node_data = subgraph.nodes.get(node, {})
+                    if node_data.get('node_type') == 'molecule':
+                        # Find all atoms connected to this molecule
+                        for neighbor in subgraph.neighbors(node):
+                            edge_data = subgraph.get_edge_data(node, neighbor)
+                            if edge_data and edge_data.get('edge_type') == 'contains':
+                                a_atom_nodes.add(neighbor)
+                
+                # Count atoms from subgraph
+                b_count = 0
+                x_count = 0
+                a_count = 0
+                
+                for node in subgraph.nodes():
+                    node_data = subgraph.nodes.get(node, {})
+                    if node_data.get('node_type') == 'atom':
+                        original_idx = node_data.get('original_index')
+                        
+                        # A atoms: connected to molecule nodes
+                        if node in a_atom_nodes:
+                            a_count += 1
+                        # B atoms: octahedron centers (original_index in octahedra_info keys)
+                        elif original_idx is not None and original_idx in b_atom_indices:
+                            b_count += 1
+                        # X atoms: everything else
+                        else:
+                            x_count += 1
+            else:
+                # Fallback if subgraph not available
+                b_count = len(getattr(cavity, 'b_atom_indices', []))
+                x_count = len(getattr(cavity, 'x_atom_indices', []))
+                a_count = len(getattr(cavity, 'a_site_indices', []))
             
             # Determine cavity label
-            if cavity.get('closed', False):
+            if getattr(cavity, 'contains_a_site', False):
                 cav_label = "A-site"
             elif cavity_type == 'spacer_dj':
                 cav_label = "DJ Spacer"

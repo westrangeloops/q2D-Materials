@@ -11,11 +11,11 @@ from matplotlib.colors import LinearSegmentedColormap
 
 # Color schemes
 HALOGEN_COLORS = {
-    "I": "#6B9BD3",   # Blue for Iodine
+    "I": "#7F5595",   # Purple for Iodine
     "Br": "#E7845F",  # Orange for Bromine
     "Cl": "#4C8B68",  # Green for Chlorine
 }
-ORGANIC_COLOR = "#A58DC1"  # Purple for Molecule
+ORGANIC_COLOR = "#65B5E1"  # Light blue for Molecule
 
 # Vibrant LDOS colormap colors (for heatmaps)
 LDOS_COLORS = [

@@ -366,7 +366,7 @@ Molecule candidate analysis uses RDKit SMARTS for pattern matching:
 
 ```python
 from q2D_Materials.modifier.fragment import from_smiles
-from q2D_Materials.analyzer.characterization.smarts_validator import find_smarts_matches
+from q2D_Materials.analyzer.molecular_processing.smarts_validator import find_smarts_matches
 
 # Parse SMILES to graph using RDKit (graph-based, no 3D coordinates)
 pattern_graph = from_smiles('[NH3+]C')

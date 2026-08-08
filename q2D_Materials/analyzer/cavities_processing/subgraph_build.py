@@ -4,18 +4,23 @@ Builds the isolated cavity subgraph (molecule + B + X nodes, B-X edges,
 cage/half_cage metadata) and runs connectivity validation/repair.
 """
 
+import os
 import sys
 import numpy as np
 import networkx as nx
 from typing import List, Dict, Any, Tuple, Optional
+
+_CONNECTIVITY_DEBUG = os.environ.get("Q2D_CAVITY_CONNECTIVITY_DEBUG", "").strip().lower() in ("1", "true", "yes")
 
 from .molecule_helpers import _find_nh3_groups
 from .connectivity import (
     _get_connectivity_rules,
     _diagnose_connectivity_issues,
     _remove_excess_connections,
+    _remove_bad_equatorial_edges,
     _add_missing_connections,
     _validate_bx_connectivity,
+    _warn_long_bx_edges,
 )
 
 
@@ -45,6 +50,10 @@ def _get_layer_for_b(b_idx, parent_graph):
     return None
 
 
+# Stricter max distance for equatorial B-X so we avoid assigning wrong PBC image (5+ Å edges)
+MAX_EQUATORIAL_BOND_LENGTH = 4.0
+
+
 def _build_x_candidate_pools(
     b_node_instances: List[Tuple[Tuple[int, Tuple], str]],
     subgraph: nx.Graph,
@@ -56,6 +65,8 @@ def _build_x_candidate_pools(
     
     For each B atom, finds all X atoms within MAX_BOND_LENGTH and categorizes
     them by type (equatorial/terminal/axial) based on their node properties.
+    Equatorial candidates are further restricted to MAX_EQUATORIAL_BOND_LENGTH
+    to avoid wrong PBC image assignment (long edges).
     """
     candidate_pools = {}
     
@@ -88,8 +99,15 @@ def _build_x_candidate_pools(
             if distance > MAX_BOND_LENGTH:
                 continue
             
+            # DJ spacer: only connect B to X in the same half-cage (avoid inter-layer bonds)
+            b_half = b_node_data.get('half_cage')
+            x_half = x_node_data.get('half_cage')
+            if b_half is not None and x_half is not None and b_half != x_half:
+                continue
+            
             if x_node_data.get('is_equatorial', False):
-                pools['equatorial'].append((x_node_id, distance))
+                if distance <= MAX_EQUATORIAL_BOND_LENGTH:
+                    pools['equatorial'].append((x_node_id, distance))
             if x_node_data.get('is_terminal', False):
                 pools['terminal'].append((x_node_id, distance))
             if x_node_data.get('is_axial', False):
@@ -97,7 +115,7 @@ def _build_x_candidate_pools(
         
         for x_type in pools:
             pools[x_type].sort(key=lambda x: x[1])
-        
+        # Equatorial: keep all within MAX_EQUATORIAL_BOND_LENGTH (wrong X removed by _remove_bad_equatorial_edges)
         candidate_pools[b_node_id] = pools
     
     return candidate_pools
@@ -242,6 +260,14 @@ def _build_subgraph(
         elif node_type == 'spacer' and len(nh3_groups) == 1:
             pass
     
+    n_cages = len(cage_info) if cage_info else 0
+    if n_cages >= 2:
+        b0, x0 = cage_info[0]['b_indices'], cage_info[0]['x_indices']
+        n_b_cage0 = int(b0.shape[0]) if hasattr(b0, 'shape') else len(b0)
+        n_x_cage0 = int(x0.shape[0]) if hasattr(x0, 'shape') else len(x0)
+    else:
+        n_b_cage0 = n_x_cage0 = 0
+
     b_indices, b_positions, b_distances, b_labels = b_data
     for i in range(len(b_indices)):
         b_idx = int(b_indices[i])
@@ -259,6 +285,8 @@ def _build_subgraph(
         node_attrs['image_label'] = img_label
         node_attrs['pbc_position'] = b_pos
         node_attrs['is_B'] = True
+        if n_cages >= 2:
+            node_attrs['half_cage'] = 0 if i < n_b_cage0 else 1
 
         subgraph.add_node(node_id, **node_attrs)
     
@@ -278,6 +306,9 @@ def _build_subgraph(
         node_attrs['original_index'] = x_idx
         node_attrs['image_label'] = img_label
         node_attrs['pbc_position'] = x_pos
+        node_attrs['is_X'] = True
+        if n_cages >= 2:
+            node_attrs['half_cage'] = 0 if i < n_x_cage0 else 1
 
         subgraph.add_node(node_id, **node_attrs)
 
@@ -367,11 +398,17 @@ def _build_subgraph(
             subgraph, b_node_instances, connectivity_rules,
             x_labels_in_cavity, atom_node_mapping
         )
+        if _CONNECTIVITY_DEBUG:
+            print(f"    [CONNECTIVITY_DEBUG] Re-validation: {'OK' if is_valid else 'FAILED'}", file=sys.stderr)
         
         if is_valid:
             validation_success = True
             print(f"    ✓ Connectivity validated successfully after {iteration} iteration(s)", file=sys.stderr)
+            _warn_long_bx_edges(subgraph, b_node_instances, max_bond_length=4.0)
             break
+
+        # Remove equatorial X that are not in top-2 for both of their B (wrong X → eliminate, repair will replace)
+        removed_bad = _remove_bad_equatorial_edges(subgraph, b_node_instances)
         
         under_connected_b, over_connected_b = _diagnose_connectivity_issues(
             subgraph, b_node_instances, connectivity_rules
@@ -385,7 +422,14 @@ def _build_subgraph(
         removed = _remove_excess_connections(subgraph, over_connected_b)
         added = _add_missing_connections(subgraph, under_connected_b, candidate_pools)
         
-        print(f"    Iteration {iteration}: removed {removed} edges, added {added} edges", file=sys.stderr)
+        print(f"    Iteration {iteration}: removed {removed_bad + removed} edges (bad equatorial: {removed_bad}), added {added} edges", file=sys.stderr)
+        if _CONNECTIVITY_DEBUG:
+            n_bx = sum(
+                1 for u, v in subgraph.edges()
+                if (subgraph.nodes[u].get('is_B') and subgraph.nodes[v].get('is_X'))
+                or (subgraph.nodes[u].get('is_X') and subgraph.nodes[v].get('is_B'))
+            )
+            print(f"    [CONNECTIVITY_DEBUG] After repair: {n_bx} B-X edges in subgraph", file=sys.stderr)
         
         if removed == 0 and added == 0:
             print(f"    ERROR: Cannot fix connectivity issues (iteration {iteration})", file=sys.stderr)
@@ -418,7 +462,7 @@ def _build_subgraph(
                 node_i_is_x = subgraph.nodes[node_i].get('is_X', False)
                 node_j_is_b = subgraph.nodes[node_j].get('is_B', False)
                 node_j_is_x = subgraph.nodes[node_j].get('is_X', False)
-                
+                # Never copy B-X edges from parent; subgraph B-X comes only from validation/repair
                 if (node_i_is_b and node_j_is_x) or (node_i_is_x and node_j_is_b):
                     continue
 
@@ -426,5 +470,14 @@ def _build_subgraph(
                     subgraph.add_edge(node_i, node_j, **edge_data)
 
     _add_metadata_nodes(subgraph, graph, atom_node_mapping, cage_info, molecule_node_id, node_type)
+
+    # Defensive final re-validation: ensure the subgraph we return actually passes
+    final_valid = _validate_bx_connectivity(
+        subgraph, b_node_instances, connectivity_rules,
+        x_labels_in_cavity, atom_node_mapping
+    )
+    if not final_valid:
+        print(f"    ERROR: Final re-validation failed after post-processing. Rejecting cavity.", file=sys.stderr)
+        return None
 
     return subgraph

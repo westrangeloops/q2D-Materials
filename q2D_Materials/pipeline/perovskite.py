@@ -238,21 +238,41 @@ def create_monolayer_perovskite(
         BX_dist=BX_dist,
         spacer_orientation=spacer_orientation,
         collision_strategy=collision_strategy,
+        wrap_atoms=False,
+        pbc_z=False,
     )
 
     if len(atoms) == 0:
         return atoms
 
-    # Always align bottom at Z=0, then add vacuum above if needed
-    z_min = atoms.positions[:, 2].min()
-    atoms.positions[:, 2] -= z_min  # Shift so bottom is at Z=0
-    
+    # Center structure in vacuum region
     if vacuum > 0.0:
-        add_vacuum(atoms, vacuum=vacuum)
-        # After adding vacuum, shift up by half vacuum to center
-        shift = vacuum / 2.0
-        atoms.positions[:, 2] += shift
-
+        # Get current Z extent
+        z_min = atoms.positions[:, 2].min()
+        z_max = atoms.positions[:, 2].max()
+        z_extent = z_max - z_min
+        
+        # Calculate new cell height: structure extent + vacuum
+        new_c = z_extent + vacuum
+        
+        # Update cell with new c dimension
+        current_cell = atoms.cell.copy()
+        current_cell[2, 2] = new_c
+        atoms.set_cell(current_cell)
+        
+        # Center structure in the new cell: shift so there's vacuum/2 on each side
+        # First move bottom to Z=0, then shift up by vacuum/2
+        atoms.positions[:, 2] -= z_min
+        atoms.positions[:, 2] += vacuum / 2.0
+        
+        # Set PBC: periodic in XY, non-periodic in Z for monolayers
+        atoms.pbc = [1, 1, 0]
+    else:
+        # No vacuum: just align bottom at Z=0
+        z_min = atoms.positions[:, 2].min()
+        atoms.positions[:, 2] -= z_min
+        # Still set PBC for non-vacuum case
+        atoms.pbc = [1, 1, 0]
 
     return atoms
 

@@ -175,13 +175,14 @@ def main():
     min_z = z_coords.min()
     max_z = z_coords.max()
 
-    # For a 3-layer structure with explicit gaps, the total height should reflect the custom distances
-    # The layers should be at approximately 0, 1.5, 3.5, 5.5 (with some tolerance for layer thickness)
+    # For a 3-layer structure with explicit gaps: L1-(1.5)-L2-(2.0)-L1
+    # Layer 1 (L1) starts at z=0
+    # Gap 1.5, then Layer 2 (L2) starts around z=1.5 + layer_thickness (~2.0-2.5)
+    # Gap 2.0, then Layer 3 (L1) starts around z=2.5 + 2.0 + layer_thickness (~4.5-5.0)
     expected_z_ranges = [
-        (0.0, 1.0),    # First layer around 0
-        (1.0, 2.5),    # Second layer around 1.5
-        (3.0, 4.5),    # Third layer around 3.5
-        (5.0, 6.5)     # Terminal layer around 5.5
+        (0.0, 1.5),    # First layer (L1) around 0
+        (1.5, 3.5),    # Second layer (L2) after gap of 1.5
+        (3.5, 6.5)     # Third layer (L1) after gap of 2.0
     ]
 
     # Check that atoms exist in expected z ranges

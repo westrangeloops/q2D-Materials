@@ -11,11 +11,13 @@
     pkgs.python312Packages.numpy
     pkgs.python312Packages.pandas
     pkgs.python312Packages.scipy
+    pkgs.python312Packages.scikit-learn
     pkgs.python312Packages.ase
     pkgs.python312Packages.pymatgen
     pkgs.python312Packages.rdkit
     pkgs.python312Packages.matplotlib
     pkgs.python312Packages.numba
+    pkgs.python312Packages.pymysql  # MySQL connector for COD database
 
     # Web framework
     pkgs.python312Packages.fastapi
@@ -34,33 +36,39 @@
     pkgs.python312Packages.wheel
     pkgs.python312Packages.streamlit
     pkgs.cachix
+    pkgs.python312Packages.pyvis
+    pkgs.python312Packages.graphviz
+    pkgs.python312Packages.pygraphviz
+    pkgs.python312Packages.seaborn
+
+    pkgs.graphviz
   ];
 
-  # X11 support for visualization
+  # X11 support and C++ stdlib (needed for pip build isolation / numpy wheels)
   env = {
     LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [
       pkgs.xorg.libX11
       pkgs.xorg.libXext
       pkgs.xorg.libSM
       pkgs.xorg.libICE
+      pkgs.stdenv.cc.cc.lib
     ];
-    PYTHONPATH = "$PWD:$PYTHONPATH";
   };
 
   scripts = {
     dev.exec = ''
-      # Set up virtual environment
+      # Use nix Python and nix packages; venv with system-site-packages
       if [ ! -d ".venv" ]; then
-        echo "Creating virtual environment..."
-        python3 -m venv .venv
+        echo "Creating virtual environment (system-site-packages to use nix deps)..."
+        python3 -m venv --system-site-packages .venv
       fi
       
       source .venv/bin/activate
       pip install --upgrade pip
       
       if [ ! -f .venv/.installed ]; then
-        echo "Installing packages from requirements.txt..."
-        pip install -r requirements.txt
+        echo "Installing q2D-Materials in editable mode..."
+        pip install -e . --config-settings editable_mode=compat
         touch .venv/.installed
       fi
       
@@ -84,6 +92,10 @@
   };
 
   enterShell = ''
+    # Add project root to PYTHONPATH so q2D_Materials can be imported
+    export PYTHONPATH="$PWD:$PYTHONPATH"
     dev
+    # Activate .venv so python3 uses nix packages
+    source .venv/bin/activate
   '';
 }

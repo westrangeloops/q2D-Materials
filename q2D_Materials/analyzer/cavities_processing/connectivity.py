@@ -15,6 +15,8 @@ from typing import List, Dict, Any, Tuple
 
 # Enable verbose debug when env var is set (e.g. for EXTRACT.py --folder runs)
 _CONNECTIVITY_DEBUG = os.environ.get("Q2D_CAVITY_CONNECTIVITY_DEBUG", "").strip().lower() in ("1", "true", "yes")
+# When set, validation fails if any B-X edge length exceeds max (catches wrong PBC image)
+_STRICT_BX_DISTANCE = os.environ.get("Q2D_CAVITY_STRICT_BX_DISTANCE", "").strip().lower() in ("1", "true", "yes")
 
 
 def _get_connectivity_rules(cage_info: List[Dict[str, Any]]) -> Dict[str, int]:
@@ -209,6 +211,82 @@ def _remove_excess_connections(
                     print(f"    REMOVED: B{b_data['b_idx']} - {x_type} X (distance={distance:.3f} Å)", 
                           file=sys.stderr)
     
+    return edges_removed
+
+
+def _top2_equatorial_x_per_b(
+    subgraph: nx.Graph,
+    b_node_instances: List[Tuple[Tuple[int, Tuple], str]]
+) -> Dict[str, set]:
+    """For each B node, return the set of (at most) 2 closest equatorial X node_ids (by distance).
+    Used to enforce: an equatorial X must be one of the two closest to each of its two B.
+    """
+    b_to_top2: Dict[str, set] = {}
+    for (_b_idx, _b_img), b_node_id in b_node_instances:
+        b_node_data = subgraph.nodes[b_node_id]
+        b_pos = np.array(b_node_data.get("pbc_position"))
+        b_half = b_node_data.get("half_cage")
+        if b_pos is None:
+            b_to_top2[b_node_id] = set()
+            continue
+        candidates = []
+        for node_id in subgraph.nodes():
+            nd = subgraph.nodes[node_id]
+            if not nd.get("is_X") or not nd.get("is_equatorial", False):
+                continue
+            x_half = nd.get("half_cage")
+            if b_half is not None and x_half is not None and b_half != x_half:
+                continue
+            x_pos = nd.get("pbc_position")
+            if x_pos is None:
+                continue
+            d = float(np.linalg.norm(np.asarray(x_pos) - b_pos))
+            candidates.append((node_id, d))
+        candidates.sort(key=lambda x: x[1])
+        b_to_top2[b_node_id] = {node_id for node_id, _ in candidates[:2]}
+    return b_to_top2
+
+
+def _remove_bad_equatorial_edges(
+    subgraph: nx.Graph,
+    b_node_instances: List[Tuple[Tuple[int, Tuple], str]]
+) -> int:
+    """Remove equatorial B-X edges where X is not one of the two closest equatorial X for both of its B.
+    Such X are incorrect (not 'between' two B); removing edges lets repair assign the correct X.
+    Returns number of edges removed.
+    """
+    b_top2 = _top2_equatorial_x_per_b(subgraph, b_node_instances)
+    edges_removed = 0
+    seen_x = set()
+    for node_id in subgraph.nodes():
+        nd = subgraph.nodes[node_id]
+        if not nd.get("is_X") or node_id in seen_x:
+            continue
+        b_neighbors = [
+            n for n in subgraph.neighbors(node_id)
+            if subgraph.nodes[n].get("is_B")
+        ]
+        if len(b_neighbors) != 2:
+            continue
+        edge1 = subgraph.get_edge_data(b_neighbors[0], node_id) or {}
+        edge2 = subgraph.get_edge_data(b_neighbors[1], node_id) or {}
+        if edge1.get("geometry") != "equatorial" or edge2.get("geometry") != "equatorial":
+            continue
+        b1, b2 = b_neighbors[0], b_neighbors[1]
+        if node_id in b_top2.get(b1, set()) and node_id in b_top2.get(b2, set()):
+            continue
+        seen_x.add(node_id)
+        for b_node_id in (b1, b2):
+            if subgraph.has_edge(b_node_id, node_id):
+                subgraph.remove_edge(b_node_id, node_id)
+                edges_removed += 1
+                if _CONNECTIVITY_DEBUG:
+                    bidx = subgraph.nodes[b_node_id].get("original_index", "?")
+                    print(
+                        f"    [CONNECTIVITY_DEBUG] Removed bad equatorial: B{bidx}-X{nd.get('original_index', '?')} "
+                        "(X not in top-2 for both B)",
+                        file=sys.stderr,
+                    )
     return edges_removed
 
 
@@ -435,4 +513,75 @@ def _validate_bx_connectivity(
                     print(f"    [CONNECTIVITY_DEBUG] X{x_idx} full: eq={b_connections_by_geom['equatorial']} term={b_connections_by_geom['terminal']} axial={b_connections_by_geom['axial']}", file=sys.stderr)
                 return False
     
+    if _STRICT_BX_DISTANCE and not _validate_bx_distances(subgraph, b_node_instances, max_bond_length=4.0):
+        return False
+    
     return True
+
+
+def _validate_bx_distances(
+    subgraph: nx.Graph,
+    b_node_instances: List[Tuple[Tuple[int, Tuple], str]],
+    max_bond_length: float = 4.0
+) -> bool:
+    """Return False if any B-X edge length exceeds max_bond_length (wrong PBC image).
+    Used when Q2D_CAVITY_STRICT_BX_DISTANCE=1 to fail validation and allow repair to fix.
+    """
+    for (_b_idx, _b_img), b_node_id in b_node_instances:
+        b_pos = subgraph.nodes[b_node_id].get("pbc_position")
+        if b_pos is None:
+            continue
+        b_pos = np.asarray(b_pos)
+        for x_node_id in subgraph.neighbors(b_node_id):
+            if not subgraph.nodes[x_node_id].get("is_X", False):
+                continue
+            x_pos = subgraph.nodes[x_node_id].get("pbc_position")
+            if x_pos is None:
+                continue
+            x_pos = np.asarray(x_pos)
+            dist = float(np.linalg.norm(x_pos - b_pos))
+            if dist > max_bond_length:
+                x_idx = subgraph.nodes[x_node_id].get("original_index", "?")
+                edge_data = subgraph.get_edge_data(b_node_id, x_node_id) or {}
+                geom = edge_data.get("geometry", "?")
+                print(
+                    f"    VALIDATION FAILED (strict distance): B{_b_idx}-X{x_idx} ({geom}) "
+                    f"distance = {dist:.3f} Å (max {max_bond_length} Å).",
+                    file=sys.stderr,
+                )
+                if _CONNECTIVITY_DEBUG:
+                    print(f"    [CONNECTIVITY_DEBUG] Wrong PBC image; repair may remove and re-add.", file=sys.stderr)
+                return False
+    return True
+
+
+def _warn_long_bx_edges(
+    subgraph: nx.Graph,
+    b_node_instances: List[Tuple[Tuple[int, Tuple], str]],
+    max_bond_length: float = 4.0
+) -> None:
+    """Log a warning for any B-X edge whose length exceeds max_bond_length.
+    Helps catch wrong PBC image assignments (correct count but far X position).
+    """
+    for (_b_idx, _b_img), b_node_id in b_node_instances:
+        b_pos = subgraph.nodes[b_node_id].get("pbc_position")
+        if b_pos is None:
+            continue
+        b_pos = np.asarray(b_pos)
+        for x_node_id in subgraph.neighbors(b_node_id):
+            if not subgraph.nodes[x_node_id].get("is_X", False):
+                continue
+            x_pos = subgraph.nodes[x_node_id].get("pbc_position")
+            if x_pos is None:
+                continue
+            x_pos = np.asarray(x_pos)
+            dist = float(np.linalg.norm(x_pos - b_pos))
+            if dist > max_bond_length:
+                x_idx = subgraph.nodes[x_node_id].get("original_index", "?")
+                edge_data = subgraph.get_edge_data(b_node_id, x_node_id) or {}
+                geom = edge_data.get("geometry", "?")
+                print(
+                    f"    WARNING: B{_b_idx}-X{x_idx} ({geom}) distance = {dist:.3f} Å "
+                    f"(max {max_bond_length} Å). Check PBC image assignment.",
+                    file=sys.stderr,
+                )

@@ -5,7 +5,7 @@ This script reads all molecules from A-ion_data.csv and tests them as:
 - RP spacers (monofunctional, requires 1+ terminal NH2/NH3 groups)
 
 Usage:
-    nix develop -c python3 test_a_ion_molecules.py
+    python3 test_a_ion_molecules.py
 
 Output:
     - Console summary with statistics

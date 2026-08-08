@@ -21,6 +21,26 @@ You only need two patterns to master templates: a cubic stack (clear layers, eas
 ```
 Required: `name`, `named_layers`, `layer_sequence`, `lattice_multipliers`; optional: `angles`, `layer_spacing`. Layer entries are `[site, x, y]` with `site` in `A/B/X`.
 
+### Understanding `BX_dist` and `lattice_multipliers`
+
+The `BX_dist` parameter represents the **actual B–X bond distance** (in Angstroms) between the B-site cation and X-site anion. The `lattice_multipliers` in your template determine how this bond distance scales to the unit cell lattice parameters:
+
+**Lattice parameter calculation:**
+- `a = lattice_multipliers[0] × BX_dist`
+- `b = lattice_multipliers[1] × BX_dist`
+
+**For cubic perovskites:** In the cubic template, B atoms are at (0.5, 0.5) and X atoms are at (0.5, 0.0) or (0.0, 0.5) in fractional coordinates. The distance in fractional coordinates is 0.5, so:
+- Actual B–X distance = `0.5 × a = a/2`
+- Therefore: `a = 2 × BX_dist`
+
+The `cubic` template uses `lattice_multipliers: [2.0, 2.0]` to ensure that when you specify `BX_dist=3.2` Å (for example, Pb–I), the resulting structure has:
+- Lattice parameter `a = 2.0 × 3.2 = 6.4` Å
+- Actual B–X bond distances in the structure = `a/2 = 3.2` Å ✓
+
+**For other templates:** The multiplier depends on the specific geometry. The `reduced` template uses `2.828...` (which is `2 × √2`) for a different geometric arrangement, while hexagonal or other symmetries will have different multipliers based on their unit cell geometry.
+
+**Key point:** `BX_dist` always represents the **actual bond distance**. The template multipliers are chosen to ensure the geometric relationship between lattice parameters and bond distances matches the template's fractional coordinates.
+
 ---
 
 ## Example 1 — Cubic template, stacking told in words
@@ -46,6 +66,8 @@ Template (minimal):
   "lattice_multipliers": [2.0, 2.0]
 }
 ```
+
+**Note:** The multiplier `2.0` ensures that `BX_dist` equals the actual B–X bond distance: with `a = 2.0 × BX_dist`, the distance from B at (0.5, 0.5) to X at (0.5, 0.0) is `a/2 = BX_dist` (see "Understanding BX_dist and lattice_multipliers" above).
 
 Use it and write the three storyboard frames:
 ```python

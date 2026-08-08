@@ -5,6 +5,7 @@ import os
 import re
 from collections import OrderedDict
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
@@ -18,17 +19,15 @@ from q2D_Materials.builders.glazer_notation import resolve_glazer_input
 
 
 def available_templates() -> List[str]:
-    """Return list of template names based on JSON files in data/templates/."""
-    # Load from central data/templates directory
-    data_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    data_dir = os.path.join(data_dir, "q2D_Materials", "data", "templates")
-    if not os.path.exists(data_dir):
+    """Return list of template names based on JSON files in q2D_Materials/data/templates/."""
+    data_dir = Path(__file__).resolve().parent.parent / "data" / "templates"
+    if not data_dir.exists():
         return []
 
     names: List[str] = []
-    for fname in os.listdir(data_dir):
-        if fname.endswith(".json"):
-            names.append(os.path.splitext(fname)[0])
+    for fname in data_dir.iterdir():
+        if fname.suffix == ".json":
+            names.append(fname.stem)
     return sorted(names)
 
 
@@ -179,9 +178,9 @@ def _load_template_json(template_name: str | Dict) -> Dict:
             return json.loads(template_name)
         except json.JSONDecodeError:
             pass
-    # Load from central data/templates directory
-    data_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    json_path = os.path.join(data_dir, "q2D_Materials", "data", "templates", f"{template_name}.json")
+    # Load from q2D_Materials/data/templates
+    data_dir = Path(__file__).resolve().parent.parent / "data" / "templates"
+    json_path = data_dir / f"{template_name}.json"
     with open(json_path, "r") as f:
         return json.load(f)
 

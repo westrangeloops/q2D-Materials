@@ -4,6 +4,12 @@
 
 Check if molecules are suitable as DJ (Dion-Jacobson) or RP (Ruddlesden-Popper) spacers. Works with SMILES strings, files, or Atoms objects—no structure needed.
 
+**New in v2.3**: Unified molecular graph system with backbone identification
+- `create_molecule_graph()` - Create standardized molecular graphs from any input
+- `identify_backbone()` - Identify backbone atoms and count NH3 groups
+- Atoms marked as `role='backbone'` or `role='functional_group'`
+- Molecule nodes store `nh3_count` attribute for downstream analysis
+
 **New in v2.2**: Pattern-based validation with configurable SMILES patterns for terminal groups. Backbone element validation filters out molecules with unwanted elements (P, S, metals, etc.)
 
 **Updated**: 
@@ -25,6 +31,37 @@ print(f"Valid: {result.is_valid}")  # True
 result = analyzer.mol_validate("NCCCCC", spacer_type="RP")
 print(f"Valid: {result.is_valid}")  # True
 ```
+
+## Unified Molecular Graph System (v2.3+)
+
+The new unified molecular graph system provides a standardized way to work with molecules from any source (SMILES, XYZ, Atoms, or structure-extracted):
+
+```python
+from q2D_Materials.analyzer.molecular_processing import create_molecule_graph
+
+# Create molecular graph from SMILES
+graph = create_molecule_graph("C(CC[NH3+])C[NH3+]")
+
+# Access molecule properties
+mol_data = graph.nodes['molecule_0']
+print(f"Formula: {mol_data['formula']}")
+print(f"NH3 count: {mol_data['nh3_count']}")  # Automatically detected
+
+# Access atom properties
+for node in graph.nodes():
+    if node != 'molecule_0':
+        atom_data = graph.nodes[node]
+        symbol = atom_data['symbol']
+        role = atom_data.get('role')  # 'backbone' or 'functional_group'
+        if role:
+            print(f"Atom {node} ({symbol}): {role}")
+```
+
+**Key Features:**
+- **Automatic backbone identification**: Finds longest path between NH3 groups
+- **Atom role marking**: Atoms marked as `backbone` or `functional_group`
+- **NH3 counting**: Stored as `nh3_count` on molecule node
+- **Unified format**: Same graph structure for standalone and structure-extracted molecules
 
 ## Simple Examples
 
@@ -142,14 +179,14 @@ result = analyzer.mol_validate(
 ### NH2 → NH3 Conversion
 
 ```python
-from q2D_Materials.analyzer.characterization.molecule_candidates import convert_nh2_to_nh3
+from q2D_Materials.analyzer.molecular_processing.molecule_candidates import convert_nh2_to_nh3
 
 analyzer = q2D_analyzer()
 result = analyzer.mol_validate("NCCN", spacer_type="DJ", initial_pattern='NH2C')
 
 # Convert NH2 to NH3 (requires nitrogen index)
 # Note: With pattern-based API, you may need to identify N indices from pattern matches
-from q2D_Materials.analyzer.characterization.molecule_candidates import clean_molecule
+from q2D_Materials.analyzer.molecular_processing.molecule_candidates import clean_molecule
 
 # Use clean_molecule to automatically convert all NH2 to NH3
 modified = clean_molecule(result.original_atoms, convert_nh2_to_nh3_flag=True)
@@ -335,7 +372,7 @@ if result.is_valid:
     # Prepare spacer
     molecule = result.original_atoms
     # Convert NH2 to NH3 if needed (using clean_molecule)
-    from q2D_Materials.analyzer.characterization.molecule_candidates import clean_molecule
+    from q2D_Materials.analyzer.molecular_processing.molecule_candidates import clean_molecule
     molecule = clean_molecule(molecule, convert_nh2_to_nh3_flag=True)
     molecule = analyzer.elongate_dj_spacer(molecule, target_distance=12.0)
     
@@ -553,7 +590,7 @@ result = validator.validate_dj("NCCCCN")
 For advanced users, import the functions directly:
 
 ```python
-from q2D_Materials.analyzer.characterization.molecule_candidates import (
+from q2D_Materials.analyzer.molecular_processing.molecule_candidates import (
     analyze_molecule_candidate,
     DEFAULT_ALLOWED_BACKBONE_ELEMENTS,
     DEFAULT_FORBIDDEN_BACKBONE_ELEMENTS,
