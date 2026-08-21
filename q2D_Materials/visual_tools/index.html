@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>q2D Materials - Module Launcher</title>
+    <link rel="stylesheet" href="/static/theme.css">
+    <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+    
+    <script>
+    // Apply theme immediately before page renders
+    (function() {
+        const currentTheme = localStorage.getItem('theme');
+        if (currentTheme === 'dark') {
+            document.documentElement.setAttribute('data-theme', 'dark');
+        } else if (currentTheme === 'light') {
+            document.documentElement.removeAttribute('data-theme');
+        }
+    })();
+    </script>
+    
+    <style>
+        body {
+            align-items: center;
+            justify-content: center;
+        }
+        .container {
+            width: 100%;
+            max-width: 1200px;
+            padding: 40px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 40px;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .logo {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+        .modules-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 25px;
+            width: 100%;
+            max-width: 1200px;
+        }
+
+        @media (max-width: 900px) {
+            .modules-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        .module-card {
+            background: var(--bg-panel);
+            border-radius: var(--radius-lg);
+            padding: 0;
+            box-shadow: var(--shadow-panel);
+            border: 1px solid rgba(255,255,255,0.03);
+            transition: all 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            overflow: hidden;
+            min-height: 420px;
+        }
+        .module-card:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 25px 50px rgba(0,0,0,0.15);
+            border-color: var(--accent);
+        }
+        .module-card::before {
+            display: none;
+        }
+        .module-visual {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(to bottom, rgba(255,255,255,0.02), transparent);
+            padding: 40px;
+            position: relative;
+            transition: background 0.3s ease;
+        }
+
+        [data-theme="dark"] .module-visual {
+            background: linear-gradient(to bottom, rgba(255,255,255,0.01), transparent);
+        }
+        .module-visual::after {
+            content: '';
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            width: 80%; height: 80%;
+            background: radial-gradient(circle, var(--accent-glow) 0%, transparent 70%);
+            opacity: 0.6;
+            pointer-events: none;
+            transition: opacity 0.3s;
+        }
+        .module-card:hover .module-visual::after {
+            opacity: 0.9;
+        }
+        .module-visual object, .module-visual .module-icon-emoji {
+            transition: transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
+            filter: drop-shadow(0 20px 40px rgba(0,0,0,0.3));
+            z-index: 1;
+        }
+        .module-card:hover .module-visual object, .module-card:hover .module-visual .module-icon-emoji {
+            transform: scale(1.15) translateY(-10px);
+        }
+        .module-label {
+            padding: 30px;
+            background: rgba(255,255,255,0.02);
+            border-top: 1px solid rgba(0,0,0,0.05);
+            text-align: center;
+            z-index: 2;
+            transition: border-color 0.3s ease;
+        }
+
+        [data-theme="dark"] .module-label {
+            background: rgba(255,255,255,0.01);
+            border-top: 1px solid rgba(255,255,255,0.05);
+        }
+        .module-title {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--fg-primary);
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+        }
+        .module-description {
+            color: var(--fg-secondary);
+            font-size: 0.85rem;
+            line-height: 1.6;
+            font-style: italic;
+            opacity: 0.9;
+        }
+        .module-icon-emoji {
+            font-size: 6rem;
+        }
+
+        .theme-toggle {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: var(--bg-panel);
+            padding: 8px 12px;
+            border-radius: var(--radius-pill);
+            border: 1px solid rgba(255,255,255,0.1);
+            font-size: 0.85rem;
+            color: var(--fg-secondary);
+        }
+
+        .theme-toggle label {
+            cursor: pointer;
+            user-select: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">
+                <object type="image/svg+xml" data="/Logos/logo_q2D_materials.svg" width="320" height="100" style="pointer-events: none;"></object>
+            </div>
+            <div class="theme-toggle">
+                <span>🌙</span>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="theme-toggle">
+                    <span class="slider"></span>
+                </label>
+                <span>☀️</span>
+            </div>
+        </div>
+
+        <div class="modules-grid">
+            <div class="module-card" onclick="launchModule('layer_arquitect.html')">
+                <div class="module-visual">
+                    <object type="image/svg+xml" data="/Logos/layer_arquitect_icon.svg" width="200" height="200" style="pointer-events: none;"></object>
+                </div>
+                <div class="module-label">
+                    <div class="module-title">Layer Architect</div>
+                    <div class="module-description">
+                        Design and visualize the layer architecture to create new types of perovskites, this modules contain tools to help create your own.
+                    </div>
+                </div>
+            </div>
+
+            <div class="module-card" onclick="launchModule('structure_generator.html')">
+                <div class="module-visual">
+                    <div class="module-icon-emoji">🧬</div>
+                </div>
+                <div class="module-label">
+                    <div class="module-title">Structure Generator</div>
+                    <div class="module-description">
+                        Convert layer designs into complete crystal structures for DFT
+                    </div>
+                </div>
+            </div>
+
+            <div class="module-card" onclick="launchModule('analyzer.html')">
+                <div class="module-visual">
+                    <div class="module-icon-emoji">📊</div>
+                </div>
+                <div class="module-label">
+                    <div class="module-title">Structure Analyzer</div>
+                    <div class="module-description">
+                        Upload VASP files and visualize perovskite structures with interactive graph networks and cavity analysis
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentNetwork = null;
+        
+        function launchModule(modulePath) {
+            window.location.href = modulePath;
+        }
+
+        // Dark mode toggle functionality
+        document.addEventListener('DOMContentLoaded', function() {
+            const themeToggle = document.getElementById('theme-toggle');
+            const currentTheme = localStorage.getItem('theme');
+
+            // Set initial theme
+            if (currentTheme === 'dark') {
+                document.documentElement.setAttribute('data-theme', 'dark');
+                themeToggle.checked = true;
+            }
+
+            // Handle theme toggle
+            themeToggle.addEventListener('change', function() {
+                if (this.checked) {
+                    document.documentElement.setAttribute('data-theme', 'dark');
+                    localStorage.setItem('theme', 'dark');
+                } else {
+                    document.documentElement.removeAttribute('data-theme');
+                    localStorage.setItem('theme', 'light');
+                }
+            });
+        });
+    </script>
+</body>
+</html>
+

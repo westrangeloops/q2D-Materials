@@ -22,10 +22,10 @@ def main():
 
     # m1: Super-mixed monolayer (reduced template, similar to test_creator_monolayer.py)
     print("\n1. Creating m1: super-mixed monolayer (reduced, mixed A/B/X, spacers, Glazer)...")
-    m1 = q2d.create_perovskite(
+    m1 = q2d.create_structure(
         A_ions=["Cs", "MA", "FA", "MA", "MA", "FA", "Cs", "MA"],
         B_ions=["Pb", "Sn", "Pb", "Pb", "Sn", "Pb", "Pb", "Sn"],
-        spacer=["CN1C=NC2=C1C(=O)N(C(=O)N2C)CC[NH3+]", "CCCC[NH3+]"],
+        passivator=["CN1C=NC2=C1C(=O)N(C(=O)N2C)CC[NH3+]", "CCCC[NH3+]"],
         X_ions=["Br"] * 12 + ["I"] * 12,
         xy_expansion=(2, 2),
         template="reduced",
@@ -42,7 +42,7 @@ def main():
 
     # m2: Mixed A-site with different xy_expansion (cubic template)
     print("\n2. Creating m2: mixed A-site monolayer (cubic, xy_expansion=(3, 3))...")
-    m2 = q2d.create_perovskite(
+    m2 = q2d.create_structure(
         A_ions=["Cs", "MA", "FA", "Cs", "MA", "FA", "Cs", "MA", "FA"],
         B_ions="Pb",
         X_ions="I",
@@ -50,7 +50,7 @@ def main():
         template="cubic",
         structure_type="monolayer",
         vacuum=vacuum,
-        spacer="Cs",
+        passivator="Cs",
     )
     write("m2_mixedA_cubic.vasp", m2, format="vasp", sort=True)
     monolayers.append(m2)
@@ -58,7 +58,7 @@ def main():
 
     # m3: Mixed B/X sites with Glazer tilting (reduced template)
     print("\n3. Creating m3: mixed B/X monolayer with Glazer tilting (reduced)...")
-    m3 = q2d.create_perovskite(
+    m3 = q2d.create_structure(
         A_ions="MA",
         B_ions=["Pb", "Sn", "Pb", "Sn"],
         X_ions=["Br", "I", "I", "Br", "I", "I", "Br", "I"],
@@ -66,7 +66,7 @@ def main():
         template="reduced",
         structure_type="monolayer",
         vacuum=vacuum,
-        spacer="CCCC[NH3+]",
+        passivator="CCCC[NH3+]",
         glazer_angles=[0, 2, 2],
         glazer_pattern=["0", "+", "+"],
         thickness=2,

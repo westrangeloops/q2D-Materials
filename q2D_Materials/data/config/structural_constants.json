@@ -1,0 +1,90 @@
+{
+  "_comment": "Structural analysis constants from PDynA (https://github.com/WMD-group/PDynA). These constants control tolerance thresholds, search radii, and other parameters used throughout the structural analysis modules.",
+  "_license": "MIT License - Copyright (c) 2022 Xia Liang",
+  
+  "default_tolerance_constants": {
+    "_comment": "Default tolerance values used in octahedral matching and structure analysis",
+    "fitting_tolerance": {
+      "value": 0.3,
+      "description": "Used in match_bx_orthogonal() and match_bx_orthogonal_rotated() for matching octahedral bond vectors to ideal coordinates. Controls how strict the matching is.",
+      "used_in": ["octahedral_analysis.py:match_bx_orthogonal", "octahedral_analysis.py:match_bx_orthogonal_rotated", "octahedral_analysis.py:quick_match_octahedron"]
+    },
+    "match_tolerance": {
+      "value": 1.5,
+      "description": "Tolerance for coordinate matching in pseudo-cubic lattice parameter calculations (in Angstroms).",
+      "used_in": ["trajectory_analysis.py:pseudocubic_lat"]
+    },
+    "bb_search_radius": {
+      "value": 10.0,
+      "description": "Search radius for finding B-B neighbors in polytype network analysis (in Angstroms).",
+      "used_in": ["octahedral_analysis.py:find_polytype_network"]
+    },
+    "population_gap_tol": {
+      "value": 5,
+      "description": "Tolerance for population gap detection when separating first and second nearest neighbors in distance matrices.",
+      "used_in": ["octahedral_analysis.py:find_population_gap", "octahedral_analysis.py:fit_octahedral_network_defect_tol"]
+    },
+    "rmsd_threshold": {
+      "value": 0.1,
+      "description": "RMSD threshold for octahedral matching validation. Used to determine if a match is acceptable.",
+      "used_in": ["octahedral_analysis.py:quick_match_octahedron", "octahedral_analysis.py:calc_rotation_from_arbitrary_order", "resolve_octahedra.py"]
+    },
+    "angle_tolerance": {
+      "value": 0.3,
+      "description": "Tolerance for angle matching in octahedral analysis.",
+      "used_in": ["octahedral_analysis.py"]
+    },
+    "distinct_threshold": {
+      "value": 20.0,
+      "description": "Threshold for distinguishing different halide configurations in mixed halide octahedra.",
+      "used_in": ["a_site_analysis.py:match_mixed_halide_octa_dot"]
+    }
+  },
+  
+  "octahedral_matching_thresholds": {
+    "_comment": "Thresholds specific to octahedral matching operations",
+    "fitting_tol": {
+      "value": 0.3,
+      "description": "Alternative name for fitting_tolerance, used in some matching functions.",
+      "used_in": ["octahedral_analysis.py"]
+    },
+    "confidence_bound": {
+      "value": [0.8, 0.2],
+      "description": "Confidence bounds for matching quality assessment (currently not actively used but available for future validation).",
+      "used_in": ["octahedral_analysis.py:match_bx_arbitrary"]
+    }
+  },
+  
+  "time_averaging_defaults": {
+    "_comment": "Defaults for time-averaging trajectory analysis",
+    "match_tol": {
+      "value": 1.5,
+      "description": "Matching tolerance for time-averaged structure calculations (in Angstroms).",
+      "used_in": ["trajectory_analysis.py"]
+    }
+  },
+  
+  "hydrogen_bond_detection": {
+    "_comment": "Parameters for hydrogen bond detection in molecular analysis",
+    "max_distance": {
+      "value": 3.2,
+      "description": "Maximum H...acceptor distance for hydrogen bond detection (in Angstroms).",
+      "used_in": ["a_site_analysis.py", "pymatgen_utils.py:detect_hydrogen_bonds"]
+    },
+    "min_angle": {
+      "value": 120.0,
+      "description": "Minimum D-H...A angle for hydrogen bond detection (in degrees). Currently defined but not actively used in detection.",
+      "used_in": ["a_site_analysis.py", "pymatgen_utils.py:detect_hydrogen_bonds"]
+    }
+  },
+  
+  "volume_calculation": {
+    "_comment": "Tolerance for volume calculations",
+    "tolerance": {
+      "value": 1e-15,
+      "description": "Tolerance below which distortion values are set to zero in simply_calc_distortion().",
+      "used_in": ["trajectory_analysis.py:simply_calc_distortion"]
+    }
+  }
+}
+

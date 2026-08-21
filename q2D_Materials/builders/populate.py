@@ -1,9 +1,4 @@
-"""
-Population module for populating structure matrices with atoms.
-
-This module handles ion assignment, molecular alignment, and spacer attachment
-to convert abstract position matrices into complete ASE Atoms objects.
-"""
+"""Population module for populating structure matrices with atoms."""
 
 import numpy as np
 from ase import Atoms
@@ -11,7 +6,7 @@ from typing import Union, List, Tuple, Dict, Optional, Any
 
 from .q_builder import QBuilderOutput
 from .templates import FloorSchema, flatten_floor_schema
-from ..utils.molecule_builder import (
+from ..utils.molecules.molecule_builder import (
     align_ase_molecule_for_perovskite,
     center_of_mass_correction,
     place_atoms_at_location,
@@ -21,56 +16,21 @@ from ..utils.molecule_builder import (
     get_molecule_length,
     com_to_origin
 )
-from ..utils.A_sites import get_ionic_radius, is_molecular_a_cation, get_a_site_object
+from ..utils.sites.A_sites import get_ionic_radius, is_molecular_a_cation, get_a_site_object
+from .optimizers import find_optimal_spacer_vectors_global
+from .spacer import count_nh3_groups, SpacerMolecule, _find_terminal_nitrogens
+from .collision import resolve_collisions
 
 
 def place_spacer_at_location(atoms, r, attachment_end):
-    """
-    Place a spacer molecule with its NH3+ N atom at the location r.
-
-    Parameters
-    ----------
-    atoms : Atoms
-        Spacer molecule (already aligned with NH3+ at correct end)
-    r : array
-        Vector for the translation (3,)
-    attachment_end : str
-        'top' or 'bottom' - which end of molecule contains the NH3+ group
-
-    Returns
-    -------
-    mod_atoms : Atoms
-        The modified atoms object with NH3+ N atom at position r.
-    """
+    """Place a spacer molecule with its NH3+ N atom at the location r."""
     mod_atoms = atoms.copy()
-    symbols = mod_atoms.get_chemical_symbols()
-    positions = mod_atoms.positions
+    spacer = SpacerMolecule.from_atoms(mod_atoms)
 
-    # Find NH3+ N atoms (N with 3 nearby H atoms)
-    n_indices = [i for i, s in enumerate(symbols) if s == 'N']
-    nh3_n_idx = None
-
-    if len(n_indices) == 1:
-        # Single N atom - assume it's NH3+
-        nh3_n_idx = n_indices[0]
-    else:
-        # Multiple N atoms - find the one that is part of NH3+ (has 3 nearby H)
-        h_indices = [i for i, s in enumerate(symbols) if s == 'H']
-        for n_idx in n_indices:
-            n_pos = positions[n_idx]
-            nearby_h_count = 0
-            for h_idx in h_indices:
-                h_pos = positions[h_idx]
-                dist = np.linalg.norm(n_pos - h_pos)
-                if dist < 1.2:  # N-H bond distance
-                    nearby_h_count += 1
-            if nearby_h_count == 3:
-                nh3_n_idx = n_idx
-                break
+    nh3_n_idx = spacer.primary_nh3_index
 
     if nh3_n_idx is not None:
-        # Move the NH3+ N atom to the target position
-        n_pos = positions[nh3_n_idx]
+        n_pos = mod_atoms.get_positions()[nh3_n_idx]
         translation = np.array(r) - n_pos
         mod_atoms.positions += translation
     else:
@@ -80,33 +40,71 @@ def place_spacer_at_location(atoms, r, attachment_end):
     return mod_atoms
 
 
+def _normalize_ion_list(
+    ions: Union[str, Atoms, List[Union[str, Atoms]], None],
+    normalize_func,
+    copy_atoms: bool = False
+) -> Union[str, Atoms, List[Union[str, Atoms]], None]:
+    """Normalize ion lists (single values or lists)."""
+    if ions is None:
+        return None
+
+    if isinstance(ions, list):
+        normalized = []
+        for ion in ions:
+            if isinstance(ion, Atoms):
+                normalized.append(ion.copy() if copy_atoms else ion)
+            elif isinstance(ion, str):
+                normalized.append(normalize_func(ion))
+            else:
+                normalized.append(normalize_func(ion))
+        return normalized
+    else:
+        # Single value
+        if isinstance(ions, Atoms):
+            return ions.copy() if copy_atoms else ions
+        elif isinstance(ions, str):
+            return normalize_func(ions)
+        else:
+            return normalize_func(ions)
+
+
+def _get_next_ion_from_list(ions, site_type: str, site_counters: Dict[str, int]):
+    """Get the next ion from a list (cycling through) or single value."""
+    if isinstance(ions, list):
+        if not ions:
+            return None
+        if site_type not in site_counters:
+            site_counters[site_type] = 0
+        ion = ions[site_counters[site_type] % len(ions)]
+        site_counters[site_type] += 1
+    else:
+        ion = ions
+
+    # Always copy Atoms objects to avoid shared references
+    if isinstance(ion, Atoms):
+        ion = ion.copy()
+
+    return ion
+
+
 def normalize_a_site(A: Union[str, Atoms]) -> Union[str, Atoms]:
     """
     Normalize A-site input to handle both strings and Atoms objects.
     Converts molecular cation strings (MA, FA, etc.) to Atoms objects.
-    
+
     Parameters
     ----------
     A : str or Atoms
         A-site cation (string like "MA", "FA", "Cs" or Atoms object)
-        
+
     Returns
     -------
     str or Atoms
         Atomic cations as strings, molecular cations as Atoms objects
     """
-    if isinstance(A, Atoms):
-        return A
-    
-    if isinstance(A, str):
-        # Check if it's a molecular cation that needs conversion
-        try:
-            return get_a_site_object(A)
-        except (ImportError, ValueError):
-            # If conversion fails or not available, return as-is (atomic cation)
-            return A
-    
-    return A
+    from q2D_Materials.pipeline.common import _normalize_to_atoms_or_string
+    return _normalize_to_atoms_or_string(A, return_atoms_only=False)
 
 
 def apply_penetration_offsets(
@@ -173,6 +171,7 @@ def populate_from_floor_schema(
     sharp_spacer: Optional[List[Union[str, Atoms]]] = None,
     penetration: float = 0.0,
     BX_dist: float | None = None,
+    spacer_orientation: Optional[List[str]] = None,
 ) -> Atoms:
     """
     Populate directly from a floor schema (numbered floors with cartesian coords).
@@ -193,6 +192,9 @@ def populate_from_floor_schema(
         Ap_ions=Ap_ions,
         sharp_spacer=sharp_spacer,
         site_labels=site_labels,
+        floors_cart=list(schema.floors.values()),
+        BX_dist=BX_dist,
+        spacer_orientation=spacer_orientation,
     )
 
 
@@ -205,41 +207,7 @@ def assign_ions_to_sites(
     sharp_spacer: Optional[List[Union[str, Atoms]]] = None,
     site_labels: Optional[Dict[str, List[str]]] = None,
 ) -> List[Tuple[str, Union[str, Atoms], np.ndarray, str]]:
-    """
-    Assign ions to positions using explicit patterns with site label metadata.
-    
-    This function assigns ions to positions based on explicit patterns provided by the user.
-    If a single ion is provided, it's used for all positions of that type.
-    If a list is provided, ions are assigned sequentially, cycling if the list is shorter.
-    Processes positions in layer-by-layer order (sorted by z-coordinate).
-    Maintains Ap override: Ap positions take precedence over A positions.
-    
-    Parameters
-    ----------
-    position_template : dict
-        Dictionary with site types ('A', 'B', 'X', 'Ap', 'S1', 'S2', etc.) and numpy arrays of positions
-    A_ions : str/Atoms or list[str/Atoms]
-        A-site ion(s). Single value or list pattern.
-    B_ions : str or list[str]
-        B-site ion(s). Single value or list pattern.
-    X_ions : str or list[str]
-        X-site ion(s). Single value or list pattern.
-    Ap_ions : optional
-        Ap-site spacer(s). Single value or list pattern.
-    sharp_spacer : optional list
-        Spacer molecules for S# sites (double or mono). List cycles through S# labels.
-    site_labels : optional dict
-        Dictionary mapping site types to lists of labels (e.g., {"S1": ["S1", "S1", ...], "A": ["A", "A", ...]})
-        
-    Returns
-    -------
-    list[tuple]
-        List of (site_type, ion, position, label) tuples where:
-        - site_type is the site type ('A', 'B', 'X', 'Ap', 'S1', etc.)
-        - ion is str or Atoms object
-        - position is numpy array [x, y, z]
-        - label is the site label (e.g., "S1", "S2", "A")
-    """
+    """Assign ions to positions using explicit patterns with site label metadata."""
     assignments = []
     
     # Collect all positions with their labels and z-coordinates for layer-by-layer processing
@@ -282,43 +250,19 @@ def assign_ions_to_sites(
         
         # Handle A sites (but Ap will override later)
         if site_type == 'A':
-            if isinstance(A_ions, list):
-                if 'A' not in site_counters:
-                    site_counters['A'] = 0
-                ion = A_ions[site_counters['A'] % len(A_ions)]
-                site_counters['A'] += 1
-            else:
-                ion = A_ions
-            if isinstance(ion, Atoms):
-                ion = ion.copy()
+            ion = _get_next_ion_from_list(A_ions, 'A', site_counters)
             assignments.append((site_type, ion, pos, label))
             continue
-        
+
         # Handle B sites
         if site_type == 'B':
-            if isinstance(B_ions, list):
-                if 'B' not in site_counters:
-                    site_counters['B'] = 0
-                ion = B_ions[site_counters['B'] % len(B_ions)]
-                site_counters['B'] += 1
-            else:
-                ion = B_ions
-            if isinstance(ion, Atoms):
-                ion = ion.copy()
+            ion = _get_next_ion_from_list(B_ions, 'B', site_counters)
             assignments.append((site_type, ion, pos, label))
             continue
-        
+
         # Handle X sites
         if site_type == 'X':
-            if isinstance(X_ions, list):
-                if 'X' not in site_counters:
-                    site_counters['X'] = 0
-                ion = X_ions[site_counters['X'] % len(X_ions)]
-                site_counters['X'] += 1
-            else:
-                ion = X_ions
-            if isinstance(ion, Atoms):
-                ion = ion.copy()
+            ion = _get_next_ion_from_list(X_ions, 'X', site_counters)
             assignments.append((site_type, ion, pos, label))
             continue
     
@@ -353,29 +297,6 @@ def assign_ions_to_sites(
                     assignments.append(('Ap', ion, pos, label))
     
     return assignments
-
-
-def _count_nh3_groups(spacer: Atoms) -> int:
-    """Return the number of NH3-like nitrogens (N with 3 nearby H)."""
-    symbols = spacer.get_chemical_symbols()
-    positions = spacer.get_positions()
-    n_indices = [i for i, s in enumerate(symbols) if s == 'N']
-    h_indices = [i for i, s in enumerate(symbols) if s == 'H']
-
-    if not n_indices or not h_indices:
-        return 0
-
-    h_positions = positions[h_indices]
-    nh3_count = 0
-    nh_bond_cutoff = 1.2
-
-    for n_idx in n_indices:
-        n_pos = positions[n_idx]
-        distances = np.linalg.norm(h_positions - n_pos, axis=1)
-        if np.sum(distances < nh_bond_cutoff) == 3:
-            nh3_count += 1
-
-    return nh3_count
 
 
 def _place_mono_sharp_spacer(molecule: Atoms, position: np.ndarray, attachment_end: str) -> Optional[Atoms]:
@@ -417,7 +338,8 @@ def _build_floor_slabs(
 
 def _add_atomic_site(structure: Atoms, symbol: str, position: np.ndarray) -> Atoms:
     """Add a single atomic ion to the structure."""
-    if symbol is None:
+    if symbol is None or symbol == 'M' or symbol.strip() == '':
+        # Skip placeholder symbols like 'M' or empty strings
         return structure
     atom = Atoms(symbol, positions=[np.array(position, dtype=float)])
     return add_atoms(structure, atom)
@@ -455,13 +377,12 @@ def populate_a_sites(structure: Atoms, slab: Dict[str, Any]) -> Atoms:
             structure = _place_a_molecule(structure, ion, position)
             continue
         if isinstance(ion, str):
-            try:
-                if is_molecular_a_cation(ion):
-                    mol = get_a_site_object(ion)
+            if is_molecular_a_cation(ion):
+                mol = get_a_site_object(ion)
+                # Only place molecule if get_a_site_object returned an Atoms object
+                if isinstance(mol, Atoms):
                     structure = _place_a_molecule(structure, mol, position)
                     continue
-            except (ImportError, ValueError):
-                pass
         structure = _add_atomic_site(structure, ion, position)
 
     for entry in slab.get("sites", {}).get('Ap', []):
@@ -473,13 +394,10 @@ def populate_a_sites(structure: Atoms, slab: Dict[str, Any]) -> Atoms:
             structure = _place_ap_molecule(structure, ion, position)
             continue
         if isinstance(ion, str):
-            try:
-                if is_molecular_a_cation(ion):
-                    mol = get_a_site_object(ion)
-                    structure = _place_ap_molecule(structure, mol, position)
-                    continue
-            except (ImportError, ValueError):
-                pass
+            if is_molecular_a_cation(ion):
+                mol = get_a_site_object(ion)
+                structure = _place_ap_molecule(structure, mol, position)
+                continue
         structure = _add_atomic_site(structure, ion, position)
 
     return structure
@@ -542,14 +460,19 @@ def _prepare_sharp_template(template: Union[str, Atoms]) -> Optional[Atoms]:
 
 def _sort_spacer_entries(entries: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Sort S-site entries deterministically for pairing ground and sky."""
-    return sorted(
-        entries,
-        key=lambda e: (
-            round(float(e["position"][0]), 4),
-            round(float(e["position"][1]), 4),
-            round(float(e["position"][2]), 4),
-        ),
-    )
+    def sort_key(entry):
+        # Try to sort by S# number if the label starts with 'S' followed by digits
+        label = entry.get("label", "")
+        if label.startswith("S") and len(label) > 1 and label[1:].isdigit():
+            # Sort by the numeric part of S# labels (S1, S2, S3, etc.)
+            return (0, int(label[1:]))
+        else:
+            # Fallback to position-based sorting for other labels
+            return (1, round(float(entry["position"][0]), 4),
+                       round(float(entry["position"][1]), 4),
+                       round(float(entry["position"][2]), 4))
+
+    return sorted(entries, key=sort_key)
 
 
 def _adjust_positions_for_double_spacer(
@@ -558,26 +481,9 @@ def _adjust_positions_for_double_spacer(
     spacer_template: Atoms,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """Project ground/sky anchors onto the molecule's intrinsic N-N span."""
-    from q2D_Materials.builders.spacer import calculate_double_spacer_nh3_distance
-
-    try:
-        mol_length = float(calculate_double_spacer_nh3_distance(spacer_template))
-    except Exception:
-        mol_length = 0.0
-
-    vec = sky_pos - ground_pos
-    dist = np.linalg.norm(vec)
-
-    if mol_length <= 0.0 or dist <= 1e-6:
-        return ground_pos, sky_pos
-
-    unit = vec / dist
-    midpoint = (ground_pos + sky_pos) * 0.5
-    half_len = 0.5 * mol_length
-
-    ground_new = midpoint - unit * half_len
-    sky_new = midpoint + unit * half_len
-    return ground_new, sky_new
+    # Simply return original positions - the kinematic solver will handle
+    # aligning the molecule between P1 and P2 while respecting bond constraints
+    return ground_pos, sky_pos
 
 
 class _SharpSpacerSequence:
@@ -598,11 +504,58 @@ class _SharpSpacerSequence:
         return template
 
 
+class _SpacerOrientationSequence:
+    """Simple cursor that cycles through user-provided spacer orientations across floor pairs."""
+
+    def __init__(self, orientations: Optional[List[str]]):
+        self.orientations = orientations or []
+        self.index = 0
+
+    def has_orientations(self) -> bool:
+        return len(self.orientations) > 0
+
+    def next_orientation(self) -> Optional[str]:
+        if not self.orientations:
+            return None
+        orientation = self.orientations[self.index % len(self.orientations)]
+        self.index += 1
+        return orientation
+
+
+def _calculate_xy_pbc_distances(reference_pos: np.ndarray, positions: np.ndarray, cell: np.ndarray) -> np.ndarray:
+    """
+    Calculate PBC-aware distances considering only XY periodic images.
+    Z coordinate is kept fixed (no wrapping in Z direction).
+    
+    Now uses unified pbc_distances module for consistency and performance.
+    
+    Parameters
+    ----------
+    reference_pos : np.ndarray
+        Reference position [x, y, z]
+    positions : np.ndarray
+        Array of positions to calculate distances to, shape (n, 3)
+    cell : np.ndarray
+        Unit cell matrix (3x3)
+        
+    Returns
+    -------
+    np.ndarray
+        Array of shortest distances considering XY PBC only, shape (n,)
+    """
+    from ..utils.geometry.pbc_distances import calculate_xy_pbc_distances
+    return calculate_xy_pbc_distances(reference_pos, positions, cell)
+
+
 def populate_sharp(
     structure: Atoms,
     ground_slab: Dict[str, Any],
     sky_slab: Optional[Dict[str, Any]],
     sharp_sequence: Optional[_SharpSpacerSequence],
+    optimizer: str = "KS",
+    BX_dist: Optional[float] = None,
+    spacer_orientation: Optional[List[str]] = None,
+    collision_strategy: str = "rotate",
 ) -> Atoms:
     """Populate sharp (S#) sites between a ground slab and an optional sky slab."""
     if sharp_sequence is None or not sharp_sequence.has_templates():
@@ -620,52 +573,199 @@ def populate_sharp(
 
     from q2D_Materials.builders.spacer import place_double_spacer_between_positions
 
+    # Get cell for PBC-aware calculations
+    cell = structure.cell if structure.cell is not None else None
+
+    # Create orientation sequence for cycling through orientations
+    orientation_sequence = _SpacerOrientationSequence(spacer_orientation)
+
     for label in shared_labels:
         template = sharp_sequence.next_template()
         spacer_template = _prepare_sharp_template(template)
         if spacer_template is None:
             continue
 
+        # Apply plane alignment if orientation is specified
+        if orientation_sequence.has_orientations() and cell is not None:
+            orientation = orientation_sequence.next_orientation()
+            if orientation in ["A", "B"]:
+                from .molecule_builder import align_molecule_plane
+                spacer_template = align_molecule_plane(spacer_template, orientation, cell)
+
         ground_entries = _sort_spacer_entries(ground_labels.get(label, []))
         sky_entries = _sort_spacer_entries(sky_labels.get(label, []))
         if not ground_entries or not sky_entries:
             continue
 
-        nh3_groups = _count_nh3_groups(spacer_template)
+        nh3_groups = count_nh3_groups(spacer_template)
 
         if nh3_groups >= 2:
-            pair_count = min(len(ground_entries), len(sky_entries))
-            for pair_idx in range(pair_count):
-                ground_pos = np.array(ground_entries[pair_idx]["position"], dtype=float)
-                sky_pos = np.array(sky_entries[pair_idx]["position"], dtype=float)
-                direction = sky_pos - ground_pos
+            # Collect all pairs for deterministic vector selection
+            all_starts = []
+            all_targets = []
+            all_pairs_info = []  # Store (ground_entry, sky_entry, ground_pos, sky_pos) for later
+            
+            if cell is None:
+                # Fallback to simple pairing if no cell
+                pair_count = min(len(ground_entries), len(sky_entries))
+                for pair_idx in range(pair_count):
+                    ground_pos = np.array(ground_entries[pair_idx]["position"], dtype=float)
+                    sky_pos = np.array(sky_entries[pair_idx]["position"], dtype=float)
+                    all_starts.append(ground_pos)
+                    all_targets.append(sky_pos)
+                    all_pairs_info.append((ground_entries[pair_idx], sky_entries[pair_idx], ground_pos, sky_pos))
+            else:
+                # For templates like salts, do index-based pairing if groups have equal size
+                if len(ground_entries) == len(sky_entries):
+                    # Index-based pairing: ground_entries[i] pairs with sky_entries[i]
+                    for i in range(len(ground_entries)):
+                        ground_pos = np.array(ground_entries[i]["position"], dtype=float)
+                        sky_pos = np.array(sky_entries[i]["position"], dtype=float)
+                        all_starts.append(ground_pos)
+                        all_targets.append(sky_pos)
+                        all_pairs_info.append((ground_entries[i], sky_entries[i], ground_pos, sky_pos))
+                else:
+                    # PBC-aware pairing: match each ground entry to closest sky entry
+                    sky_positions = np.array([entry["position"] for entry in sky_entries], dtype=float)
+                    used_sky_indices = set()
+
+                    # Pair each ground entry with its closest available sky entry
+                    for ground_entry in ground_entries:
+                        ground_pos = np.array(ground_entry["position"], dtype=float)
+
+                        # Calculate PBC-aware distances from this ground position to all sky positions
+                        distances = _calculate_xy_pbc_distances(ground_pos, sky_positions, cell)
+
+                        # Find the closest unused sky entry
+                        best_sky_idx = None
+                        best_dist = float('inf')
+                        for sky_idx, dist in enumerate(distances):
+                            if sky_idx not in used_sky_indices and dist < best_dist:
+                                best_dist = dist
+                                best_sky_idx = sky_idx
+
+                        if best_sky_idx is None:
+                            continue  # No available sky position to pair with
+
+                        # Mark this sky entry as used
+                        used_sky_indices.add(best_sky_idx)
+                        sky_pos = sky_positions[best_sky_idx]
+                        sky_entry = sky_entries[best_sky_idx]
+
+                        all_starts.append(ground_pos)
+                        all_targets.append(sky_pos)
+                        all_pairs_info.append((ground_entry, sky_entry, ground_pos, sky_pos))
+            
+            # Deterministic vector selection based on fractional coordinates
+            if len(all_starts) > 0 and cell is not None:
+                # Use deterministic vector selection for all pairs
+                vectors = find_optimal_spacer_vectors_global(
+                    all_starts,
+                    all_targets,
+                    cell
+                )
+            else:
+                # Fallback: calculate vectors individually (no PBC)
+                vectors = []
+                for i in range(len(all_starts)):
+                    vec = all_targets[i] - all_starts[i]
+                    vectors.append(vec)
+            
+            # Place spacers using the assigned vectors
+            for i, (ground_entry, sky_entry, ground_pos, sky_pos) in enumerate(all_pairs_info):
+                # Debug: Verify Z coordinates are different
+                if len(ground_pos) >= 3 and len(sky_pos) >= 3:
+                    direction = vectors[i] if i < len(vectors) else (sky_pos - ground_pos)
+                    z_diff = abs(direction[2]) if len(direction) >= 3 else abs(ground_pos[2] - sky_pos[2])
+                    if z_diff < 1e-6:
+                        import warnings
+                        warnings.warn(
+                            f"Warning: Ground and sky positions have same Z coordinate! "
+                            f"Ground pos={ground_pos}, Sky pos={sky_pos}, Z diff={z_diff:.6f}. "
+                            f"Ground slab z={ground_slab.get('z', 'unknown')}, Sky slab z={sky_slab.get('z', 'unknown') if sky_slab else 'none'}. "
+                            f"This will cause molecules to be placed in plane."
+                        )
+                
+                # CRITICAL FIX: Only adjust Z, preserve X, Y coordinates
+                # This ensures molecules are placed at correct S# site positions
+                direction = vectors[i] if i < len(vectors) else (sky_pos - ground_pos)
                 dist = np.linalg.norm(direction)
+                
                 if dist > 1e-6:
                     unit = direction / dist
-                    ground_pos = ground_pos - unit
-                    sky_pos = sky_pos + unit
+                    # Only adjust Z component to move positions slightly outward
+                    # Preserve X, Y to keep molecules at correct S# sites
+                    ground_pos_adjusted = ground_pos.copy()
+                    sky_pos_adjusted = sky_pos.copy()
+                    ground_pos_adjusted[2] = ground_pos[2] - unit[2]  # Only adjust Z
+                    sky_pos_adjusted[2] = sky_pos[2] + unit[2]  # Only adjust Z
+                else:
+                    ground_pos_adjusted = ground_pos.copy()
+                    sky_pos_adjusted = sky_pos.copy()
 
-                ground_pos, sky_pos = _adjust_positions_for_double_spacer(
-                    ground_pos,
-                    sky_pos,
+                ground_pos_adjusted, sky_pos_adjusted = _adjust_positions_for_double_spacer(
+                    ground_pos_adjusted,
+                    sky_pos_adjusted,
                     spacer_template,
                 )
 
+                # Update target vector Z component to match adjusted positions
+                target_vector = None
+                if i < len(vectors):
+                    target_vector = vectors[i].copy()
+                    target_vector[2] = sky_pos_adjusted[2] - ground_pos_adjusted[2]
+
+                # Place the spacer molecule using the specific vector from global optimization
                 placed = place_double_spacer_between_positions(
                     spacer_template.copy(),
-                    ground_pos,
-                    sky_pos,
+                    ground_pos_adjusted,
+                    sky_pos_adjusted,
+                    optimizer=optimizer,
+                    cell=cell,
+                    target_vector=target_vector,
+                    existing_structure=structure if collision_strategy != "off" else None,
+                    collision_strategy=collision_strategy,
                 )
                 if placed is not None and len(placed) > 0:
+                    # Check for and resolve collisions before adding to structure
+                    if collision_strategy != "off":
+                        placed, collision_resolved = resolve_collisions(
+                            placed, structure, cell=cell, strategy=collision_strategy
+                        )
+                        if not collision_resolved and collision_strategy == "reject":
+                            continue  # Skip this spacer placement
+
+                    # Add spacer atoms to structure
                     structure = add_atoms(structure, placed)
         else:
+            # Mono spacers: no global optimization needed
+            # Note: orientation alignment was already applied above for the template
+            # Check if spacer is atomic (single atom) - skip collision resolution for atomic spacers
+            is_atomic_spacer = len(spacer_template) == 1
+            
             for entry in ground_entries:
                 placed = _place_mono_sharp_spacer(spacer_template.copy(), entry["position"], 'bottom')
                 if placed is not None and len(placed) > 0:
+                    # Skip collision resolution for atomic spacers (they must stay at exact positions)
+                    if collision_strategy != "off" and not is_atomic_spacer:
+                        placed, collision_resolved = resolve_collisions(
+                            placed, structure, cell=cell, strategy=collision_strategy
+                        )
+                        if not collision_resolved and collision_strategy == "reject":
+                            continue  # Skip this spacer placement
+
                     structure = add_atoms(structure, placed)
             for entry in sky_entries:
                 placed = _place_mono_sharp_spacer(spacer_template.copy(), entry["position"], 'top')
                 if placed is not None and len(placed) > 0:
+                    # Skip collision resolution for atomic spacers (they must stay at exact positions)
+                    if collision_strategy != "off" and not is_atomic_spacer:
+                        placed, collision_resolved = resolve_collisions(
+                            placed, structure, cell=cell, strategy=collision_strategy
+                        )
+                        if not collision_resolved and collision_strategy == "reject":
+                            continue  # Skip this spacer placement
+
                     structure = add_atoms(structure, placed)
 
     return structure
@@ -676,12 +776,16 @@ def _process_floor_slab(
     ground_slab: Dict[str, Any],
     sky_slab: Optional[Dict[str, Any]],
     sharp_sequence: Optional[_SharpSpacerSequence],
+    optimizer: str = "KS",
+    BX_dist: Optional[float] = None,
+    spacer_orientation: Optional[List[str]] = None,
+    collision_strategy: str = "rotate",
 ) -> Atoms:
     """Process a single ground slab and optionally populate sharp spacers to the sky."""
     structure = populate_a_sites(structure, ground_slab)
     structure = populate_b_sites(structure, ground_slab)
     structure = populate_x_sites(structure, ground_slab)
-    structure = populate_sharp(structure, ground_slab, sky_slab, sharp_sequence)
+    structure = populate_sharp(structure, ground_slab, sky_slab, sharp_sequence, optimizer=optimizer, BX_dist=BX_dist, spacer_orientation=spacer_orientation, collision_strategy=collision_strategy)
     return structure
 
 
@@ -694,65 +798,61 @@ def populate_structure(
     Ap_ions: Optional[Union[str, Atoms, List]] = None,
     sharp_spacer: Optional[List[Union[str, Atoms]]] = None,
     site_labels: Optional[Dict[str, List[str]]] = None,
+    optimizer: str = "KS",
+    BX_dist: Optional[float] = None,
+    spacer_orientation: Optional[List[str]] = None,
+    collision_strategy: str = "rotate",
+    wrap_atoms: bool = True,
+    pbc_z: bool = True,
 ) -> Atoms:
     """
     Populate structure matrix with atoms based on site labels (A, B, X, Ap, S#).
-    
+
     Floors are processed strictly in the provided cartesian order (floors_cart).
     Handles double spacers (sharp_spacer) for S# sites that connect adjacent layers.
+
+    Parameters
+    ----------
+    collision_strategy : str, default "rotate"
+        Strategy for resolving atomic collisions during placement:
+        - "rotate": Rotate molecule around N-N axis to find collision-free orientation
+        - "nudge": Apply small XY translations to resolve collisions
+        - "optimize": Use geometry optimization to push atoms apart (slowest but most robust)
+        - "reject": Raise warning and skip placement if collisions detected
+        - "off": Skip collision detection entirely
+    wrap_atoms : bool, default True
+        Whether to wrap atoms back into the cell after population
+    pbc_z : bool, default True
+        Whether to enable periodic boundary conditions in Z direction
     """
     # Normalize A-site ions (convert molecular strings to Atoms objects)
-    if isinstance(A_ions, list):
-        A_ions_normalized = []
-        for A in A_ions:
-            if isinstance(A, Atoms):
-                A_ions_normalized.append(A)
-            elif isinstance(A, str):
-                A_ions_normalized.append(normalize_a_site(A))
-            else:
-                A_ions_normalized.append(normalize_a_site(A))
-        A_ions = A_ions_normalized
-    else:
-        # Single value
-        if isinstance(A_ions, str):
-            A_ions = normalize_a_site(A_ions)
-        # else: already Atoms object
+    A_ions = _normalize_ion_list(A_ions, normalize_a_site)
 
     # Normalize Ap-site ions if provided
-    if Ap_ions is not None:
-        if isinstance(Ap_ions, list):
-            Ap_normalized = []
-            for Ap in Ap_ions:
-                if isinstance(Ap, Atoms):
-                    Ap_normalized.append(Ap)
-                elif isinstance(Ap, str):
-                    Ap_normalized.append(normalize_a_site(Ap))
-                else:
-                    Ap_normalized.append(normalize_a_site(Ap))
-            Ap_ions = Ap_normalized
-        else:
-            if isinstance(Ap_ions, str):
-                Ap_ions = normalize_a_site(Ap_ions)
-            # else: already Atoms object
-    
+    Ap_ions = _normalize_ion_list(Ap_ions, normalize_a_site)
+
     # Normalize sharp_spacer if provided
-    sharp_spacer_normalized = None
     if sharp_spacer is not None:
-        sharp_spacer_normalized = []
-        for ds in sharp_spacer:
-            if isinstance(ds, Atoms):
-                sharp_spacer_normalized.append(ds.copy())
-            elif isinstance(ds, str):
-                # Try to normalize as spacer
+        def normalize_spacer_or_fallback(ds):
+            if isinstance(ds, str):
+                # Try to normalize as spacer first
                 try:
                     from q2D_Materials.pipeline.common import normalize_spacer
-                    sharp_spacer_normalized.append(normalize_spacer(ds))
+                    return normalize_spacer(ds)
                 except:
                     # Fallback to A-site normalization
-                    sharp_spacer_normalized.append(normalize_a_site(ds))
-            else:
-                sharp_spacer_normalized.append(ds)
+                    return normalize_a_site(ds)
+            return ds
+
+        sharp_spacer_normalized = _normalize_ion_list(sharp_spacer, normalize_spacer_or_fallback, copy_atoms=True)
+    else:
+        sharp_spacer_normalized = None
     
+    n_b_input = 0
+    if hasattr(matrix, "positions") and matrix.positions and "B" in matrix.positions:
+        pos_b = matrix.positions["B"]
+        n_b_input = pos_b.shape[0] if hasattr(pos_b, "shape") else len(pos_b)
+
     # Assign ions to positions using patterns with site labels
     assignments = assign_ions_to_sites(
         matrix.positions,
@@ -772,28 +872,41 @@ def populate_structure(
         assignment_lookup[key] = (st, ion, pos, label)
 
     floors: List[Tuple[float, List[Tuple[str, Union[str, Atoms], np.ndarray, str]]]] = []
+    n_entries_total = sum(len(f) for f in floors_cart)
+    n_skipped = 0
     for floor_entries in floors_cart:
         resolved: List[Tuple[str, Union[str, Atoms], np.ndarray, str]] = []
         for entry in floor_entries:
             if len(entry) < 4:
+                n_skipped += 1
                 continue
             st, x, y, z = entry[0], float(entry[1]), float(entry[2]), float(entry[3])
-            key = (st, st, round(x, 4), round(y, 4), round(z, 4))
+            x_round, y_round, z_round = round(x, 4), round(y, 4), round(z, 4)
+            key = (st, st, x_round, y_round, z_round)
             chosen = assignment_lookup.get(key)
             if chosen is None:
-                # fallback: ignore label match
+                # fallback: ignore label match, but must match z-coordinate exactly
+                # This ensures consecutive layers (like M1-M1) with same x,y but different z get correct assignments
                 for k, v in assignment_lookup.items():
-                    if k[0] == st and k[2] == round(x, 4) and k[3] == round(y, 4) and k[4] == round(z, 4):
+                    if (k[0] == st and 
+                        k[2] == x_round and 
+                        k[3] == y_round and 
+                        abs(k[4] - z_round) < 1e-4):  # Match z-coordinate with tolerance
                         chosen = v
                         break
             if chosen is None:
+                n_skipped += 1
                 continue
             st_r, ion_r, pos_r, label_r = chosen
             # S# sites will have ion_r=None from assign_ions_to_sites - will be assigned per floor pair
             resolved.append((st_r, ion_r, np.array([x, y, z], dtype=float), label_r))
         if resolved:
             floors.append((resolved[0][2][2], resolved))
-    
+
+    if n_skipped > 0:
+        import sys
+        print(f"[populate_structure] WARNING: {n_skipped} floor entries skipped (no assignment match); total entries={n_entries_total}", file=sys.stderr, flush=True)
+
     # Prepare ordered slabs (ground/sky metadata)
     floors.sort(key=lambda x: x[0])
     resolved_floors = [entries for _, entries in floors]
@@ -802,7 +915,7 @@ def populate_structure(
     # Initialize structure and cell
     structure = Atoms()
     structure.set_cell(matrix.cell_vectors)
-    structure.pbc = [1, 1, 1]
+    structure.pbc = [1, 1, pbc_z]
 
     sharp_sequence = _SharpSpacerSequence(sharp_spacer_normalized) if sharp_spacer_normalized else None
 
@@ -814,9 +927,73 @@ def populate_structure(
             ground_slab,
             sky_slab,
             sharp_sequence,
+            optimizer=optimizer,
+            BX_dist=BX_dist,
+            spacer_orientation=spacer_orientation,
+            collision_strategy=collision_strategy,
         )
 
+    _b = B_ions[0] if isinstance(B_ions, list) and B_ions else B_ions
+    b_sym = _b.get_chemical_symbols()[0] if hasattr(_b, "get_chemical_symbols") else (_b if isinstance(_b, str) else None)
+    n_b_final = sum(1 for s in structure.get_chemical_symbols() if s == b_sym) if b_sym else 0
+
+    # Ensure all positions are inside the cell (no negative or > L coords from Glazer/spacer)
+    # For monolayers (pbc_z=False), skip wrapping to avoid molecules wrapping around Z
+    if wrap_atoms:
+        structure.wrap()
+
     return structure
+
+
+def get_existing_spacer_molecules(structure: Atoms) -> List[Atoms]:
+    """
+    Extract individual spacer molecules from structure.
+
+    Groups atoms by connectivity or site_role tag to identify separate molecules.
+
+    Parameters
+    ----------
+    structure : Atoms
+        The full structure containing multiple molecules
+
+    Returns
+    -------
+    List[Atoms]
+        List of individual spacer molecules
+    """
+    from .spacer import SITE_ROLE_KEY
+
+    spacer_molecules = []
+
+    if len(structure) == 0:
+        return spacer_molecules
+
+    # Check if we have site_role information
+    if SITE_ROLE_KEY in structure.arrays:
+        site_roles = structure.arrays[SITE_ROLE_KEY]
+
+        # Find all unique molecule IDs (groups of atoms with same site_role)
+        unique_roles = set()
+        for role in site_roles:
+            if role == "spacer":
+                unique_roles.add(role)
+
+        # For now, treat all spacer atoms as one molecule (simplified approach)
+        # In practice, you'd want to group by connectivity or molecule ID
+        spacer_indices = [i for i, role in enumerate(site_roles) if role == "spacer"]
+
+        if spacer_indices:
+            # Create a molecule from all spacer atoms
+            spacer_atoms = structure[spacer_indices]
+            spacer_molecules.append(spacer_atoms)
+
+    else:
+        # Fallback: no site_role info, try to identify molecules by connectivity
+        # This is a simplified approach - in practice you'd use bond detection
+        # For now, return empty list (no existing spacers to avoid)
+        pass
+
+    return spacer_molecules
 
 
 def get_effective_spacer_size(spacer: Atoms) -> float:

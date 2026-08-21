@@ -10,12 +10,12 @@ from q2D_Materials.core.creator import q2D_creator
 q2d = q2D_creator()
 
 # Two simple monolayers
-mono1 = q2d.create_perovskite(
+mono1 = q2d.create_structure(
     structure_type="monolayer",
     A_ions="MA", B_ions="Pb", X_ions="I",
     xy_expansion=(1, 1), template="cubic", vacuum=12.0,
 )
-mono2 = q2d.create_perovskite(
+mono2 = q2d.create_structure(
     structure_type="monolayer",
     A_ions="FA", B_ions="Sn", X_ions="Br",
     xy_expansion=(1, 1), template="cubic", vacuum=12.0,
@@ -46,5 +46,5 @@ bilayer = q2d.twist(
 
 Regenerate the frames:
 ```bash
-nix develop -c python3 Examples/plot.py
+python3 Examples/plot.py
 ```

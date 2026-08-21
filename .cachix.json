@@ -1,0 +1,8 @@
+{
+  "cachix": [
+    {
+      "name": "q2dmaterials",
+      "public-key": "q2dmaterials.cachix.org-1:b8LJh7sqNfGf2fFzeY8ofYpXtkBsQZcvStPZk2HGlmg="
+    }
+  ]
+}

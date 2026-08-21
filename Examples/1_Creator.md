@@ -18,32 +18,39 @@ q2d = q2D_creator()
 base = dict(structure_type="bulk", A_ions="MA", B_ions="Pb", X_ions="I", xy_expansion=(1, 1))
 
 # Same geometry, different chemistry
-cubic = q2d.create_perovskite(template="cubic", **base)
-csbr = q2d.create_perovskite(template="cubic", A_ions="Cs", B_ions="Sn", X_ions="Br", xy_expansion=(1, 1))
+cubic = q2d.create_structure(template="cubic", **base)
+csbr = q2d.create_structure(template="cubic", A_ions="Cs", B_ions="Sn", X_ions="Br", xy_expansion=(1, 1))
 
 # Same chemistry, different geometry
-cubic_geom   = q2d.create_perovskite(template="cubic", **base)
-reduced_geom = q2d.create_perovskite(template="reduced", **base)
+cubic_geom   = q2d.create_structure(template="cubic", **base)
+reduced_geom = q2d.create_structure(template="reduced", **base)
 
 # DJ spacer example (two spacer layers with S#)
-dj = q2d.create_perovskite(
+dj = q2d.create_structure(
     template="cubic",
     structure_type="bulk",
     layer_sequence="DJ",
     thickness=2,
     A_ions="MA", B_ions="Pb", X_ions="I",
-    sharp_spacer="[NH3+]CCCC[NH3+]",
+    spacer="[NH3+]CCCC[NH3+]",
     glazer_angles=[0, 0, 3],
     glazer_pattern=["0", "0", "+"],
 )
 ```
 
 ### Visual cue (cubic storyboard)
+
+**Atomic A-site (Cs):**
+
+![L1-Cs](./images/creator-L1-Cs.png) ![L1-L2-Cs](./images/creator-L1-L2-Cs.png) ![L1-L2-L1-Cs](./images/creator-L1-L2-L1-Cs.png)
+
+**Molecular A-site (MA):**
+
 ![L1](./images/creator-L1.png) ![L1-L2](./images/creator-L1-L2.png) ![L1-L2-L1](./images/creator-L1-L2-L1.png)
 
 ### Pattern mixing in one line
 ```python
-mixed = q2d.create_perovskite(
+mixed = q2d.create_structure(
     template="cubic",
     structure_type="bulk",
     A_ions=["Cs", "MA", "FA", "Cs"],   # maps to 4 A-sites when xy_expansion=(2,2)
@@ -57,6 +64,27 @@ Patterns just cycle to fill positions: short lists repeat, matching the count im
 ### Custom bond distances
 If you need experimental matching, pass `BX_dist=3.18` (Å). Otherwise it auto-calculates from the ion tables.
 
+### Custom interlayer distances
+Control the vertical spacing between layers with explicit distances in the `layer_sequence` string:
+```python
+# Explicit distances override BX-based spacing for specific gaps
+custom_gaps = q2d.create_structure(
+    template="cubic",
+    structure_type="bulk",
+    A_ions="MA", B_ions="Pb", X_ions="I",
+    layer_sequence="L1-(1.5)-L2-(2.0)-L1"  # 1.5Å between L1-L2, 2.0Å between L2-L1
+)
+
+# Mix explicit distances with defaults
+mixed_gaps = q2d.create_structure(
+    template="cubic",
+    structure_type="bulk",
+    A_ions="MA", B_ions="Pb", X_ions="I",
+    layer_sequence="L1-(2.5)-L2-L1-(1.8)-L2"  # First and third gaps explicit, second uses BX
+)
+```
+Numbers in parentheses are absolute distances in Å. Gaps without numbers use the standard BX-based spacing.
+
 ### What to remember
 - Template = where; your args = what.
 - `layer_sequence` lets you reuse one template for many stacks.
@@ -66,5 +94,5 @@ If you need experimental matching, pass `BX_dist=3.18` (Å). Otherwise it auto-c
 
 Regenerate the storyboard images any time:
 ```bash
-nix develop -c python3 Examples/plot.py
+python3 Examples/plot.py
 ```

@@ -1,20 +1,16 @@
-"""
-Template loader rewritten to emit stacked floors with cartesian coordinates.
-
-The builder outputs numbered floors keyed as strings ("1", "2", ...) so callers
-can grab floors directly (schema["1"], schema["2"], ...). Each floor stores
-cartesian coordinates and the layer name is preserved separately.
-"""
+"""Template loader for stacked floors with cartesian coordinates."""
 
 import json
 import os
 import re
 from collections import OrderedDict
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
-from q2D_Materials.builders.glazer_tilting import apply_glazer_tilt
+from q2D_Materials.builders.glazer_tilting import apply_glazer_tilt, apply_glazer_tilt_from_notation
+from q2D_Materials.builders.glazer_notation import resolve_glazer_input
 
 
 # -----------------------------------------------------------------------------
@@ -23,16 +19,15 @@ from q2D_Materials.builders.glazer_tilting import apply_glazer_tilt
 
 
 def available_templates() -> List[str]:
-    """Return list of template names based on JSON files in data/."""
-    template_dir = os.path.dirname(os.path.abspath(__file__))
-    data_dir = os.path.join(template_dir, "data")
-    if not os.path.exists(data_dir):
+    """Return list of template names based on JSON files in q2D_Materials/data/templates/."""
+    data_dir = Path(__file__).resolve().parent.parent / "data" / "templates"
+    if not data_dir.exists():
         return []
 
     names: List[str] = []
-    for fname in os.listdir(data_dir):
-        if fname.endswith(".json"):
-            names.append(os.path.splitext(fname)[0])
+    for fname in data_dir.iterdir():
+        if fname.suffix == ".json":
+            names.append(fname.stem)
     return sorted(names)
 
 
@@ -46,33 +41,38 @@ class FloorSchema:
     xy_expansion: Tuple[int, int]
 
 
+def _count_b_in_floors(floors: "OrderedDict[str, List[List[float]]]") -> int:
+    """Count B-site entries across all floors (each B = one octahedron)."""
+    return sum(1 for entries in floors.values() for entry in entries if entry[0] == "B")
+
+
 def build_floor_schema(
-    template_name: str,
+    template_name: str | Dict,
     BX_dist: float = 3.0,
     jahn_teller_dist: float = 1.0,
     layer_sequence: Optional[List[str] | str] = None,
     xy_expansion: Tuple[int, int] = (1, 1),
     sharp_spacer_nn_distance: Optional[float] = None,
     glazer_angles: Optional[List[float]] = None,
-    glazer_pattern: Optional[List[str]] = None,
+    glazer_pattern: Optional[List[str] | str] = None,
+    lattice_multipliers: Optional[List[float]] = None,
+    interlayer_distances: Optional[Dict[int, float]] = None,
 ) -> FloorSchema:
-    """
-    Build a numbered-floor schema with cartesian coordinates.
-
-    Floors are keyed as strings ("1", "2", ...) and contain entries
-    [site_label, x_cart, y_cart, z_cart]. Layer names (L1, L2, M1, M2, etc.)
-    are stored in floor_names for reference.
-    """
+    """Build a numbered-floor schema with cartesian coordinates."""
     data = _load_template_json(template_name)
     angles = tuple(data.get("angles", [90.0, 90.0, 90.0]))
 
     layers, layer_names = _resolve_layers(data, layer_sequence)
     z_positions, total_height = _compute_layer_heights(
-        layers, layer_names, BX_dist=BX_dist, sharp_spacer_nn_distance=sharp_spacer_nn_distance
+        layers, layer_names, BX_dist=BX_dist, sharp_spacer_nn_distance=sharp_spacer_nn_distance, interlayer_distances=interlayer_distances
     )
 
     lattice_lengths = _calculate_lattice_lengths(
-        data, BX_dist, total_height, jahn_teller_dist=jahn_teller_dist
+        data,
+        BX_dist,
+        total_height,
+        jahn_teller_dist=jahn_teller_dist,
+        lattice_multipliers_override=lattice_multipliers,
     )
     cell_matrix = cell_matrix_from_parameters(*lattice_lengths, *angles)
 
@@ -89,13 +89,19 @@ def build_floor_schema(
             entries.append([site, float(cart[0]), float(cart[1]), float(cart[2])])
         floors[floor_key] = entries
 
-    if glazer_angles is not None and glazer_pattern is not None:
+    n_b_unit = _count_b_in_floors(floors)
+
+    if glazer_pattern is not None:
         floors, cell_matrix, lattice_lengths = _apply_glazer_to_floors(
-            floors, lattice_lengths, glazer_angles, glazer_pattern
+            floors, lattice_lengths, glazer_angles, glazer_pattern, BX_dist=BX_dist
         )
+        n_b_after_glazer = _count_b_in_floors(floors)
 
     if xy_expansion != (1, 1):
         floors, cell_matrix = _apply_xy_expansion(floors, cell_matrix, xy_expansion)
+        lattice_lengths = tuple(float(x) for x in np.linalg.norm(cell_matrix, axis=1))
+        n_b_after_expansion = _count_b_in_floors(floors)
+        nx, ny = xy_expansion
 
     return FloorSchema(
         floors=floors,
@@ -108,12 +114,7 @@ def build_floor_schema(
 
 
 def flatten_floor_schema(schema: FloorSchema) -> Tuple[Dict[str, np.ndarray], Dict[str, List[str]]]:
-    """
-    Collapse floors into a site-indexed position matrix.
-
-    Returns (positions_by_site, site_labels) where positions are cartesian numpy
-    arrays keyed by site type (A, B, X, Ap, S1, ...). Labels mirror the site.
-    """
+    """Collapse floors into a site-indexed position matrix."""
     positions: Dict[str, List[List[float]]] = {}
     labels: Dict[str, List[str]] = {}
 
@@ -134,10 +135,7 @@ def flatten_floor_schema(schema: FloorSchema) -> Tuple[Dict[str, np.ndarray], Di
 def cell_matrix_from_parameters(
     a: float, b: float, c: float, alpha: float, beta: float, gamma: float
 ) -> np.ndarray:
-    """
-    Convert lattice lengths and angles (in degrees) to a 3x3 Cartesian matrix.
-    Aligns c with Z, b in YZ plane.
-    """
+    """Convert lattice lengths and angles (in degrees) to a 3x3 Cartesian matrix."""
     alpha_r = np.radians(alpha)
     beta_r = np.radians(beta)
     gamma_r = np.radians(gamma)
@@ -170,9 +168,19 @@ def cell_matrix_from_parameters(
 # -----------------------------------------------------------------------------
 
 
-def _load_template_json(template_name: str) -> Dict:
-    template_dir = os.path.dirname(os.path.abspath(__file__))
-    json_path = os.path.join(template_dir, "data", f"{template_name}.json")
+def _load_template_json(template_name: str | Dict) -> Dict:
+    """Load a template from a JSON file or return it directly if it's already a dict/string."""
+    if isinstance(template_name, dict):
+        return template_name
+        
+    if isinstance(template_name, str) and template_name.strip().startswith("{"):
+        try:
+            return json.loads(template_name)
+        except json.JSONDecodeError:
+            pass
+    # Load from q2D_Materials/data/templates
+    data_dir = Path(__file__).resolve().parent.parent / "data" / "templates"
+    json_path = data_dir / f"{template_name}.json"
     with open(json_path, "r") as f:
         return json.load(f)
 
@@ -224,13 +232,9 @@ def _compute_layer_heights(
     layer_names: List[str],
     BX_dist: float,
     sharp_spacer_nn_distance: Optional[float],
+    interlayer_distances: Optional[Dict[int, float]] = None,
 ) -> Tuple[List[float], float]:
-    """
-    Return absolute z for each layer start and total c-length.
-
-    Any consecutive layers that both contain spacer sites (S#) use the
-    spacer span (sharp_spacer_nn_distance or 2*BX_dist). All other gaps use BX_dist.
-    """
+    """Return absolute z for each layer start and total c-length."""
     if not layer_names:
         return [], 0.0
 
@@ -241,12 +245,19 @@ def _compute_layer_heights(
         prev_layer = layers[idx - 1]
         curr_layer = layers[idx]
         gap = BX_dist
-        if _layer_has_spacer_sites(prev_layer) and _layer_has_spacer_sites(curr_layer):
+        if interlayer_distances is not None and idx - 1 in interlayer_distances:
+            gap = interlayer_distances[idx - 1]
+        elif _layer_has_spacer_sites(prev_layer) and _layer_has_spacer_sites(curr_layer):
             gap = sharp_spacer_nn_distance if sharp_spacer_nn_distance is not None else 2.0 * BX_dist
         cumulative += gap
         z_positions.append(cumulative)
 
-    terminal_gap = BX_dist
+    terminal_gap_idx = len(layer_names) - 1
+    if interlayer_distances is not None and terminal_gap_idx in interlayer_distances:
+        terminal_gap = interlayer_distances[terminal_gap_idx]
+    else:
+        terminal_gap = BX_dist
+
     total_height = cumulative + terminal_gap
     return z_positions, total_height
 
@@ -280,8 +291,9 @@ def _calculate_lattice_lengths(
     BX_dist: float,
     total_height: float,
     jahn_teller_dist: float,
+    lattice_multipliers_override: Optional[List[float]] = None,
 ) -> Tuple[float, float, float]:
-    multipliers = data.get("lattice_multipliers", [2.0, 2.0, 2.0])
+    multipliers = lattice_multipliers_override or data.get("lattice_multipliers", [2.0, 2.0, 2.0])
     if len(multipliers) == 2:
         multipliers = [multipliers[0], multipliers[1], 1.0]
 
@@ -331,40 +343,64 @@ def _apply_xy_expansion(
 def _apply_glazer_to_floors(
     floors: "OrderedDict[str, List[List[float]]]",
     lattice_lengths: Tuple[float, float, float],
-    glazer_angles: List[float],
-    glazer_pattern: List[str],
+    glazer_angles: Optional[List[float]],
+    glazer_pattern: List[str] | str,
+    BX_dist: float = 3.0,
 ) -> Tuple["OrderedDict[str, List[List[float]]]", np.ndarray, Tuple[float, float, float]]:
-    """
-    Apply Glazer tilting to X-sites and return updated floors and cell.
-    """
-    # Build position matrix grouped by site
+    """Apply Glazer tilting to unit-cell floors. XY expansion is applied later by build_floor_schema."""
+    # Build position matrix grouped by site (unit-cell positions)
     position_matrix: Dict[str, List[List[float]]] = {}
     for entries in floors.values():
         for site, x, y, z in entries:
             position_matrix.setdefault(site, []).append([x, y, z])
     original_positions = {k: [list(p) for p in v] for k, v in position_matrix.items()}
 
-    # Tilt only if we have X sites
-    if "X" not in position_matrix or len(position_matrix["X"]) == 0:
-        cell_matrix = cell_matrix_from_parameters(*lattice_lengths, 90.0, 90.0, 90.0)
+    a, b, c = lattice_lengths
+    if (
+        "X" not in position_matrix
+        or len(position_matrix["X"]) == 0
+        or "B" not in position_matrix
+        or len(position_matrix["B"]) == 0
+    ):
+        cell_matrix = cell_matrix_from_parameters(a, b, c, 90.0, 90.0, 90.0)
         return floors, cell_matrix, lattice_lengths
 
-    tilted_positions, lv_unit, cell_lengths = apply_glazer_tilt(
-        position_matrix,
-        lattice_vectors=lattice_lengths,
-        supercell=(1, 1, 1),
-        angles=glazer_angles,
-        tilt_pattern=glazer_pattern,
-        adjust_cell=True,
-    )
-    # Preserve any site types not touched by tilting (e.g., S#)
+    c_unit_ref = 2.0 * BX_dist
+    total_height = lattice_lengths[2]
+    nz = max(1, int(round(total_height / c_unit_ref)))
+    c_unit = total_height / nz
+    lattice_vectors = (a, b, c_unit)
+    supercell_dims = (1, 1, nz)
+
+    if isinstance(glazer_pattern, str):
+        notation = resolve_glazer_input(glazer_pattern)
+        tilted_positions, lv_unit, cell_lengths = apply_glazer_tilt_from_notation(
+            position_matrix,
+            lattice_vectors=lattice_vectors,
+            supercell=supercell_dims,
+            glazer_notation=notation,
+            angles=glazer_angles,
+            adjust_cell=False,
+        )
+    else:
+        if glazer_angles is None:
+            cell_matrix = cell_matrix_from_parameters(a, b, c, 90.0, 90.0, 90.0)
+            return floors, cell_matrix, lattice_lengths
+
+        tilted_positions, lv_unit, cell_lengths = apply_glazer_tilt(
+            position_matrix,
+            lattice_vectors=lattice_vectors,
+            supercell=supercell_dims,
+            angles=glazer_angles,
+            tilt_pattern=glazer_pattern,
+            adjust_cell=False,
+        )
+
     for site, coords in original_positions.items():
         if site not in tilted_positions:
             tilted_positions[site] = coords
 
-    # Rebuild floors using tilted positions in original order
     updated_floors: "OrderedDict[str, List[List[float]]]" = OrderedDict()
-    # Prepare iterators per site to consume positions in insertion order
     site_iterators: Dict[str, List[List[float]]] = {k: list(v) for k, v in tilted_positions.items()}
     for floor_key, entries in floors.items():
         new_entries: List[List[float]] = []
@@ -373,20 +409,16 @@ def _apply_glazer_to_floors(
                 pos = site_iterators[site].pop(0)
                 new_entries.append([site, pos[0], pos[1], pos[2]])
             else:
-                # Fallback to original coordinates for this floor/site if available
                 orig = original_positions.get(site, [[0.0, 0.0, 0.0]])
                 pos = orig[0]
                 new_entries.append([site, pos[0], pos[1], pos[2]])
         updated_floors[floor_key] = new_entries
 
-    # Build orthogonal cell from updated lengths
-    cell_matrix = np.diag(cell_lengths)
-    return updated_floors, cell_matrix, tuple(cell_lengths)
+    _, _, nz = supercell_dims
+    full_lengths = (lv_unit[0], lv_unit[1], lv_unit[2] * nz)
+    cell_matrix = np.diag(full_lengths)
 
-
-# -----------------------------------------------------------------------------
-# Structure matrix helpers
-# -----------------------------------------------------------------------------
+    return updated_floors, cell_matrix, full_lengths
 
 
 @dataclass

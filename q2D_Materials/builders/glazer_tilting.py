@@ -1,16 +1,19 @@
-"""
-Glazer-style octahedral tilting applied to position matrices (no ASE atoms).
-
-Given cartesian positions (as produced by templates.build_bulk_cell) and lattice vectors,
-apply per-axis small rotations to X-site positions about their nearest B-site
-center, following a Glazer tilt pattern.
-"""
+"""Glazer-style octahedral tilting applied to position matrices."""
 
 from typing import Dict, List, Tuple, Optional
 
 import numpy as np
 
+from .glazer_notation import parse_glazer_notation, suggest_angles_for_notation
+
 PositionMatrix = Dict[str, List[List[float]]]
+
+DEFAULT_NUMERICAL_TOLERANCE = 1e-6
+DEFAULT_DEDUPLICATION_THRESHOLD = 0.1
+DEFAULT_OVERLAP_THRESHOLD = 0.1
+DEFAULT_ADJUSTMENT_STEP = 0.01
+DEFAULT_CELL_PADDING_FACTOR = 1e-6
+DEFAULT_MIN_CELL_PADDING = 1e-5
 
 
 def _rotation_matrix(axis: str, angle_deg: float) -> np.ndarray:
@@ -27,13 +30,14 @@ def _rotation_matrix(axis: str, angle_deg: float) -> np.ndarray:
 
 
 def _cell_index(
-    vec: np.ndarray, lv: np.ndarray, supercell: Tuple[int, int, int]
+    vec: np.ndarray, lv: np.ndarray, supercell: Tuple[int, int, int], 
+    numerical_tolerance: float = DEFAULT_NUMERICAL_TOLERANCE
 ) -> Tuple[int, int, int]:
     """Return cell indices in range [0, n-1] for each axis, wrapping with PBC."""
     frac = vec / lv
-    ix = int(np.floor(frac[0] + 1e-6)) % supercell[0]
-    iy = int(np.floor(frac[1] + 1e-6)) % supercell[1]
-    iz = int(np.floor(frac[2] + 1e-6)) % supercell[2]
+    ix = int(np.floor(frac[0] + numerical_tolerance)) % supercell[0]
+    iy = int(np.floor(frac[1] + numerical_tolerance)) % supercell[1]
+    iz = int(np.floor(frac[2] + numerical_tolerance)) % supercell[2]
     return ix, iy, iz
 
 
@@ -55,9 +59,10 @@ def _nearest_b_with_pbc(
 
 
 def _deduplicate_positions_pbc(
-    positions: List[List[float]], cell_len: np.ndarray, tol: float = 0.5
+    positions: List[List[float]], cell_len: np.ndarray, 
+    deduplication_threshold: float = DEFAULT_DEDUPLICATION_THRESHOLD
 ) -> List[List[float]]:
-    """Remove positions closer than tol using minimum-image distances."""
+    """Remove positions closer than threshold using minimum-image distances."""
     unique: List[np.ndarray] = []
     for pos in positions:
         p = np.asarray(pos, dtype=float)
@@ -65,7 +70,7 @@ def _deduplicate_positions_pbc(
         for u in unique:
             delta = p - u
             delta -= np.round(delta / cell_len) * cell_len
-            if np.linalg.norm(delta) < tol:
+            if np.linalg.norm(delta) < deduplication_threshold:
                 is_dup = True
                 break
         if not is_dup:
@@ -106,51 +111,32 @@ def _adjust_network_connectivity(
     displacements: List[np.ndarray],
     supercell: Tuple[int, int, int],
     lattice_vectors: Tuple[float, float, float],
+    overlap_threshold: float = DEFAULT_OVERLAP_THRESHOLD,
+    adjustment_step: float = DEFAULT_ADJUSTMENT_STEP,
 ) -> PositionMatrix:
-    """
-    Adjust positions after rotations to maintain octahedral network connectivity.
-
-    This implements a simplified version of the network adjustment from the reference
-    DistortPerovskite code, ensuring that octahedra remain connected across supercell boundaries.
-    """
+    """Adjust positions after rotations to maintain octahedral network connectivity."""
     nx, ny, nz = supercell
     lv = np.asarray(lattice_vectors, dtype=float)
-
-    # Start with rotated positions
     adjusted_positions = {
         "A": [list(p) for p in position_matrix.get("A", [])],
         "B": [list(p) for p in position_matrix.get("B", [])],
         "X": rotated_x_positions.copy(),
     }
-
-    # Convert to numpy arrays for easier manipulation
     x_positions = np.asarray(rotated_x_positions, dtype=float)
     b_positions = np.asarray(position_matrix.get("B", []), dtype=float)
 
-    # For each X atom, find its nearest B atom and ensure proper connectivity
     for i, x_pos in enumerate(x_positions):
-        # Find nearest B atom
         distances = np.linalg.norm(b_positions - x_pos, axis=1)
         nearest_b_idx = np.argmin(distances)
         nearest_b = b_positions[nearest_b_idx]
 
-        # The X atom should be at approximately bond_length from B
-        # If it's significantly closer/farther, there might be connectivity issues
-        bond_length = np.linalg.norm(x_pos - nearest_b)
-
-        # Check if this X atom is involved in any problematic overlaps
         for j, other_x in enumerate(x_positions):
             if i == j:
                 continue
-
             dist = np.linalg.norm(x_pos - other_x)
-            # If two X atoms are very close, they might be duplicates from boundary issues
-            if dist < 0.5:  # Much more conservative threshold
-                # Adjust the position to avoid overlap
-                # Move along the vector away from the nearest B atom
+            if dist < overlap_threshold:
                 direction = (x_pos - nearest_b) / np.linalg.norm(x_pos - nearest_b)
-                # Small adjustment to separate overlapping atoms
-                adjustment = direction * 0.01
+                adjustment = direction * adjustment_step
                 adjusted_positions["X"][i] = (x_pos + adjustment).tolist()
 
     return adjusted_positions
@@ -163,61 +149,43 @@ def apply_glazer_tilt(
     angles: List[float],
     tilt_pattern: List[str],
     adjust_cell: bool = True,
+    numerical_tolerance: float = DEFAULT_NUMERICAL_TOLERANCE,
+    deduplication_threshold: float = DEFAULT_DEDUPLICATION_THRESHOLD,
+    cell_padding_factor: float = DEFAULT_CELL_PADDING_FACTOR,
+    min_cell_padding: float = DEFAULT_MIN_CELL_PADDING,
 ) -> Tuple[PositionMatrix, Tuple[float, float, float], Tuple[float, float, float]]:
-    """
-    Apply Glazer tilts to X sites about their nearest B site.
-
-    Parameters
-    ----------
-    position_matrix : dict
-        Cartesian positions with keys 'A','B','X' (output of templates.build_bulk_cell).
-    lattice_vectors : (float, float, float)
-        Lattice vector lengths (a, b, c) for the underlying unit cell.
-    supercell : (int, int, int)
-        Supercell replication (nx, ny, nz) that produced the positions.
-    angles : list[float]
-        Rotation angles [omega_x, omega_y, omega_z] in degrees.
-    tilt_pattern : list[str]
-        Glazer pattern entries ['+','-','0'] matching angles.
-
-    Returns
-    -------
-    (positions, lv_unit, cell_lengths)
-        positions : dict with tilted X; A and B shifted only if cell adjusted.
-        lv_unit : updated unit-cell vector lengths (a,b,c)
-        cell_lengths : full supercell lengths after tilt (A)
-    """
+    """Apply Glazer tilts to X sites about their nearest B site."""
     lv = np.asarray(lattice_vectors, dtype=float)
     nx, ny, nz = supercell
     cell_len = lv * np.asarray(supercell, dtype=float)
     kvecs, angles_eff = _kvecs_from_pattern(angles, tilt_pattern)
 
-    # Build cell index -> B positions for nearest-center lookup
     b_cells: Dict[Tuple[int, int, int], List[np.ndarray]] = {}
     for bpos in position_matrix.get("B", []):
         bx, by, bz = bpos
-        ix = int(np.floor(bx / lv[0] + 1e-6))
-        iy = int(np.floor(by / lv[1] + 1e-6))
-        iz = int(np.floor(bz / lv[2] + 1e-6))
+        ix = int(np.floor(bx / lv[0] + numerical_tolerance))
+        iy = int(np.floor(by / lv[1] + numerical_tolerance))
+        iz = int(np.floor(bz / lv[2] + numerical_tolerance))
         key = (ix, iy, iz)
         b_cells.setdefault(key, []).append(np.asarray(bpos, dtype=float))
 
     rotated_x: List[List[float]] = []
     for xpos in position_matrix.get("X", []):
         xvec = np.asarray(xpos, dtype=float)
-        ix = int(np.floor(xvec[0] / lv[0] + 1e-6))
-        iy = int(np.floor(xvec[1] / lv[1] + 1e-6))
-        iz = int(np.floor(xvec[2] / lv[2] + 1e-6))
+        ix = int(np.floor(xvec[0] / lv[0] + numerical_tolerance))
+        iy = int(np.floor(xvec[1] / lv[1] + numerical_tolerance))
+        iz = int(np.floor(xvec[2] / lv[2] + numerical_tolerance))
         cell_key = (ix, iy, iz)
 
-        # pick nearest B in this cell, else nearest overall
         candidates = b_cells.get(cell_key, [])
         if not candidates:
             candidates = [np.asarray(bpos, dtype=float) for bpos in position_matrix.get("B", [])]
         b_center = min(candidates, key=lambda b: np.linalg.norm(xvec - b))
 
-        # signed angles per axis using (-1)^dot(shift, kvec)
-        shift = np.array([ix, iy, iz], dtype=int)
+        b_ix = int(np.floor(b_center[0] / lv[0] + numerical_tolerance)) % supercell[0]
+        b_iy = int(np.floor(b_center[1] / lv[1] + numerical_tolerance)) % supercell[1]
+        b_iz = int(np.floor(b_center[2] / lv[2] + numerical_tolerance)) % supercell[2]
+        shift = np.array([b_ix, b_iy, b_iz], dtype=int)
         rot_total = np.eye(3)
         for ax, axis_name in enumerate(["x", "y", "z"]):
             if angles_eff[ax] == 0.0:
@@ -230,34 +198,68 @@ def apply_glazer_tilt(
         x_rot = b_center + rot_total @ rel
         rotated_x.append(x_rot.tolist())
 
-    # Remove any duplicated X atoms that land on periodic boundaries
-    rotated_x = _deduplicate_positions_pbc(rotated_x, cell_len, tol=0.5)
+    rotated_x = _deduplicate_positions_pbc(rotated_x, cell_len, deduplication_threshold)
 
     positions_out: PositionMatrix = {
         "A": [list(p) for p in position_matrix.get("A", [])],
         "B": [list(p) for p in position_matrix.get("B", [])],
         "X": rotated_x,
     }
-    # Preserve Ap sites (spacer attachment points) unchanged
     if "Ap" in position_matrix:
         positions_out["Ap"] = [list(p) for p in position_matrix.get("Ap", [])]
 
-    # Optional cell adjustment: wrap positions back into the original supercell
+    cell_len = lv * np.asarray(supercell, dtype=float)
+    # Always wrap positions into [0, cell_len) so we never output negative or out-of-cell coords
+    for k, plist in positions_out.items():
+        if not plist:
+            continue
+        arr = np.asarray(plist, dtype=float)
+        arr = np.mod(arr, cell_len)
+        positions_out[k] = arr.tolist()
+
     if adjust_cell:
-        cell_len = lv * np.asarray(supercell, dtype=float)
-        padding = np.maximum(cell_len * 1e-6, 1e-5)
+        padding = np.maximum(cell_len * cell_padding_factor, min_cell_padding)
         for k, plist in positions_out.items():
-            # Do not wrap Ap sites; keep their absolute placement for spacer attachment
             if k == "Ap":
                 continue
             if not plist:
                 continue
             arr = np.asarray(plist, dtype=float)
-            arr = np.mod(arr, cell_len)  # wrap into [0, cell_len)
             arr = np.clip(arr, 0.0, cell_len - padding)
             positions_out[k] = arr.tolist()
 
         return positions_out, tuple(lv.tolist()), tuple(cell_len.tolist())
 
-    return positions_out, tuple(lv.tolist()), tuple((lv * np.asarray(supercell)).tolist())
+    return positions_out, tuple(lv.tolist()), tuple(cell_len.tolist())
+
+
+def apply_glazer_tilt_from_notation(
+    position_matrix: PositionMatrix,
+    lattice_vectors: Tuple[float, float, float],
+    supercell: Tuple[int, int, int],
+    glazer_notation: str,
+    angles: Optional[List[float]] = None,
+    base_angle: float = 10.0,
+    adjust_cell: bool = True,
+    numerical_tolerance: float = DEFAULT_NUMERICAL_TOLERANCE,
+    deduplication_threshold: float = DEFAULT_DEDUPLICATION_THRESHOLD,
+    cell_padding_factor: float = DEFAULT_CELL_PADDING_FACTOR,
+    min_cell_padding: float = DEFAULT_MIN_CELL_PADDING,
+) -> Tuple[PositionMatrix, Tuple[float, float, float], Tuple[float, float, float]]:
+    """Apply Glazer tilting using full Glazer notation string."""
+    system = parse_glazer_notation(glazer_notation)
+    if angles is None:
+        angles = suggest_angles_for_notation(glazer_notation, base_angle)
+    return apply_glazer_tilt(
+        position_matrix=position_matrix,
+        lattice_vectors=lattice_vectors,
+        supercell=supercell,
+        angles=angles,
+        tilt_pattern=system.tilt_pattern,
+        adjust_cell=adjust_cell,
+        numerical_tolerance=numerical_tolerance,
+        deduplication_threshold=deduplication_threshold,
+        cell_padding_factor=cell_padding_factor,
+        min_cell_padding=min_cell_padding,
+    )
 

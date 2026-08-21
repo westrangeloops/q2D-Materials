@@ -1,0 +1,87 @@
+"""Element-specific bond radii and constants for perovskite analysis.
+
+This module contains empirical bond distance data tuned for common perovskite
+materials, based on VESTA cutoffs and literature values.
+"""
+
+from ...utils.properties.atomic_properties import get_covalent_radius
+
+PEROVSKITE_BOND_RADII = {
+    ('Pb', 'I'): 3.70, ('I', 'Pb'): 3.70,
+    ('Pb', 'Br'): 3.40, ('Br', 'Pb'): 3.40,
+    ('Pb', 'Cl'): 3.20, ('Cl', 'Pb'): 3.20,
+    ('Pb', 'O'): 3.04, ('O', 'Pb'): 3.04,
+    ('Sn', 'I'): 3.52, ('I', 'Sn'): 3.52,
+    ('Sn', 'Br'): 3.22, ('Br', 'Sn'): 3.22,
+    ('Sn', 'Cl'): 3.13, ('Cl', 'Sn'): 3.13,
+    ('Cs', 'I'): 4.41, ('I', 'Cs'): 4.41,
+    ('Cs', 'Br'): 4.07, ('Br', 'Cs'): 4.07,
+    ('Cs', 'Cl'): 3.91, ('Cl', 'Cs'): 3.91,
+    ('Rb', 'I'): 4.33, ('I', 'Rb'): 4.33,
+    ('Rb', 'Br'): 4.05, ('Br', 'Rb'): 4.05,
+    ('K', 'I'): 4.12, ('I', 'K'): 4.12,
+    ('K', 'Br'): 3.85, ('Br', 'K'): 3.85,
+    ('C', 'C'): 1.89, ('C', 'N'): 1.79, ('N', 'C'): 1.79,
+    ('C', 'H'): 1.20, ('H', 'C'): 1.20,
+    ('N', 'H'): 1.20, ('H', 'N'): 1.20,
+    ('C', 'O'): 1.97, ('O', 'C'): 1.97,
+    ('N', 'N'): 1.88, ('O', 'O'): 1.70,
+    ('C', 'S'): 2.15, ('S', 'C'): 2.15,
+    ('C', 'P'): 1.94, ('P', 'C'): 1.94,
+    ('O', 'H'): 1.20, ('H', 'O'): 1.20,
+    ('N', 'I'): 3.80, ('I', 'N'): 3.80,
+    ('N', 'Br'): 3.60, ('Br', 'N'): 3.60,
+    ('N', 'Cl'): 3.48, ('Cl', 'N'): 3.48,
+    ('H', 'I'): 3.20, ('I', 'H'): 3.20,
+    ('H', 'Br'): 3.00, ('Br', 'H'): 3.00,
+    ('H', 'Cl'): 2.80, ('Cl', 'H'): 2.80,
+}
+
+# COVALENT_RADII removed - now using get_covalent_radius() from atomic_properties
+# This ensures all covalent radii come from covalent_radii.json
+
+AMMONIUM_NITROGEN_ELEMENTS = {'N'}
+
+MOLECULAR_A_SITE_PATTERNS = {
+    'CH6N': 'MA',
+    'CH5N2': 'FA',
+    'H4N': 'NH4',
+}
+
+
+def get_bond_cutoff(symbol1: str, symbol2: str, multiplier: float = 1.1) -> float:
+    """Get bond cutoff distance for two elements.
+
+    Uses PEROVSKITE_BOND_RADII if available, otherwise falls back to
+    sum of covalent radii with a multiplier.
+
+    Parameters
+    ----------
+    symbol1 : str
+        First element symbol
+    symbol2 : str
+        Second element symbol
+    multiplier : float, optional
+        Multiplier for covalent radii sum (default 1.1)
+
+    Returns
+    -------
+    float
+        Maximum bond distance in Angstroms
+
+    Examples
+    --------
+    >>> get_bond_cutoff('Pb', 'I')
+    3.7
+    >>> get_bond_cutoff('C', 'H')
+    1.2
+    >>> get_bond_cutoff('Ti', 'O')
+    2.42
+    """
+    pair = (symbol1, symbol2)
+    if pair in PEROVSKITE_BOND_RADII:
+        return PEROVSKITE_BOND_RADII[pair]
+
+    r1 = get_covalent_radius(symbol1, default=1.5)
+    r2 = get_covalent_radius(symbol2, default=1.5)
+    return (r1 + r2) * multiplier

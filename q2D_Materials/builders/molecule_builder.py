@@ -1,64 +1,30 @@
-"""
-Molecule Builder - Unified module for SMILES conversion and molecular alignment.
+"""Molecule builder for SMILES conversion and molecular alignment."""
 
-This module combines:
-- SMILES string to ASE Atoms conversion
-- Molecular alignment for perovskite structures
-- Special handling for small molecules like NH3
-"""
-
+from typing import List, Tuple, Optional
 import numpy as np
 import pandas as pd
 from ase import Atoms
 
-# Try to import RDKit for SMILES support
-try:
-    from rdkit import Chem
-    from rdkit.Chem import AllChem
-    RDKIT_AVAILABLE = True
-except ImportError:
-    RDKIT_AVAILABLE = False
+# Import RDKit for SMILES support
+from rdkit import Chem
+from rdkit.Chem import AllChem
 
 
-# ============================================================================
 # SMILES Conversion Functions
-# ============================================================================
 
 def smiles_to_xyz(smiles: str, filename: str, optimize_geometry=True, max_attempts=5):
-    """
-    Converts a SMILES string to an XYZ file with robust error handling.
-    Enhanced with multiple optimization strategies and validation.
+    """Convert a SMILES string to an XYZ file."""
 
-    Args:
-        smiles: The SMILES string of the molecule.
-        filename: The path to save the output XYZ file.
-        optimize_geometry: Whether to optimize molecular geometry.
-        max_attempts: Maximum number of embedding attempts.
-        
-    Raises:
-        ImportError: If RDKit is not installed.
-        ValueError: If SMILES string is invalid.
-        RuntimeError: If 3D coordinate generation fails.
-    """
-    if not RDKIT_AVAILABLE:
-        raise ImportError("RDKit is not installed. This functionality is unavailable.")
-
-    # Create a molecule object from the SMILES string
     mol = Chem.MolFromSmiles(smiles)
     if mol is None:
         raise ValueError(f"Invalid SMILES string: {smiles}")
-    
-    # Add hydrogens
     mol = Chem.AddHs(mol)
-    
-    # Validate molecule size
     num_atoms = mol.GetNumAtoms()
     if num_atoms == 0:
         raise ValueError("Molecule has no atoms after hydrogen addition")
     if num_atoms > 1000:
         print(f"Warning: Large molecule with {num_atoms} atoms - this may take time")
-    
-    # Try multiple embedding methods with different parameters
+
     embedding_methods = [
         ("ETKDGv3", lambda: AllChem.EmbedMolecule(mol, AllChem.ETKDGv3())),
         ("ETKDGv2", lambda: AllChem.EmbedMolecule(mol, AllChem.ETKDGv2())),
@@ -69,31 +35,28 @@ def smiles_to_xyz(smiles: str, filename: str, optimize_geometry=True, max_attemp
     
     success = False
     method_used = None
-    
+
     for attempt in range(max_attempts):
         for method_name, method_func in embedding_methods:
             try:
                 result = method_func()
-                if result == 0 or (isinstance(result, int) and result >= 0):  # Success
-                    # Check for NaN coordinates
+                if result == 0 or (isinstance(result, int) and result >= 0):
                     coords = mol.GetConformer().GetPositions()
                     if not np.any(np.isnan(coords)) and not np.any(np.isinf(coords)):
                         success = True
                         method_used = method_name
                         break
-            except Exception as e:
+            except Exception:
                 continue
         if success:
             break
-        
-        # If first attempt failed, try with different random seed
-        for method_name, _ in embedding_methods[:2]:  # Try top methods with new seed
+
+        for method_name, _ in embedding_methods[:2]:
             try:
                 if method_name == "ETKDGv3":
                     result = AllChem.EmbedMolecule(mol, AllChem.ETKDGv3(randomSeed=attempt*1000))
                 elif method_name == "ETKDGv2":
                     result = AllChem.EmbedMolecule(mol, AllChem.ETKDGv2(randomSeed=attempt*1000))
-                
                 if result == 0:
                     coords = mol.GetConformer().GetPositions()
                     if not np.any(np.isnan(coords)) and not np.any(np.isinf(coords)):
@@ -107,16 +70,12 @@ def smiles_to_xyz(smiles: str, filename: str, optimize_geometry=True, max_attemp
     
     if not success:
         raise RuntimeError(f"Failed to generate valid 3D coordinates for SMILES: {smiles} after {max_attempts} attempts")
-    
+
     print(f"3D coordinates generated using {method_used}")
-    
-    # Try to optimize the geometry (optional)
+
     if optimize_geometry:
         try:
-            # Try multiple optimization methods
             optimization_success = False
-            
-            # Method 1: UFF optimization
             try:
                 AllChem.UFFOptimizeMolecule(mol, maxIters=500)
                 coords = mol.GetConformer().GetPositions()
@@ -125,8 +84,6 @@ def smiles_to_xyz(smiles: str, filename: str, optimize_geometry=True, max_attemp
                     print("Geometry optimized using UFF")
             except:
                 pass
-            
-            # Method 2: MMFF optimization (fallback)
             if not optimization_success:
                 try:
                     AllChem.MMFFOptimizeMolecule(mol, maxIters=500)
@@ -136,104 +93,62 @@ def smiles_to_xyz(smiles: str, filename: str, optimize_geometry=True, max_attemp
                         print("Geometry optimized using MMFF")
                 except:
                     pass
-            
             if not optimization_success:
                 print("Warning: Geometry optimization failed, using unoptimized structure")
-                
         except Exception as e:
             print(f"Warning: Geometry optimization failed ({e}), using unoptimized structure")
-    
-    # Final coordinate validation
+
     coords = mol.GetConformer().GetPositions()
     if np.any(np.isnan(coords)) or np.any(np.isinf(coords)):
         raise RuntimeError(f"Generated coordinates contain invalid values for SMILES: {smiles}")
-    
-    # Validate reasonable coordinate ranges
-    coord_range = np.ptp(coords, axis=0)  # Range in each dimension
-    if np.any(coord_range > 100):  # More than 100 Å in any dimension seems unreasonable
+
+    coord_range = np.ptp(coords, axis=0)
+    if np.any(coord_range > 100):
         print(f"Warning: Large molecular dimensions detected: {coord_range}")
-    
-    # Get atom symbols and coordinates
+
     symbols = [atom.GetSymbol() for atom in mol.GetAtoms()]
-    
-    # Validate symbols
     if len(symbols) != len(coords):
         raise RuntimeError("Mismatch between number of atoms and coordinates")
-    
-    # Write to XYZ file
+
     try:
         with open(filename, 'w') as f:
             f.write(f"{len(symbols)}\n")
             f.write(f"Molecule created from SMILES: {smiles} using {method_used}\n")
             for symbol, coord in zip(symbols, coords):
                 f.write(f"{symbol} {coord[0]:.8f} {coord[1]:.8f} {coord[2]:.8f}\n")
-        
         print(f"Successfully wrote {len(symbols)} atoms to {filename}")
-        
     except IOError as e:
         raise RuntimeError(f"Failed to write XYZ file: {e}")
 
 
 def smiles_to_ase_atoms(smiles: str):
-    """
-    Convert a SMILES string directly to an ASE Atoms object.
-    
-    This function uses the robust smiles_to_xyz() function internally
-    to generate 3D coordinates, then converts them to an ASE Atoms object.
-    
-    Parameters
-    ----------
-    smiles : str
-        SMILES string representing the molecule
-        
-    Returns
-    -------
-    ase.Atoms
-        ASE Atoms object with 3D coordinates
-        
-    Raises
-    ------
-    ImportError
-        If RDKit is not available
-    ValueError
-        If SMILES string is invalid
-    RuntimeError
-        If 3D coordinate generation fails
-    """
-    if not RDKIT_AVAILABLE:
-        raise ImportError("RDKit is required for SMILES conversion. Please install rdkit-pypi.")
+    """Convert a SMILES string directly to an ASE Atoms object."""
     
     import tempfile
     import os
-    
-    # Create temporary XYZ file
-    with tempfile.NamedTemporaryFile(mode='w+', delete=False, suffix='.xyz') as tmp_file:
-        try:
-            # Use the robust smiles_to_xyz function
-            smiles_to_xyz(smiles, tmp_file.name, optimize_geometry=True)
-            # Read back as ASE Atoms object
-            from ase.io import read
-            atoms = read(tmp_file.name)
-            return atoms
-        finally:
-            # Clean up temporary file
-            if os.path.exists(tmp_file.name):
-                os.remove(tmp_file.name)
+    import time
+
+    tmp_file_path = None
+    try:
+        with tempfile.NamedTemporaryFile(mode='w+', delete=False, suffix='.xyz') as tmp_file:
+            tmp_file_path = tmp_file.name
+            smiles_to_xyz(smiles, tmp_file_path, optimize_geometry=True)
+        from ase.io import read
+        atoms = read(tmp_file_path)
+        return atoms
+    finally:
+        if tmp_file_path and os.path.exists(tmp_file_path):
+            for attempt in range(5):
+                try:
+                    os.remove(tmp_file_path)
+                    break
+                except (PermissionError, OSError):
+                    if attempt < 4:
+                        time.sleep(0.1)
 
 
 def validate_smiles(smiles: str) -> bool:
-    """
-    Validate a SMILES string without generating coordinates.
-    
-    Args:
-        smiles: SMILES string to validate
-        
-    Returns:
-        bool: True if valid, False otherwise
-    """
-    if not RDKIT_AVAILABLE:
-        return False
-        
+    """Validate a SMILES string without generating coordinates."""
     try:
         mol = Chem.MolFromSmiles(smiles)
         return mol is not None
@@ -242,18 +157,7 @@ def validate_smiles(smiles: str) -> bool:
 
 
 def get_molecular_info(smiles: str) -> dict:
-    """
-    Get basic molecular information from SMILES.
-    
-    Args:
-        smiles: SMILES string
-        
-    Returns:
-        dict: Molecular information (formula, weight, etc.)
-    """
-    if not RDKIT_AVAILABLE:
-        raise ImportError("RDKit is not installed")
-        
+    """Get basic molecular information from SMILES."""
     mol = Chem.MolFromSmiles(smiles)
     if mol is None:
         raise ValueError(f"Invalid SMILES: {smiles}")
@@ -269,69 +173,42 @@ def get_molecular_info(smiles: str) -> dict:
     }
 
 
-# ============================================================================
 # Molecular Alignment Functions
-# ============================================================================
 
 def _align_nitrogens(molecule_df, tar='Z'):
-    """
-    Align two nitrogen atoms along a target direction.
-    
-    Parameters
-    ----------
-    molecule_df : pd.DataFrame
-        Molecule data with 'Element', 'X', 'Y', 'Z' columns
-    tar : str or array
-        Target direction ('Z' for z-axis) or custom vector
-        
-    Returns
-    -------
-    pd.DataFrame
-        Aligned molecule data
-    """
+    """Align two nitrogen atoms along a target direction."""
     nitrogen_atoms = molecule_df[molecule_df['Element'] == 'N']
     if len(nitrogen_atoms) < 2:
-        # Not enough nitrogen atoms to align, return original DataFrame
         return molecule_df
 
-    # Find the coordinates of the two Nitrogen atoms
     n1_coords = nitrogen_atoms[['X', 'Y', 'Z']].iloc[0].values
     n2_coords = nitrogen_atoms[['X', 'Y', 'Z']].iloc[1].values
-
-    # Calculate the vector between the two Nitrogen atoms
     v_ref = n1_coords - n2_coords
 
     if tar == 'Z':
-        # Define the target vector (aligned with the z-axis)
         v_tar = np.array([0, 0, np.linalg.norm(v_ref)])
     else:
         v_tar = tar
-    
-    # Check for zero-length vectors
-    if np.linalg.norm(v_ref) < 1e-10 or np.linalg.norm(v_tar) < 1e-10:
-        return molecule_df # Cannot align, return original
 
-    # Calculate the rotation matrix that transforms v_ref to v_tar
+    if np.linalg.norm(v_ref) < 1e-10 or np.linalg.norm(v_tar) < 1e-10:
+        return molecule_df
+
     cos_theta = np.dot(v_ref, v_tar) / (np.linalg.norm(v_ref) * np.linalg.norm(v_tar))
-    
-    # Clamp value to avoid numerical errors
     cos_theta = np.clip(cos_theta, -1.0, 1.0)
-    
+
     if np.isclose(cos_theta, 1.0):
-        # Already aligned
         return molecule_df
     elif np.isclose(cos_theta, -1.0):
-        # Anti-aligned, find a perpendicular vector for 180-degree rotation
         perp_vec = np.array([1.0, 0.0, 0.0])
         if np.linalg.norm(np.cross(v_ref, perp_vec)) < 1e-10:
             perp_vec = np.array([0.0, 1.0, 0.0])
         axis = np.cross(v_ref, perp_vec)
     else:
         axis = np.cross(v_ref, v_tar)
-    
+
     axis_norm = np.linalg.norm(axis)
     if axis_norm < 1e-10:
-        return molecule_df # Parallel vectors, no rotation needed
+        return molecule_df
 
     axis /= axis_norm
     sin_theta = np.sqrt(1 - cos_theta**2)
@@ -339,387 +216,142 @@ def _align_nitrogens(molecule_df, tar='Z'):
     skew_axis = np.array([[0, -axis[2], axis[1]], [axis[2], 0, -axis[0]], [-axis[1], axis[0], 0]])
     R = cos_theta * I + (1 - cos_theta) * np.outer(axis, axis) + sin_theta * skew_axis
 
-    # Apply the rotation to the molecule coordinates
     coords = molecule_df[['X', 'Y', 'Z']].values
     coords_tar = (R @ coords.T).T
     molecule_df[['X', 'Y', 'Z']] = coords_tar
-
     return molecule_df
 
 
-def align_molecule_for_perovskite(molecule_df):
-    """
-    Comprehensive molecular alignment for perovskite structures (bulk).
-    
-    NOTE: For 2D structures (DJ/RP/Monolayer), use align_molecule_for_perovskite_2d instead.
-    This function is kept for bulk structures or as a fallback.
-    
-    This function ensures that:
-    1. For small molecules (like NH3): Nitrogen atom points INTO perovskite (positive Z)
-    2. For larger molecules: Largest dimension aligned along Z-axis
-    3. For molecules with 2+ N atoms: N-N vector aligned along Z-axis
-    4. The molecule is positioned for proper attachment
-    
-    Parameters
-    ----------
-    molecule_df : pd.DataFrame
-        Molecule data with 'Element', 'X', 'Y', 'Z' columns
-        
-    Returns
-    -------
-    pd.DataFrame
-        Properly aligned molecule data
-    """
-    df = molecule_df.copy()
-    
-    # Step 1: Store original center for later use
-    original_center = df[['X', 'Y', 'Z']].values.mean(axis=0)
-    
-    # Step 2: Center temporarily for rotation calculations
-    center = df[['X', 'Y', 'Z']].values.mean(axis=0)
-    df['X'] -= center[0]
-    df['Y'] -= center[1]
-    df['Z'] -= center[2]
-    
-    # Step 3: Check for nitrogen atoms
-    nitrogen_atoms = df[df['Element'] == 'N']
-    num_nitrogens = len(nitrogen_atoms)
-    
-    # Step 4: Handle different molecule types
-    coords = df[['X', 'Y', 'Z']].values
-    ranges = np.max(coords, axis=0) - np.min(coords, axis=0)
-    max_range = np.max(ranges)
-    
-    # For small molecules (like NH3) with single N atom, ensure N points into perovskite
-    if num_nitrogens == 1 and max_range < 5.0:  # Small molecule threshold
-        # Get the nitrogen atom position (already centered)
-        n_coords = nitrogen_atoms[['X', 'Y', 'Z']].iloc[0].values
-        
-        # For NH3 and similar small molecules, we want the N atom to point INTO the perovskite
-        # This means N should be at the positive Z end of the molecule
-        
-        # Calculate the center of mass of non-N atoms (H atoms in NH3)
-        non_n_atoms = df[df['Element'] != 'N']
-        if len(non_n_atoms) > 0:
-            # Calculate vector from non-N center to N atom
-            non_n_center = non_n_atoms[['X', 'Y', 'Z']].values.mean(axis=0)
-            n_vector = n_coords - non_n_center
-            
-            # Normalize the vector
-            n_vector_norm = np.linalg.norm(n_vector)
-            if n_vector_norm > 1e-6:
-                n_vector_unit = n_vector / n_vector_norm
-                
-                # We want this vector to point in positive Z direction
-                # Calculate rotation to align n_vector_unit with [0, 0, 1]
-                target = np.array([0, 0, 1])
-                
-                # Calculate rotation axis and angle
-                axis = np.cross(n_vector_unit, target)
-                axis_norm = np.linalg.norm(axis)
-                
-                if axis_norm > 1e-6:
-                    axis = axis / axis_norm
-                    cos_theta = np.dot(n_vector_unit, target)
-                    cos_theta = np.clip(cos_theta, -1.0, 1.0)
-                    sin_theta = np.sqrt(1 - cos_theta**2)
-                    
-                    # Rodrigues' rotation formula
-                    I = np.eye(3)
-                    skew_axis = np.array([
-                        [0, -axis[2], axis[1]],
-                        [axis[2], 0, -axis[0]],
-                        [-axis[1], axis[0], 0]
-                    ])
-                    rotation_matrix = cos_theta * I + (1 - cos_theta) * np.outer(axis, axis) + sin_theta * skew_axis
-                    
-                    # Apply rotation
-                    coords_rotated = np.dot(coords, rotation_matrix.T)
-                    df['X'] = coords_rotated[:, 0]
-                    df['Y'] = coords_rotated[:, 1]
-                    df['Z'] = coords_rotated[:, 2]
-        
-        # Final check: ensure N is at positive Z (pointing into perovskite)
-        n_coords_final = df[df['Element'] == 'N'][['X', 'Y', 'Z']].iloc[0].values
-        if n_coords_final[2] < 0:
-            # Flip along Z-axis to ensure N points into perovskite
-            df['Z'] = -df['Z']
-    
-    elif num_nitrogens >= 2:
-        # For molecules with 2+ N atoms, align N-N vector along Z
-        df = _align_nitrogens(df, tar='Z')
-        
-        # Ensure the N-N vector points in positive Z direction
-        n_atoms = df[df['Element'] == 'N']
-        if len(n_atoms) >= 2:
-            n1_z = n_atoms['Z'].iloc[0]
-            n2_z = n_atoms['Z'].iloc[1]
-            if n1_z < n2_z:  # First N is below second N
-                # Flip so first N is above (positive Z)
-                df['Z'] = -df['Z']
-    
-    else:
-        # For other molecules: align largest dimension to Z-axis
-        largest_dim = np.argmax(ranges)
-        
-        if largest_dim == 0:  # X is largest, rotate to Z
-            angle = np.radians(90)
-            rotation_matrix = np.array([
-                [np.cos(angle), 0, np.sin(angle)],
-                [0, 1, 0],
-                [-np.sin(angle), 0, np.cos(angle)]
-            ])
-        elif largest_dim == 1:  # Y is largest, rotate to Z
-            angle = np.radians(-90)
-            rotation_matrix = np.array([
-                [1, 0, 0],
-                [0, np.cos(angle), -np.sin(angle)],
-                [0, np.sin(angle), np.cos(angle)]
-            ])
-        else:  # Z is already largest
-            rotation_matrix = np.eye(3)
-        
-        # Apply rotation
-        coords = df[['X', 'Y', 'Z']].values
-        coords_rotated = np.dot(coords, rotation_matrix.T)
-        df['X'] = coords_rotated[:, 0]
-        df['Y'] = coords_rotated[:, 1]
-        df['Z'] = coords_rotated[:, 2]
-    
-    # Step 5: Final orientation check - ensure molecule extends in positive Z
-    # This ensures attachment point points INTO the perovskite
-    z_coords = df['Z'].values
-    z_max = np.max(z_coords)
-    z_min = np.min(z_coords)
-    
-    # If molecule extends more in negative Z, flip it
-    if abs(z_min) > abs(z_max):
-        df['Z'] = -df['Z']
-    
-    # Step 6: Restore original center position (don't center at origin)
-    df['X'] += original_center[0]
-    df['Y'] += original_center[1]
-    df['Z'] += original_center[2]
-    
-    return df
-
-
 def align_ase_molecule_for_perovskite(ase_atoms, attachment_end='top'):
-    """
-    Align an ASE Atoms object for perovskite structures.
-    
-    This function ensures molecules are properly oriented to attach to perovskite
-    structures, with special handling for small molecules like NH3.
-    
-    For 2D structures (DJ/RP/Monolayer), this ensures NH3/NH3+ groups face
-    the perovskite layer correctly.
-    
-    Parameters
-    ----------
-    ase_atoms : ase.Atoms
-        The molecule to align
-    attachment_end : str, optional
-        'top' or 'bottom' - which end of the molecule will attach to the layer.
-        For 2D structures: 'top' means attaching from bottom (N at top end),
-        'bottom' means attaching from top (N at bottom end).
-        Default: 'top'
-        
-    Returns
-    -------
-    ase.Atoms
-        Properly aligned molecule with attachment point pointing into perovskite
-    """
-    # Convert ASE Atoms to DataFrame
+    """Align an ASE Atoms object for perovskite structures."""
     symbols = ase_atoms.get_chemical_symbols()
     positions = ase_atoms.get_positions()
-    
-    # Store original number of atoms for validation
     num_atoms_original = len(ase_atoms)
-    
+
     df = pd.DataFrame({
         'Element': symbols,
         'X': positions[:, 0],
         'Y': positions[:, 1],
         'Z': positions[:, 2]
     })
-    
-    # Validate DataFrame has all atoms
+
     if len(df) != num_atoms_original:
         raise ValueError(f"DataFrame conversion lost atoms: {num_atoms_original} -> {len(df)}")
-    
-    # Align the molecule with attachment direction awareness
+
     aligned_df = align_molecule_for_perovskite_2d(df, attachment_end=attachment_end)
-    
-    # Validate aligned DataFrame has all atoms
+
     if len(aligned_df) != num_atoms_original:
         raise ValueError(f"Alignment lost atoms: {num_atoms_original} -> {len(aligned_df)}")
-    
-    # Reconstruct Atoms object from aligned DataFrame to ensure all atoms are preserved
-    # This is safer than just updating positions, as it ensures symbols and positions match
+
     aligned_symbols = aligned_df['Element'].tolist()
     aligned_positions = aligned_df[['X', 'Y', 'Z']].values
-    
-    # Create new Atoms object with aligned positions
     aligned_atoms = Atoms(aligned_symbols, positions=aligned_positions)
-    
-    # Preserve any additional properties from original atoms (like tags, momenta, etc.)
+
     if hasattr(ase_atoms, 'tags') and ase_atoms.tags is not None:
         aligned_atoms.set_tags(ase_atoms.get_tags())
     if hasattr(ase_atoms, 'momenta') and ase_atoms.get_momenta() is not None:
         aligned_atoms.set_momenta(ase_atoms.get_momenta())
-    
+
     return aligned_atoms
 
 
-def _identify_nh3_groups(molecule_df):
-    """
-    Identify NH3+ groups in a molecule by finding N atoms with 3 H atoms nearby.
-    
-    Parameters
-    ----------
-    molecule_df : pd.DataFrame
-        Molecule data with 'Element', 'X', 'Y', 'Z' columns
-        
-    Returns
-    -------
-    list
-        List of indices (in the nitrogen_atoms DataFrame) of N atoms that are part of NH3+ groups
-    """
-    nitrogen_atoms = molecule_df[molecule_df['Element'] == 'N']
-    hydrogen_atoms = molecule_df[molecule_df['Element'] == 'H']
-    
-    nh3_indices = []
-    
-    if len(hydrogen_atoms) == 0:
-        return nh3_indices
-    
-    n_positions = nitrogen_atoms[['X', 'Y', 'Z']].values
-    h_positions = hydrogen_atoms[['X', 'Y', 'Z']].values
-    
-    # Typical N-H bond distance is around 1.0-1.1 Å
-    nh_bond_cutoff = 1.2
-    
-    for i, n_pos in enumerate(n_positions):
-        # Calculate distances from this N to all H atoms
-        distances = np.linalg.norm(h_positions - n_pos, axis=1)
-        nearby_h_count = np.sum(distances < nh_bond_cutoff)
-        
-        # NH3+ groups have 3 H atoms nearby
-        if nearby_h_count == 3:
-            nh3_indices.append(i)
-    
-    return nh3_indices
+def _df_to_atoms_for_nh3_check(df) -> Atoms:
+    """Convert DataFrame to Atoms for NH3 detection."""
+    return Atoms(
+        symbols=df['Element'].tolist(),
+        positions=df[['X', 'Y', 'Z']].values
+    )
+
+
+def _find_next_atom_from_nh3(df: pd.DataFrame, nh3_n_idx: int) -> Optional[int]:
+    """Find the non-hydrogen atom bonded to an NH3+ nitrogen atom."""
+    covalent_radii = {
+        'H': 0.31, 'C': 0.76, 'N': 0.71, 'O': 0.66, 'F': 0.57,
+        'S': 1.05, 'Cl': 0.99, 'Br': 1.20, 'I': 1.39, 'P': 1.07,
+        'Si': 1.11, 'B': 0.84, 'Al': 1.21, 'Mg': 1.41, 'Ca': 1.76
+    }
+
+    n_pos = df.loc[nh3_n_idx, ['X', 'Y', 'Z']].values
+    n_symbol = df.loc[nh3_n_idx, 'Element']
+    bonded_atoms = []
+
+    for idx, row in df.iterrows():
+        if idx == nh3_n_idx:
+            continue
+        if row['Element'] == 'H':
+            continue
+        atom_pos = row[['X', 'Y', 'Z']].values
+        distance = np.linalg.norm(atom_pos - n_pos)
+        r1 = covalent_radii.get(n_symbol, 0.71)
+        r2 = covalent_radii.get(row['Element'], 0.76)
+        bond_cutoff = r1 + r2 + 0.45
+        if distance <= bond_cutoff:
+            bonded_atoms.append((idx, distance))
+
+    if bonded_atoms:
+        return min(bonded_atoms, key=lambda x: x[1])[0]
+    return None
 
 
 def align_molecule_for_perovskite_2d(molecule_df, attachment_end='top'):
-    """
-    Align molecule specifically for 2D perovskite structures (DJ/RP/Monolayer).
-    
-    Unified function that works for all molecules with NH3+ groups:
-    - RP/Monolayer: 1 NH3+ group
-    - DJ: 2 NH3+ groups
-    
-    Uses geometric center-to-NH3+ vector alignment for all cases.
-    
-    Parameters
-    ----------
-    molecule_df : pd.DataFrame
-        Molecule data with 'Element', 'X', 'Y', 'Z' columns
-    attachment_end : str
-        'top' or 'bottom' - which end will attach to the perovskite layer.
-        - 'top': NH3+ should be at the TOP end (max Z) of the molecule
-        - 'bottom': NH3+ should be at the BOTTOM end (min Z) of the molecule
-        
-    Returns
-    -------
-    pd.DataFrame
-        Properly aligned molecule data with NH3+ at the correct attachment end
-    """
+    """Align molecule specifically for 2D perovskite structures."""
     df = molecule_df.copy()
-    
-    # Store original center for later restoration
     original_center = df[['X', 'Y', 'Z']].values.mean(axis=0)
-    
-    # Center temporarily for rotation calculations
     center = df[['X', 'Y', 'Z']].values.mean(axis=0)
     df['X'] -= center[0]
     df['Y'] -= center[1]
     df['Z'] -= center[2]
-    
-    # Identify NH3+ groups
+
     nitrogen_atoms = df[df['Element'] == 'N']
-    nh3_indices = _identify_nh3_groups(df)
-    
+    nitrogen_row_indices = nitrogen_atoms.index.tolist()
+    from .spacer import _find_terminal_nitrogens
+    temp_atoms = _df_to_atoms_for_nh3_check(df)
+    _, nh3_indices = _find_terminal_nitrogens(temp_atoms)
+
     if len(nh3_indices) == 0:
-        # No NH3+ groups found, return as-is (shouldn't happen for valid spacers)
         df['X'] += original_center[0]
         df['Y'] += original_center[1]
         df['Z'] += original_center[2]
         return df
-    
-    # Get NH3+ N atom positions
-    nh3_n_atoms = nitrogen_atoms.iloc[nh3_indices]
+
+    nh3_positions_in_nitrogen_list = [nitrogen_row_indices.index(idx) for idx in nh3_indices]
+    nh3_n_atoms = nitrogen_atoms.iloc[nh3_positions_in_nitrogen_list]
     nh3_n_positions = nh3_n_atoms[['X', 'Y', 'Z']].values
-    
-    # Calculate geometric center
     com = df[['X', 'Y', 'Z']].values.mean(axis=0)
-    
-    # For molecules with multiple NH3+ groups (DJ), select the one at the attachment end
-    # For single NH3+ (RP/Monolayer), use that one
+
     if len(nh3_indices) == 1:
-        # Single NH3+ group - use it
         nh3_n_coords = nh3_n_positions[0]
     else:
-        # Multiple NH3+ groups (DJ) - find the one at the attachment end
-        # Calculate which NH3+ is furthest in the desired direction
         com_to_nh3_vectors = nh3_n_positions - com
         if attachment_end == 'top':
-            # Find NH3+ with highest Z (furthest above geometric center)
             z_components = com_to_nh3_vectors[:, 2]
             selected_idx = np.argmax(z_components)
-        else:  # 'bottom'
-            # Find NH3+ with lowest Z (furthest below geometric center)
+        else:
             z_components = com_to_nh3_vectors[:, 2]
             selected_idx = np.argmin(z_components)
         nh3_n_coords = nh3_n_positions[selected_idx]
-    
-    # Calculate vector from geometric center to NH3+ N atom
+
     com_to_nh3_vector = nh3_n_coords - com
     com_to_nh3_norm = np.linalg.norm(com_to_nh3_vector)
-    
-    # Align geometric center-to-NH3+ vector to be vertical
+
     if com_to_nh3_norm > 1e-6:
-        # Normalize vector
         com_to_nh3_unit = com_to_nh3_vector / com_to_nh3_norm
-        
-        # Determine target direction based on attachment_end
         if attachment_end == 'top':
-            target = np.array([0, 0, 1])  # NH3+ should be above geometric center (positive Z)
-        else:  # 'bottom'
-            target = np.array([0, 0, -1])  # NH3+ should be below geometric center (negative Z)
-        
-        # Calculate rotation to align com_to_nh3_unit with target
+            target = np.array([0, 0, 1])
+        else:
+            target = np.array([0, 0, -1])
         dot_product = np.dot(com_to_nh3_unit, target)
-        
-        # Check XY component of the unit vector (should be 0 if perfectly vertical)
         xy_component_unit = np.sqrt(com_to_nh3_unit[0]**2 + com_to_nh3_unit[1]**2)
-        
-        # Always apply rotation if there's ANY XY component (molecule is not vertical)
-        # OR if not already perfectly aligned
-        # This ensures molecules with any inclination get rotated to vertical
         needs_rotation = (xy_component_unit > 1e-3) or (abs(dot_product) < 0.9999)
-        
-        if needs_rotation:  # Need to align
+
+        if needs_rotation:
             axis = np.cross(com_to_nh3_unit, target)
             axis_norm = np.linalg.norm(axis)
-            
             if axis_norm > 1e-6:
                 axis = axis / axis_norm
                 cos_theta = np.dot(com_to_nh3_unit, target)
                 cos_theta = np.clip(cos_theta, -1.0, 1.0)
                 sin_theta = np.sqrt(1 - cos_theta**2)
-                
-                # Rodrigues' rotation formula
                 I = np.eye(3)
                 skew_axis = np.array([
                     [0, -axis[2], axis[1]],
@@ -727,43 +359,116 @@ def align_molecule_for_perovskite_2d(molecule_df, attachment_end='top'):
                     [-axis[1], axis[0], 0]
                 ])
                 rotation_matrix = cos_theta * I + (1 - cos_theta) * np.outer(axis, axis) + sin_theta * skew_axis
-                
-                # Apply rotation around the geometric center
                 coords = df[['X', 'Y', 'Z']].values
-                # Translate to origin (geometric center), rotate, then translate back
                 coords_centered = coords - com
                 coords_rotated = np.dot(coords_centered, rotation_matrix.T)
                 coords_final = coords_rotated + com
-                
                 df['X'] = coords_final[:, 0]
                 df['Y'] = coords_final[:, 1]
                 df['Z'] = coords_final[:, 2]
             else:
-                # Vectors are parallel/anti-parallel, check if we need to flip
-                if dot_product < 0:  # Anti-parallel, flip
+                if dot_product < 0:
                     df['Z'] = -df['Z']
         else:
-            # Already aligned, but check direction
             if attachment_end == 'top' and com_to_nh3_unit[2] < 0:
-                # NH3+ is below geometric center but should be above, flip
                 df['Z'] = -df['Z']
             elif attachment_end == 'bottom' and com_to_nh3_unit[2] > 0:
-                # NH3+ is above geometric center but should be below, flip
                 df['Z'] = -df['Z']
-    
-    # Final check: ensure NH3+ is at the correct end
-    # Re-identify NH3+ after rotation to get final position
-    nh3_indices_final = _identify_nh3_groups(df)
+
+    if len(nh3_indices) > 1:
+        nh3_n_positions_all = nh3_n_positions
+        if len(nh3_n_positions_all) >= 2:
+            n_n_vector = nh3_n_positions_all[1] - nh3_n_positions_all[0]
+            n_n_length = np.linalg.norm(n_n_vector)
+            if n_n_length > 1e-6:
+                n_n_unit = n_n_vector / n_n_length
+                next_atom_idx = _find_next_atom_from_nh3(df, nh3_indices[selected_idx])
+                if next_atom_idx is not None:
+                    next_atom_pos = df.loc[next_atom_idx, ['X', 'Y', 'Z']].values
+                    nh3_to_next_vector = next_atom_pos - nh3_n_coords
+                    nh3_to_next_length = np.linalg.norm(nh3_to_next_vector)
+                    if nh3_to_next_length > 1e-6:
+                        nh3_to_next_unit = nh3_to_next_vector / nh3_to_next_length
+                        proj_parallel = np.dot(nh3_to_next_unit, n_n_unit) * n_n_unit
+                        proj_perp = nh3_to_next_unit - proj_parallel
+                        proj_perp_length = np.linalg.norm(proj_perp)
+                        if proj_perp_length > 1e-3:
+                            axis = n_n_unit
+                            n_n_xy = n_n_unit[:2]
+                            nh3_to_next_xy = nh3_to_next_unit[:2]
+                            n_n_xy_length = np.linalg.norm(n_n_xy)
+                            nh3_to_next_xy_length = np.linalg.norm(nh3_to_next_xy)
+                            if n_n_xy_length > 1e-6 and nh3_to_next_xy_length > 1e-6:
+                                n_n_xy_unit = n_n_xy / n_n_xy_length
+                                nh3_to_next_xy_unit = nh3_to_next_xy / nh3_to_next_xy_length
+                                cos_angle_xy = np.dot(n_n_xy_unit, nh3_to_next_xy_unit)
+                                cos_angle_xy = np.clip(cos_angle_xy, -1.0, 1.0)
+                                if abs(cos_angle_xy) < 0.95:
+                                    cross_xy = n_n_xy_unit[0] * nh3_to_next_xy_unit[1] - n_n_xy_unit[1] * nh3_to_next_xy_unit[0]
+                                    sin_angle_xy = cross_xy
+                                    cos_theta = cos_angle_xy
+                                    sin_theta = sin_angle_xy
+                                    rotation_matrix_z = np.array([
+                                        [cos_theta, -sin_theta, 0],
+                                        [sin_theta, cos_theta, 0],
+                                        [0, 0, 1]
+                                    ])
+                                    coords = df[['X', 'Y', 'Z']].values
+                                    coords_centered = coords - nh3_n_coords
+                                    coords_rotated = np.dot(coords_centered, rotation_matrix_z.T)
+                                    coords_final = coords_rotated + nh3_n_coords
+                                    df['X'] = coords_final[:, 0]
+                                    df['Y'] = coords_final[:, 1]
+                                    df['Z'] = coords_final[:, 2]
+    else:
+        next_atom_idx = _find_next_atom_from_nh3(df, nh3_indices[0])
+        if next_atom_idx is not None:
+            next_atom_pos = df.loc[next_atom_idx, ['X', 'Y', 'Z']].values
+            nh3_to_next_vector = next_atom_pos - nh3_n_coords
+            nh3_to_next_length = np.linalg.norm(nh3_to_next_vector)
+            if nh3_to_next_length > 1e-6:
+                nh3_to_next_unit = nh3_to_next_vector / nh3_to_next_length
+                target_z = 1.0 if attachment_end == 'top' else -1.0
+                target = np.array([0, 0, target_z])
+                nh3_to_next_xy = nh3_to_next_unit[:2]
+                target_xy = target[:2]
+                nh3_to_next_xy_length = np.linalg.norm(nh3_to_next_xy)
+                if nh3_to_next_xy_length > 1e-3:
+                    cos_angle = nh3_to_next_unit[2]
+                    cos_angle = np.clip(cos_angle, -1.0, 1.0)
+                    angle_xy = np.arctan2(nh3_to_next_xy[1], nh3_to_next_xy[0])
+                    cos_theta = np.cos(-angle_xy)
+                    sin_theta = np.sin(-angle_xy)
+                    rotation_matrix_z = np.array([
+                        [cos_theta, -sin_theta, 0],
+                        [sin_theta, cos_theta, 0],
+                        [0, 0, 1]
+                    ])
+                    coords = df[['X', 'Y', 'Z']].values
+                    coords_centered = coords - nh3_n_coords
+                    coords_rotated = np.dot(coords_centered, rotation_matrix_z.T)
+                    coords_final = coords_rotated + nh3_n_coords
+                    df['X'] = coords_final[:, 0]
+                    df['Y'] = coords_final[:, 1]
+                    df['Z'] = coords_final[:, 2]
+                    next_atom_pos_rotated = df.loc[next_atom_idx, ['X', 'Y', 'Z']].values
+                    nh3_to_next_vector_rotated = next_atom_pos_rotated - nh3_n_coords
+                    nh3_to_next_unit_rotated = nh3_to_next_vector_rotated / np.linalg.norm(nh3_to_next_vector_rotated)
+                    if (attachment_end == 'top' and nh3_to_next_unit_rotated[2] < 0) or \
+                       (attachment_end == 'bottom' and nh3_to_next_unit_rotated[2] > 0):
+                        df['Z'] = -df['Z']
+
+    temp_atoms_final = _df_to_atoms_for_nh3_check(df)
+    _, nh3_indices_final = _find_terminal_nitrogens(temp_atoms_final)
     if len(nh3_indices_final) > 0:
         nitrogen_atoms_final = df[df['Element'] == 'N']
-        nh3_n_atoms_final = nitrogen_atoms_final.iloc[nh3_indices_final]
+        nitrogen_row_indices_final = nitrogen_atoms_final.index.tolist()
+        nh3_positions_in_nitrogen_list_final = [nitrogen_row_indices_final.index(idx) for idx in nh3_indices_final]
+        nh3_n_atoms_final = nitrogen_atoms_final.iloc[nh3_positions_in_nitrogen_list_final]
         nh3_n_positions_final = nh3_n_atoms_final[['X', 'Y', 'Z']].values
-        
-        # Select the same NH3+ we used for alignment
         if len(nh3_indices_final) == 1:
             nh3_n_coords_final = nh3_n_positions_final[0]
         else:
-            # Multiple NH3+ - use same selection logic
             com_final = df[['X', 'Y', 'Z']].values.mean(axis=0)
             com_to_nh3_vectors_final = nh3_n_positions_final - com_final
             if attachment_end == 'top':
@@ -773,35 +478,25 @@ def align_molecule_for_perovskite_2d(molecule_df, attachment_end='top'):
                 z_components = com_to_nh3_vectors_final[:, 2]
                 selected_idx = np.argmin(z_components)
             nh3_n_coords_final = nh3_n_positions_final[selected_idx]
-        
         z_coords = df['Z'].values
         z_max = np.max(z_coords)
         z_min = np.min(z_coords)
-        
         if attachment_end == 'top':
-            # NH3+ should be at top (max Z)
-            if nh3_n_coords_final[2] < (z_max - 0.1):  # NH3+ is not at the top
-                # Find which end NH3+ is closer to
+            if nh3_n_coords_final[2] < (z_max - 0.1):
                 dist_to_top = abs(nh3_n_coords_final[2] - z_max)
                 dist_to_bottom = abs(nh3_n_coords_final[2] - z_min)
                 if dist_to_bottom < dist_to_top:
-                    # NH3+ is at bottom, flip molecule along Z
                     df['Z'] = -df['Z']
-        else:  # 'bottom'
-            # NH3+ should be at bottom (min Z)
-            if nh3_n_coords_final[2] > (z_min + 0.1):  # NH3+ is not at the bottom
-                # Find which end NH3+ is closer to
+        else:
+            if nh3_n_coords_final[2] > (z_min + 0.1):
                 dist_to_top = abs(nh3_n_coords_final[2] - z_max)
                 dist_to_bottom = abs(nh3_n_coords_final[2] - z_min)
                 if dist_to_top < dist_to_bottom:
-                    # NH3+ is at top, flip molecule along Z
                     df['Z'] = -df['Z']
-    
-    # Restore original center position
+
     df['X'] += original_center[0]
     df['Y'] += original_center[1]
     df['Z'] += original_center[2]
-    
     return df
 
 
@@ -976,4 +671,257 @@ def place_atoms_at_location(atoms, r):
     mod_atoms = com_to_origin(mod_atoms)
     mod_atoms = translate_atoms(mod_atoms, r)
     return mod_atoms
+
+
+def get_nearby_atoms_pbc(atoms: Atoms, center: np.ndarray,
+                         cutoff: float) -> List[Tuple[int, np.ndarray]]:
+    """
+    Get atoms within cutoff distance, considering PBC.
+
+    Based on mofun approach for better PBC-aware neighbor finding.
+
+    Parameters
+    ----------
+    atoms : ase.Atoms
+        The structure to search
+    center : np.ndarray
+        Center point for distance calculation
+    cutoff : float
+        Maximum distance to include atoms
+
+    Returns
+    -------
+    List[Tuple[int, np.ndarray]]
+        List of (atom_index, position) tuples within cutoff
+    """
+    if atoms.cell is None:
+        # Non-periodic: simple distance check
+        positions = atoms.get_positions()
+        dists = np.linalg.norm(positions - center, axis=1)
+        return [(i, pos) for i, pos in enumerate(positions) if dists[i] < cutoff]
+
+    # PBC-aware: check all 27 unit cell images
+    cell = atoms.cell
+    positions = atoms.get_positions()
+
+    # Get unit cell neighbor offsets (same as mofun)
+    multipliers = np.array(np.meshgrid([-1, 0, 1], [-1, 0, 1], [-1, 0, 1])).T.reshape(-1, 1, 3)
+    uc_offsets = np.array([np.matmul(cell.T, mult[0]) for mult in multipliers])
+
+    nearby = []
+    for i, pos in enumerate(positions):
+        pos_images = pos + uc_offsets
+        dists = np.linalg.norm(pos_images - center, axis=1)
+        min_dist = np.min(dists)
+        if min_dist < cutoff:
+            # Find which image is closest and return that position
+            closest_idx = np.argmin(dists)
+            nearby_pos = pos + uc_offsets[closest_idx]
+            nearby.append((i, nearby_pos))
+
+    return nearby
+
+
+def find_molecule_patterns(structure: Atoms, pattern: Atoms,
+                           atol: float = 0.1) -> List[Tuple[int, ...]]:
+    """
+    Find instances of pattern molecule in structure.
+
+    Based on mofun's find_pattern_in_structure approach, simplified for ASE Atoms.
+
+    Parameters
+    ----------
+    structure : ase.Atoms
+        The structure to search in
+    pattern : ase.Atoms
+        The pattern molecule to find
+    atol : float
+        Absolute tolerance for atom position matching
+
+    Returns
+    -------
+    List[Tuple[int, ...]]
+        List of atom index tuples matching the pattern
+    """
+    from scipy.spatial.distance import cdist
+
+    if len(pattern) > len(structure):
+        return []
+
+    # Pre-calculate pattern distance matrix
+    pattern_positions = pattern.get_positions()
+    pattern_dists = cdist(pattern_positions, pattern_positions)
+    pattern_elements = pattern.get_chemical_symbols()
+
+    matches = []
+
+    # For each possible starting position in structure
+    for i in range(len(structure) - len(pattern) + 1):
+        # Quick element check: first few atoms must match
+        if structure.get_chemical_symbols()[i:i+len(pattern)] != pattern_elements:
+            continue
+
+        # Check distance matrix
+        struct_positions = structure.positions[i:i+len(pattern)]
+        struct_dists = cdist(struct_positions, struct_positions)
+
+        # Check if distance matrices match within tolerance
+        if np.allclose(pattern_dists, struct_dists, atol=atol):
+            matches.append(tuple(range(i, i+len(pattern))))
+
+    return matches
+
+
+def align_molecule_plane(molecule: Atoms, target_plane: str, cell_vectors: np.ndarray) -> Atoms:
+    """
+    Align the molecule's best-fit plane to a target lattice plane.
+
+    The molecule's plane is defined as the plane containing the N-N axis and
+    the majority of the atoms. This plane is rotated around the N-N axis to
+    align with the target lattice plane.
+
+    Parameters
+    ----------
+    molecule : Atoms
+        The molecule to align
+    target_plane : str
+        Target lattice plane:
+        - "A": Align to plane normal to BC (parallel to A vector, contains B and C)
+        - "B": Align to plane normal to AC (parallel to B vector, contains A and C)
+    cell_vectors : np.ndarray
+        Unit cell vectors (3x3 matrix) with shape (3, 3)
+
+    Returns
+    -------
+    Atoms
+        Aligned molecule
+
+    Raises
+    ------
+    ValueError
+        If target_plane is not "A" or "B", or if cell_vectors is invalid
+    """
+    from .spacer import calculate_best_plane_normal
+
+    if target_plane not in ["A", "B"]:
+        raise ValueError(f"target_plane must be 'A' or 'B', got '{target_plane}'")
+
+    if cell_vectors.shape != (3, 3):
+        raise ValueError(f"cell_vectors must have shape (3, 3), got {cell_vectors.shape}")
+
+    aligned_molecule = molecule.copy()
+
+    # Calculate current molecule plane normal
+    current_normal = calculate_best_plane_normal(aligned_molecule)
+
+    if current_normal is None:
+        # No defined plane (e.g., linear molecule), return as-is
+        return aligned_molecule
+
+    # Determine target normal based on lattice vectors
+    # Normalize cell vectors
+    a_vec = cell_vectors[0] / np.linalg.norm(cell_vectors[0])
+    b_vec = cell_vectors[1] / np.linalg.norm(cell_vectors[1])
+    c_vec = cell_vectors[2] / np.linalg.norm(cell_vectors[2])
+
+    if target_plane == "A":
+        # Target plane contains B and C vectors, so normal is parallel to A
+        target_normal = a_vec
+    else:  # target_plane == "B"
+        # Target plane contains A and C vectors, so normal is parallel to B
+        target_normal = b_vec
+
+    # Check if already aligned (within tolerance)
+    cos_angle = np.abs(np.dot(current_normal, target_normal))
+    if cos_angle > 0.999:  # Within ~2 degrees
+        return aligned_molecule
+
+    # Find rotation axis: the N-N axis for the molecule
+    from .spacer import _find_terminal_nitrogens
+    _, nh3_indices = _find_terminal_nitrogens(aligned_molecule)
+
+    positions = aligned_molecule.get_positions()
+
+    if len(nh3_indices) >= 2:
+        # Double spacer: axis is between two NH3+ groups
+        p1 = positions[nh3_indices[0]]
+        p2 = positions[nh3_indices[1]]
+    elif len(nh3_indices) == 1:
+        # Mono spacer: axis is from NH3+ to center of mass
+        p1 = positions[nh3_indices[0]]
+        p2 = aligned_molecule.get_center_of_mass()
+    else:
+        # No NH3+ groups found, use molecule's principal axis
+        # Simple fallback: use first and last atoms
+        p1 = positions[0]
+        p2 = positions[-1] if len(positions) > 1 else aligned_molecule.get_center_of_mass()
+
+    rotation_axis = p2 - p1
+    axis_length = np.linalg.norm(rotation_axis)
+
+    if axis_length < 1e-6:
+        # Degenerate axis, can't rotate
+        return aligned_molecule
+
+    rotation_axis = rotation_axis / axis_length
+
+    # Compute rotation matrix to align current_normal to target_normal around rotation_axis
+    # This is a rotation in the plane perpendicular to rotation_axis
+
+    # Project both normals onto the plane perpendicular to rotation_axis
+    current_normal_proj = current_normal - np.dot(current_normal, rotation_axis) * rotation_axis
+    target_normal_proj = target_normal - np.dot(target_normal, rotation_axis) * rotation_axis
+
+    current_norm_proj = np.linalg.norm(current_normal_proj)
+    target_norm_proj = np.linalg.norm(target_normal_proj)
+
+    if current_norm_proj < 1e-6 or target_norm_proj < 1e-6:
+        # One or both normals are parallel to rotation axis, can't rotate
+        return aligned_molecule
+
+    current_normal_proj = current_normal_proj / current_norm_proj
+    target_normal_proj = target_normal_proj / target_norm_proj
+
+    # Calculate rotation angle between projected normals
+    cos_theta = np.dot(current_normal_proj, target_normal_proj)
+    cos_theta = np.clip(cos_theta, -1.0, 1.0)
+
+    # Check if the projected vectors are parallel or anti-parallel
+    if np.abs(cos_theta) > 0.999:
+        # Already aligned in the plane, no rotation needed
+        return aligned_molecule
+
+    # Calculate cross product to determine rotation direction
+    cross = np.cross(current_normal_proj, target_normal_proj)
+    sin_theta = np.dot(cross, rotation_axis)  # Component along rotation axis
+
+    theta = np.arctan2(sin_theta, cos_theta)
+
+    # Apply rotation around rotation_axis by angle theta
+    # Use rotation matrix construction
+    axis = rotation_axis
+    cos_t = np.cos(theta)
+    sin_t = np.sin(theta)
+    one_minus_cos = 1 - cos_t
+
+    # Rodrigues' rotation formula
+    rotation_matrix = np.array([
+        [cos_t + axis[0]**2 * one_minus_cos,
+         axis[0]*axis[1]*one_minus_cos - axis[2]*sin_t,
+         axis[0]*axis[2]*one_minus_cos + axis[1]*sin_t],
+        [axis[1]*axis[0]*one_minus_cos + axis[2]*sin_t,
+         cos_t + axis[1]**2 * one_minus_cos,
+         axis[1]*axis[2]*one_minus_cos - axis[0]*sin_t],
+        [axis[2]*axis[0]*one_minus_cos - axis[1]*sin_t,
+         axis[2]*axis[1]*one_minus_cos + axis[0]*sin_t,
+         cos_t + axis[2]**2 * one_minus_cos]
+    ])
+
+    # Apply rotation to all atomic positions around center of mass
+    com = aligned_molecule.get_center_of_mass()
+    positions_centered = positions - com
+    rotated_positions = np.dot(positions_centered, rotation_matrix.T)
+    aligned_molecule.set_positions(rotated_positions + com)
+
+    return aligned_molecule
 

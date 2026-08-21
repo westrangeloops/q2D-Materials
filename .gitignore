@@ -1,51 +1,56 @@
-# Temporary test outputs
-MAPb*_*.json
-MAPb*_*.png
-
-# Analysis outputs and temporary data
-batch_analysis_plots/
-correlation_plots/
-Graphs/
-
-# Development artifacts
-.specstory/
-
-# Python cache
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
-
-# Distribution / packaging
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
 *.egg-info/
-.installed.cfg
+.eggs/
+dist/
+build/
 *.egg
+.installed.cfg
 
-# Virtual environments
-.venv_installed
-venv/
+# Virtualenvs / local devenv
 .venv/
+venv/
+.devenv/
+.direnv/
 
-# IDE
+# Test / structure outputs
+*.vasp
+MAPb*_*.json
+MAPb*_*.png
+perfect.vasp
+base.vasp
+modify_*.vasp
+
+# Local analysis / notebooks / large artifacts
+Sn_twist.zip
+*.zip
+batch_analysis_plots/
+correlation_plots/
+Graphs/
+.specstory/
+
+# Package-local scratch (not part of the library)
+q2D_Materials/Images/
+q2D_Materials/MACE_traj_to erase/
+q2D_Materials/gen_twist.ipynb
+q2D_Materials/mace_sim.py
+q2D_Materials/stacking_analysis.ipynb
+
+# IDE / OS
 .vscode/
 .idea/
-
-# OS
 .DS_Store
 Thumbs.db
+.cursor/
 
-# Test output files
-*.vasp
-.venv_installed
+# Coverage / caches
+.coverage
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local paper workspace (datasets, notebooks, subprojects; not in the bundle)
+TEMPORAL/

@@ -4,48 +4,111 @@ from ..pipeline import (
     auto_calculate_BX_distance,
 )
 from .structure import q2DStructure
-import numpy as np
-from math import gcd
-from typing import List, Tuple, Optional, Union
+from typing import List, Tuple, Optional, Dict, Union
 
 
 class q2D_creator:
-    """Minimal creator for perovskite structures."""
+    """Creator for perovskite and related structures."""
 
-    def __init__(self):
+    def __init__(self) -> None:
+        """Initialize the q2D creator."""
         pass
 
-    def create_perovskite(
+    def create_structure(
         self,
-        A_ions,
-        B_ions,
-        X_ions,
-        xy_expansion=(1, 1),
-        BX_dist=None,
-        template="cubic",
-        glazer_angles=None,
-        glazer_pattern=None,
-        structure_type="bulk",
-        thickness=1,
-        jahn_teller_dist=1.0,
+        A_ions: Optional[Union[str, List[str]]] = None,
+        B_ions: Optional[Union[str, List[str]]] = None,
+        X_ions: Optional[Union[str, List[str]]] = None,
+        xy_expansion: Tuple[int, int] = (1, 1),
+        BX_dist: Optional[float] = None,
+        template: Union[str, Dict] = "cubic",
+        glazer_angles: Optional[List[float]] = None,
+        glazer_pattern: Optional[List[str]] = None,
+        structure_type: str = "bulk",
+        thickness: int = 1,
+        jahn_teller_dist: float = 1.0,
         vacuum: float = 10.0,
-        layer_sequence=None,
-        spacer=None,
+        layer_sequence: Optional[str] = None,
+        passivator: Optional[Union[str, List[str]]] = None,
         penetration: float = 0.0,
-        sharp_spacer=None,
-        attachment_end: str | None = None,
-    ):
-        # Normalize sharp_spacer: convert single value to list
-        if sharp_spacer is not None and not isinstance(sharp_spacer, list):
-            sharp_spacer = [sharp_spacer]
-        if BX_dist is None:
-            B_first = B_ions[0] if isinstance(B_ions, list) else B_ions
-            X_first = X_ions[0] if isinstance(X_ions, list) else X_ions
-            BX_dist = auto_calculate_BX_distance(B_first, X_first)
+        spacer: Optional[Union[str, List[str]]] = None,
+        attachment_end: Optional[str] = None,
+        lattice_multipliers: Optional[List[float]] = None,
+        optimizer: str = "KS",
+        spacer_orientation: Optional[List[str]] = None,
+        collision_strategy: str = "rotate",
+    ) -> q2DStructure:
+        """
+        Create a q2DStructure for a given inorganic template.
 
-        # Normalize sharp_spacer: convert single value to list
-        if sharp_spacer is not None and not isinstance(sharp_spacer, list):
-            sharp_spacer = [sharp_spacer]
+        Parameters
+        ----------
+        A_ions : str or list, optional
+            A-site cation(s)
+        B_ions : str or list, optional
+            B-site cation(s). Can be omitted for salt/spacer-only templates.
+        X_ions : str or list, optional
+            X-site anion(s)
+        xy_expansion : tuple, optional
+            XY expansion factors (default: (1, 1))
+        BX_dist : float, optional
+            B-X bond distance. Auto-calculated from ionic radii if B and X provided.
+        template : str or dict, optional
+            Template name or template dictionary (default: "cubic")
+        glazer_angles : list, optional
+            Glazer tilt angles [a, b, c]
+        glazer_pattern : list, optional
+            Glazer pattern notation. Requires both B and X networks.
+        structure_type : str, optional
+            Structure type: "bulk" or "monolayer" (default: "bulk")
+        thickness : int, optional
+            Layer thickness (default: 1)
+        jahn_teller_dist : float, optional
+            Jahn-Teller distortion distance (default: 1.0)
+        vacuum : float, optional
+            Vacuum space for monolayers in Angstroms (default: 10.0)
+        layer_sequence : str, optional
+            Layer sequence string. Can include explicit distances: "L1-(1.5)-L3"
+            where numbers in parentheses are absolute distances in Å.
+        passivator : str or list, optional
+            Passivator species for monolayers
+        penetration : float, optional
+            Penetration depth (default: 0.0)
+        spacer : str or list, optional
+            Spacer molecule(s) or atomic cation(s)
+        attachment_end : str, optional
+            Attachment end for spacers
+        lattice_multipliers : list, optional
+            Override template lattice multipliers
+        optimizer : str, optional
+            Spacer placement method: "Off", "KS" (default), or "UFF"
+        spacer_orientation : list, optional
+            Spacer plane alignment: "A" (normal to BC) or "B" (normal to AC)
+        collision_strategy : str, optional
+            Overlap resolution: "rotate" (default), "nudge", "optimize", "reject", "off"
+
+        Returns
+        -------
+        q2DStructure
+            Created structure
+
+        Notes
+        -----
+        For salt/spacer-only templates (e.g., template="salts"), B_ions can be
+        omitted. Glazer tilting requires both B and X networks.
+        """
+        if BX_dist is None:
+            if B_ions is not None and X_ions is not None:
+                from q2D_Materials.pipeline.common import _get_first_element
+
+                B_first = _get_first_element(B_ions)
+                X_first = _get_first_element(X_ions)
+                BX_dist = auto_calculate_BX_distance(B_first, X_first)
+            else:
+                BX_dist = 3.0
+
+        if spacer is not None and not isinstance(spacer, list):
+            spacer = [spacer]
 
         if structure_type.lower() == "bulk":
             atoms = create_bulk_perovskite(
@@ -60,11 +123,21 @@ class q2D_creator:
                 jahn_teller_dist=jahn_teller_dist,
                 thickness=thickness,
                 layer_sequence=layer_sequence,
-                sharp_spacer=sharp_spacer,
+                sharp_spacer=spacer,
+                lattice_multipliers=lattice_multipliers,
+                optimizer=optimizer,
+                spacer_orientation=spacer_orientation,
+                collision_strategy=collision_strategy,
             )
         elif structure_type.lower() == "monolayer":
+            # For monolayers with thickness=1 and passivator, automatically set A_ions to None
+            # so only passivator molecules are placed on surfaces (no A-sites in middle)
+            effective_A_ions = A_ions
+            if passivator is not None and thickness == 1:
+                effective_A_ions = None
+            
             atoms = create_monolayer_perovskite(
-                A=A_ions,
+                A=effective_A_ions,
                 B=B_ions,
                 X=X_ions,
                 xy_expansion=xy_expansion,
@@ -76,10 +149,14 @@ class q2D_creator:
                 jahn_teller_dist=jahn_teller_dist,
                 vacuum=vacuum,
                 layer_sequence=layer_sequence,
-                spacer=spacer,
+                passivator=passivator,
                 penetration=penetration,
-                sharp_spacer=sharp_spacer,
+                sharp_spacer=spacer,
                 attachment_end=attachment_end,
+                lattice_multipliers=lattice_multipliers,
+                optimizer=optimizer,
+                spacer_orientation=spacer_orientation,
+                collision_strategy=collision_strategy,
             )
         else:
             raise ValueError(f"structure_type must be 'bulk' or 'monolayer', got '{structure_type}'")
@@ -92,8 +169,9 @@ class q2D_creator:
             B_ions=B_ions,
             X_ions=X_ions,
             xy_expansion=xy_expansion,
-            sharp_spacer=sharp_spacer,
+            sharp_spacer=spacer,
         )
+
 
     def twist(
         self,
@@ -101,107 +179,58 @@ class q2D_creator:
         twist_angles: Optional[List[Tuple[int, int]]] = None,
         interlayer_distances: Optional[List[float]] = None,
         vacuum: float = 12.0,
-    ):
+    ) -> q2DStructure:
         """
         Create a twisted stacking of multiple monolayer structures.
-        
-        This method takes two or more monolayer structures, finds the minimal common
-        supercell (LCM of xy_expansions), and returns a stacked structure with optional
-        rotations applied to each layer.
-        
+
         Parameters
         ----------
         monolayers : List[q2DStructure]
-            List of monolayer structures to stack (must have structure_type='monolayer').
-            Minimum 2 structures required.
+            List of monolayer structures to stack (minimum 2, must have
+            structure_type='monolayer')
         twist_angles : List[Tuple[int, int]], optional
-            List of (m, n) tuples for twist angles. One per layer (excluding first).
-            If None, no rotations are applied. Length should be len(monolayers) - 1.
+            List of (m, n) tuples for twist angles, one per layer excluding first.
+            If None, no rotations applied.
         interlayer_distances : List[float], optional
             Vertical distances between consecutive layers in Angstroms.
-            If None, defaults to 11.0 Å for all interlayer gaps.
-            Length should be len(monolayers) - 1.
+            Defaults to 11.0 Å if None.
         vacuum : float, optional
-            Vacuum space outside the stacked structure in Angstroms (default: 12.0).
-            This adds vacuum above the top layer and below the bottom layer.
-            
+            Total vacuum space split evenly above/below in Angstroms (default: 12.0)
+
         Returns
         -------
         q2DStructure
-            New q2DStructure with the stacked monolayers in a common supercell.
-            
+            New q2DStructure with stacked monolayers
+
         Raises
         ------
         ValueError
-            If fewer than 2 monolayers provided, or if structure types are not 'monolayer',
-            or if twist_angles/interlayer_distances lengths don't match.
+            If fewer than 2 monolayers, wrong structure types, or length mismatches
         ImportError
-            If pymatgen is not available.
+            If pymatgen is not available
         """
+        from q2D_Materials.utils.other.twist_monolayer import (
+            create_twisted_bilayer,
+            create_twisted_multilayer,
+        )
+
         if len(monolayers) < 2:
             raise ValueError(
                 f"twist() requires at least 2 monolayer structures, got {len(monolayers)}"
             )
-        
+
         for i, mono in enumerate(monolayers):
             if not isinstance(mono, q2DStructure):
                 raise TypeError(
                     f"All structures must be q2DStructure instances. "
                     f"Structure {i} is {type(mono)}"
                 )
-            if mono.structure_type != 'monolayer':
+            if mono.structure_type != "monolayer":
                 raise ValueError(
                     f"All structures must have structure_type='monolayer'. "
                     f"Structure {i} has structure_type='{mono.structure_type}'"
                 )
-        
-        try:
-            from pymatgen.core import Structure, Lattice
-            from pymatgen.io.ase import AseAtomsAdaptor
-        except ImportError:
-            raise ImportError(
-                "pymatgen is required for twist() method. Please install pymatgen."
-            )
-        
-        adapter = AseAtomsAdaptor()
-        
-        def lcm(a: int, b: int) -> int:
-            """Calculate Least Common Multiple of two integers."""
-            return abs(a * b) // gcd(a, b) if a and b else 0
-        
-        def lcm_list(numbers: List[int]) -> int:
-            """Calculate LCM of a list of integers."""
-            result = numbers[0]
-            for num in numbers[1:]:
-                result = lcm(result, num)
-            return result
-        
-        xy_expansions = []
-        for mono in monolayers:
-            exp = mono.xy_expansion if mono.xy_expansion else (1, 1)
-            xy_expansions.append(exp)
-        
-        nx_values = [exp[0] for exp in xy_expansions]
-        ny_values = [exp[1] for exp in xy_expansions]
-        
-        common_nx = lcm_list(nx_values)
-        common_ny = lcm_list(ny_values)
-        
-        expanded_structures = []
-        for i, mono in enumerate(monolayers):
-            mono_pmg = adapter.get_structure(mono)
-            
-            exp = xy_expansions[i]
-            scale_x = common_nx // exp[0]
-            scale_y = common_ny // exp[1]
-            
-            if scale_x > 1 or scale_y > 1:
-                mono_pmg.make_supercell([[scale_x, 0, 0],
-                                        [0, scale_y, 0],
-                                        [0, 0, 1]])
-            
-            expanded_structures.append(mono_pmg)
-        
+
         if twist_angles is None:
             twist_angles = [None] * (len(monolayers) - 1)
         elif len(twist_angles) != len(monolayers) - 1:
@@ -209,7 +238,7 @@ class q2D_creator:
                 f"twist_angles must have length {len(monolayers) - 1} "
                 f"(one per layer except first), got {len(twist_angles)}"
             )
-        
+
         if interlayer_distances is None:
             interlayer_distances = [11.0] * (len(monolayers) - 1)
         elif len(interlayer_distances) != len(monolayers) - 1:
@@ -217,79 +246,36 @@ class q2D_creator:
                 f"interlayer_distances must have length {len(monolayers) - 1} "
                 f"(one per interlayer gap), got {len(interlayer_distances)}"
             )
-        
-        all_coords = []
-        all_species = []
-        z_offset = 0.0
-        
-        for i, (mono_pmg, mono) in enumerate(zip(expanded_structures, monolayers)):
-            coords = np.array([site.coords for site in mono_pmg], dtype=np.float64)
-            
-            if i > 0 and twist_angles[i - 1] is not None:
-                m, n = twist_angles[i - 1]
-                cost = (m**2 - n**2) / (m**2 + n**2)
-                sint = (2 * m * n) / (m**2 + n**2)
-                rot_matrix = np.array([[cost, -sint, 0],
-                                       [sint, cost, 0],
-                                       [0, 0, 1]], dtype=np.float64)
-                coords = coords @ rot_matrix.T
-            
-            coords[:, 2] += z_offset
-            all_coords.append(coords)
-            all_species.extend([site.species for site in mono_pmg])
-            
-            if i < len(monolayers) - 1:
-                z_offset -= interlayer_distances[i]
-        
-        all_coords = np.vstack(all_coords)
-        
-        base_lattice = expanded_structures[0].lattice
-        stacked = Structure(base_lattice, all_species, all_coords, coords_are_cartesian=True)
-        
-        stacked_atoms = adapter.get_atoms(stacked)
-        
-        positions = stacked_atoms.positions
-        min_z = np.min(positions[:, 2])
-        max_z = np.max(positions[:, 2])
-        
-        z_shift = vacuum / 2.0 - min_z
-        positions[:, 2] += z_shift
-        
-        new_z_length = max_z - min_z + vacuum
-        
-        current_cell = stacked_atoms.cell
-        stacked_atoms.cell = [
-            current_cell[0],
-            current_cell[1],
-            [0, 0, new_z_length]
-        ]
-        
-        combined_metadata = {}
-        if hasattr(monolayers[0], '_metadata') and monolayers[0]._metadata:
-            combined_metadata = monolayers[0]._metadata.copy()
-        combined_metadata['twist_params'] = twist_angles
-        combined_metadata['interlayer_distances'] = interlayer_distances
-        combined_metadata['vacuum'] = vacuum
-        combined_metadata['common_supercell'] = (common_nx, common_ny)
-        combined_metadata['n_layers'] = len(monolayers)
-        
-        return q2DStructure(
-            stacked_atoms,
-            structure_type='monolayer',
-            BX_dist=monolayers[0].BX_dist,
-            A_ions=monolayers[0].A_ions,
-            B_ions=monolayers[0].B_ions,
-            X_ions=monolayers[0].X_ions,
-            xy_expansion=(common_nx, common_ny),
-            **combined_metadata
+
+        if len(monolayers) == 2 and twist_angles[0] is not None:
+            m, n = twist_angles[0]
+            return create_twisted_bilayer(
+                monolayers[0],
+                monolayers[1],
+                m,
+                n,
+                interlayer_distance=interlayer_distances[0],
+                vacuum=vacuum,
+            )
+
+        return create_twisted_multilayer(
+            monolayers, twist_angles, interlayer_distances, vacuum=vacuum
         )
 
-    def Twist(self, m1, m2, m=3, n=1, interlayer_distance=11.0, vacuum=12.0):
+    def Twist(
+        self,
+        m1: q2DStructure,
+        m2: q2DStructure,
+        m: int = 3,
+        n: int = 1,
+        interlayer_distance: float = 11.0,
+        vacuum: float = 12.0,
+    ) -> q2DStructure:
         """
         Create a twisted bilayer from two monolayer structures.
 
-        This is a simplified API for creating twisted bilayers from two monolayers.
-        The heavy lifting is done by create_twisted_bilayer in twist_monolayer.py.
+        .. deprecated::
+            Use :meth:`twist` instead for more flexible multi-layer stacking.
 
         Parameters
         ----------
@@ -298,18 +284,30 @@ class q2D_creator:
         m2 : q2DStructure
             Second monolayer structure
         m : int, optional
-            First integer parameter for twist angle calculation (default: 3)
+            First integer parameter for twist angle (default: 3)
         n : int, optional
-            Second integer parameter for twist angle calculation (default: 1)
+            Second integer parameter for twist angle (default: 1)
         interlayer_distance : float, optional
             Vertical distance between layers in Angstroms (default: 11.0)
         vacuum : float, optional
-            Vacuum space above and below the bilayer in Angstroms (default: 12.0)
+            Vacuum space above and below in Angstroms (default: 12.0)
 
         Returns
         -------
-        Atoms
-            ASE Atoms object of the twisted bilayer
+        q2DStructure
+            Twisted bilayer structure
         """
-        from q2D_Materials.utils.twist_monolayer import create_twisted_bilayer
-        return create_twisted_bilayer(m1, m2, m, n, interlayer_distance, vacuum)
+        import warnings
+
+        warnings.warn(
+            "Twist() is deprecated. Use twist() instead for more flexible multi-layer stacking.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
+        return self.twist(
+            monolayers=[m1, m2],
+            twist_angles=[(m, n)],
+            interlayer_distances=[interlayer_distance],
+            vacuum=vacuum,
+        )

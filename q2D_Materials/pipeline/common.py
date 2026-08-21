@@ -17,20 +17,34 @@ from q2D_Materials.builders.templates import (
     flatten_floor_schema,
 )
 from q2D_Materials.builders.populate import populate_structure
-from q2D_Materials.utils.A_sites import (
+from q2D_Materials.utils.sites.A_sites import (
     calculate_BX_distance,
     get_a_site_object,
 )
-from q2D_Materials.utils.molecule_builder import smiles_to_ase_atoms
+from q2D_Materials.builders.molecule_builder import smiles_to_ase_atoms
 
 
-def get_template(template_name: str) -> str:
-    """Return a template name, validating it exists (based on available JSONs)."""
+def get_template(template_name: str | Dict) -> str | Dict:
+    """
+    Return a template name, validating it exists (based on available JSONs),
+    or return the template data directly if a dict/JSON string is provided.
+    """
+    if isinstance(template_name, dict):
+        return template_name
+        
+    # Check if input is a valid JSON string
+    if isinstance(template_name, str) and template_name.strip().startswith("{"):
+        return template_name
+        
     name = template_name.lower()
     valid = available_templates()
-    if name not in valid:
-        raise ValueError(f"template must be one of {valid}")
-    return name
+    # Case-insensitive comparison: convert valid templates to lowercase for matching
+    valid_lower = [v.lower() for v in valid]
+    if name not in valid_lower:
+        raise ValueError(f"template must be one of {valid} or a valid JSON/dict")
+    # Return the original case template name
+    valid_map = {v.lower(): v for v in valid}
+    return valid_map[name]
 
 
 def auto_calculate_BX_distance(B: str, X: str) -> float:
@@ -41,6 +55,25 @@ def auto_calculate_BX_distance(B: str, X: str) -> float:
         return 2.0
 
 
+def _get_first_element(value):
+    """
+    Get the first element if value is a list/tuple, otherwise return the value itself.
+
+    Parameters
+    ----------
+    value : any
+        Input value that might be a list, tuple, or single value
+
+    Returns
+    -------
+    any
+        First element if list/tuple, otherwise the value itself
+    """
+    if isinstance(value, (list, tuple)):
+        return value[0]
+    return value
+
+
 def resolve_BX_distance(B, X, BX_dist: float | None) -> float:
     """
     Return the BX distance, computing it when not provided.
@@ -48,15 +81,104 @@ def resolve_BX_distance(B, X, BX_dist: float | None) -> float:
     """
     if BX_dist is not None:
         return BX_dist
-    B_first = B[0] if isinstance(B, (list, tuple)) else B
-    X_first = X[0] if isinstance(X, (list, tuple)) else X
+    B_first = _get_first_element(B)
+    X_first = _get_first_element(X)
     return auto_calculate_BX_distance(B_first, X_first)
+
+
+def _create_atomic_atoms(element_str: str) -> Atoms:
+    """
+    Create an Atoms object from an atomic element string.
+
+    Handles both pymatgen-based element validation and fallback logic.
+
+    Parameters
+    ----------
+    element_str : str
+        Atomic element symbol (e.g., 'Cs', 'K', 'Na')
+
+    Returns
+    -------
+    Atoms
+        Single-atom Atoms object
+
+    Raises
+    ------
+    ValueError
+        If the string is not a valid atomic element
+    """
+    from pymatgen.core.periodic_table import Element
+
+    try:
+        Element(element_str)
+        return Atoms(element_str, positions=[[0, 0, 0]])
+    except (ValueError, KeyError):
+        pass
+
+    # Fallback without pymatgen
+    atomic_spacers = ['Cs', 'K', 'Rb', 'Na', 'Li', 'Ca', 'Sr', 'Ba', 'Mg']
+    if element_str in atomic_spacers:
+        return Atoms(element_str, positions=[[0, 0, 0]])
+    if len(element_str) <= 2 and element_str[0].isupper():
+        return Atoms(element_str, positions=[[0, 0, 0]])
+
+    raise ValueError(f"'{element_str}' is not a recognized atomic element")
+
+
+def _normalize_to_atoms_or_string(input_value, return_atoms_only: bool = False):
+    """
+    Common base function for normalizing string inputs to Atoms objects or strings.
+
+    Parameters
+    ----------
+    input_value : str or Atoms
+        Input value to normalize
+    return_atoms_only : bool
+        If True, always return Atoms objects (for spacers)
+        If False, return strings for atomic cations, Atoms for molecular (for A-sites)
+
+    Returns
+    -------
+    str or Atoms
+        Normalized value
+    """
+    if isinstance(input_value, Atoms):
+        return input_value.copy()
+
+    if isinstance(input_value, str):
+        normalized = get_a_site_object(input_value)
+        if isinstance(normalized, Atoms):
+            return normalized
+        if isinstance(normalized, str):
+            if return_atoms_only:
+                # For spacers, first try to create Atoms from atomic elements
+                # If that fails, try SMILES conversion
+                try:
+                    return _create_atomic_atoms(normalized)
+                except ValueError:
+                    # Not an atomic element, try SMILES conversion
+                    return smiles_to_ase_atoms(input_value)
+            else:
+                # For A-sites, return atomic cations as strings
+                return normalized
+
+        if return_atoms_only:
+            # Try SMILES conversion for spacers (when get_a_site_object returns None)
+            return smiles_to_ase_atoms(input_value)
+        else:
+            # For A-sites, return unrecognized strings as-is
+            return input_value
+
+    if return_atoms_only:
+        raise ValueError(f"Input must be a string (SMILES or abbreviation) or Atoms object, got {type(input_value)}")
+    else:
+        return input_value
 
 
 def normalize_spacer(spacer):
     """
     Normalize spacer input to handle strings (SMILES or abbreviations) and Atoms objects.
-    
+
     Supports both atomic spacers (e.g., "Cs", "Rb", "K") and molecular spacers (SMILES strings).
 
     Parameters
@@ -69,65 +191,7 @@ def normalize_spacer(spacer):
     Atoms
         ASE Atoms object of the spacer molecule or atom
     """
-    if isinstance(spacer, Atoms):
-        return spacer.copy()
-
-    if isinstance(spacer, str):
-        try:
-            normalized = get_a_site_object(spacer)
-            if isinstance(normalized, Atoms):
-                return normalized
-            if isinstance(normalized, str):
-                try:
-                    from pymatgen.core.periodic_table import Element
-
-                    try:
-                        Element(normalized)
-                        return Atoms(normalized, positions=[[0, 0, 0]])
-                    except (ValueError, KeyError):
-                        pass
-                except ImportError:
-                    atomic_spacers = ['Cs', 'K', 'Rb', 'Na', 'Li', 'Ca', 'Sr', 'Ba', 'Mg']
-                    if normalized in atomic_spacers:
-                        return Atoms(normalized, positions=[[0, 0, 0]])
-                    if len(normalized) <= 2 and normalized[0].isupper():
-                        return Atoms(normalized, positions=[[0, 0, 0]])
-        except (ValueError, ImportError):
-            pass
-
-        try:
-            if smiles_to_ase_atoms is not None:
-                return smiles_to_ase_atoms(spacer)
-            else:
-                raise ValueError("RDKit not available for SMILES processing")
-        except Exception as e:
-            raise ValueError(f"Failed to parse spacer '{spacer}' as SMILES or abbreviation: {e}")
-
-    raise ValueError(f"Spacer must be a string (SMILES or abbreviation) or Atoms object, got {type(spacer)}")
-
-
-def _count_nh3_groups(spacer_atoms: Atoms) -> int:
-    """Return the number of NH3-like nitrogens (N with 3 nearby H)."""
-    symbols = spacer_atoms.get_chemical_symbols()
-    positions = spacer_atoms.get_positions()
-
-    n_indices = [i for i, s in enumerate(symbols) if s == "N"]
-    h_indices = [i for i, s in enumerate(symbols) if s == "H"]
-    if not n_indices or not h_indices:
-        return 0
-
-    h_positions = positions[h_indices]
-    nh3_count = 0
-    nh_bond_cutoff = 1.2
-
-    for n_idx in n_indices:
-        n_pos = positions[n_idx]
-        distances = np.linalg.norm(h_positions - n_pos, axis=1)
-        nearby_h = np.sum(distances < nh_bond_cutoff)
-        if nearby_h == 3:
-            nh3_count += 1
-
-    return nh3_count
+    return _normalize_to_atoms_or_string(spacer, return_atoms_only=True)
 
 
 def calculate_max_sharp_spacer_span(
@@ -143,9 +207,9 @@ def calculate_max_sharp_spacer_span(
     if sharp_spacer is None or len(sharp_spacer) == 0:
         return None
 
-    from q2D_Materials.builders.spacer import calculate_double_spacer_nh3_distance
+    from q2D_Materials.builders.spacer import calculate_double_spacer_nh3_distances
     from q2D_Materials.pipeline.common import normalize_spacer
-    from q2D_Materials.utils.molecule_builder import get_molecule_length, align_ase_molecule_for_perovskite
+    from q2D_Materials.builders.molecule_builder import get_molecule_length, align_ase_molecule_for_perovskite
 
     max_span = 0.0
     saw_valid = False
@@ -169,9 +233,10 @@ def calculate_max_sharp_spacer_span(
         if len(spacer_atoms) > 1:
             atomic_only = False
 
-        nh3_count = _count_nh3_groups(spacer_atoms)
+        from q2D_Materials.builders.spacer import count_nh3_groups
+        nh3_count = count_nh3_groups(spacer_atoms)
         if nh3_count >= 2:
-            span = calculate_double_spacer_nh3_distance(spacer_atoms)
+            span = calculate_double_spacer_nh3_distances(spacer_atoms)
         else:
             aligned = align_ase_molecule_for_perovskite(spacer_atoms.copy())
             span = get_molecule_length(aligned)
@@ -189,7 +254,7 @@ def calculate_max_sharp_spacer_span(
 
 
 def build_cell_positions(
-    template_name: str,
+    template_name: str | Dict,
     BX_dist: float,
     jahn_teller_dist: float,
     layer_sequence: Optional[List[str] | str] = None,
@@ -200,6 +265,8 @@ def build_cell_positions(
     sharp_spacer_span: Optional[float] = None,
     glazer_angles: Optional[List[float]] = None,
     glazer_pattern: Optional[List[str]] = None,
+    lattice_multipliers: Optional[List[float]] = None,
+    interlayer_distances: Optional[Dict[int, float]] = None,
 ) -> Dict[str, object]:
     """
     Build floor schema then flatten to site-indexed positions.
@@ -216,6 +283,8 @@ def build_cell_positions(
         sharp_spacer_nn_distance=sharp_spacer_span,
         glazer_angles=glazer_angles,
         glazer_pattern=glazer_pattern,
+        lattice_multipliers=lattice_multipliers,
+        interlayer_distances=interlayer_distances,
     )
 
     if spacer_provided and attachment_end:
@@ -280,6 +349,12 @@ def populate_positions(
     Ap_ions=None,
     sharp_spacer=None,
     site_labels=None,
+    optimizer: str = "KS",
+    BX_dist=None,
+    spacer_orientation: Optional[List[str]] = None,
+    collision_strategy: str = "rotate",
+    wrap_atoms: bool = True,
+    pbc_z: bool = True,
 ) -> Atoms:
     """Populate ions using the population toolchain."""
     positions_np = {site: np.asarray(coords, dtype=float) for site, coords in positions.items()}
@@ -293,6 +368,12 @@ def populate_positions(
         Ap_ions=Ap_ions,
         sharp_spacer=sharp_spacer,
         site_labels=site_labels,
+        optimizer=optimizer,
+        BX_dist=BX_dist,
+        spacer_orientation=spacer_orientation,
+        collision_strategy=collision_strategy,
+        wrap_atoms=wrap_atoms,
+        pbc_z=pbc_z,
     )
 
 
@@ -305,28 +386,92 @@ def _split_layer_sequence_string(seq: str) -> List[str]:
     return parts if parts else [seq]
 
 
-def default_layer_sequence(layer_sequence: Optional[str | List[str]], thickness: int, structure_type: str = "monolayer") -> str | List[str]:
-    """Return the default layer sequence for a given thickness if not provided."""
+def _parse_layer_sequence_with_distances(seq: str) -> Tuple[List[str], Optional[Dict[int, float]]]:
+    """
+    Parse a layer sequence string with optional inter-floor distances.
+
+    Examples:
+    - "L1-L2-L3" -> (["L1", "L2", "L3"], None)
+    - "L1-(1.5)-L2-(2.0)-L3" -> (["L1", "L2", "L3"], {0: 1.5, 1: 2.0})
+
+    Parameters
+    ----------
+    seq : str
+        Layer sequence string, e.g. "L1-(1.5)-L3-M2-(3.2)-M1"
+
+    Returns
+    -------
+    Tuple[List[str], Optional[Dict[int, float]]]
+        Floor labels and optional interlayer distances keyed by gap index.
+    """
+    import re
+
+    # Pattern to match floor labels and optional distances in parentheses
+    # Matches: LABEL or LABEL-(DISTANCE)
+    pattern = r'([A-Za-z]\w*)\s*(?:-\s*\((\d+(?:\.\d+)?)\))?'
+    matches = re.findall(pattern, seq)
+
+    if not matches:
+        # Fallback to old parsing if regex fails
+        floor_labels = _split_layer_sequence_string(seq)
+        return floor_labels, None
+
+    floor_labels = []
+    distances = {}
+
+    for i, (label, dist_str) in enumerate(matches):
+        floor_labels.append(label)
+        if dist_str:
+            try:
+                distances[i] = float(dist_str)
+            except ValueError:
+                # Skip invalid numeric values
+                continue
+
+    # Only return distances if any were found
+    return floor_labels, distances if distances else None
+
+
+def default_layer_sequence(layer_sequence: Optional[str | List[str]], thickness: int, structure_type: str = "monolayer") -> Tuple[str | List[str], Optional[Dict[int, float]]]:
+    """
+    Return the default layer sequence for a given thickness if not provided.
+
+    Returns both the layer sequence and any interlayer distances specified in the sequence.
+    """
     if layer_sequence is None:
         if structure_type.lower() == "bulk":
-            return "-".join(["L1-L2"] * thickness)
+            return "-".join(["L1-L2"] * thickness), None
         else:
-            return "-".join(["L1-L2"] * thickness)
+            # For monolayers, add L1 at the end
+            base_sequence = "-".join(["L1-L2"] * thickness)
+            return f"{base_sequence}-L1", None
     elif isinstance(layer_sequence, str) and layer_sequence.upper() == "DJ":
         # DJ keyword: (L1-L2) * thickness + "-M1-M2" for bulk
         if structure_type.lower() == "bulk" and thickness > 1:
             parts = ["L2", "L1"] * thickness
-            parts.pop()
+            parts.pop() # remove the last L1
             base_sequence = "-".join(parts)
-            return f"{base_sequence}-M1-M1"
+            return f"{base_sequence}-M1-M1", None
         elif structure_type.lower() == "bulk" and thickness == 1:
-            return "L2-M1-M1"
+            return "L2-M1-M1", None
     elif isinstance(layer_sequence, str) and layer_sequence.upper() == "RP":
+        if structure_type.lower() == "bulk" and thickness > 1:
+            parts_below = ["L2", "L1"] * thickness
+            parts_above = ["RP0", "RP2"] * thickness
+            parts_below = parts_below[:-1] # remove the last L1
+            parts_above = parts_above[1:] # remove the first RP0
+            parts_above = ["RP1"] + parts_above
+            join_below = "-".join(parts_below) + "-M1"
+            join_above = "-".join(parts_above) + "-RP1-M1"
+            base_sequence = f"{join_below}-{join_above}"
+            return base_sequence, None
         # RP keyword: fixed sequence using RP layers
-        return "L2-M1-RP1-RP2-RP1-M1"
+        return "L2-M1-RP1-RP2-RP1-M1", None
     else:
         if isinstance(layer_sequence, str):
             if any(sep in layer_sequence for sep in ("-", ",", " ")):
-                return _split_layer_sequence_string(layer_sequence)
-            return layer_sequence
-        return layer_sequence
+                # Try to parse with distances first
+                floor_labels, distances = _parse_layer_sequence_with_distances(layer_sequence)
+                return floor_labels, distances
+            return layer_sequence, None
+        return layer_sequence, None

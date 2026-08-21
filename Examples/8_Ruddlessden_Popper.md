@@ -9,14 +9,14 @@ RP stacks interleave perovskite slabs with `S#` spacer planes. Every time two co
 from q2D_Materials.core.creator import q2D_creator
 
 q2d = q2D_creator()
-rp = q2d.create_perovskite(
+rp = q2d.create_structure(
     structure_type="bulk",
     template="cubic",
     layer_sequence="RP",     # expands to the RP slab ordering
     thickness=3,
     xy_expansion=(1, 1),
     A_ions="MA", B_ions="Pb", X_ions="I",
-    sharp_spacer="[NH3+]CCCC[NH3+]",  # SMILES or Atoms; lists cycle across S# labels
+    spacer="[NH3+]CCCC[NH3+]",  # SMILES or Atoms; lists cycle across S# labels
     glazer_angles=[0, 0, 8],
     glazer_pattern=["0", "0", "+"],
     penetration=0.3,         # optional Ap/S# z-shift
@@ -33,7 +33,7 @@ rp = q2d.create_perovskite(
 
 Key knobs:
 - `layer_sequence="RP"`: expands to the canonical RP floor ordering.
-- `sharp_spacer`: accepts SMILES strings, ASE `Atoms`, or lists. Lists cycle through `S1`, `S2`, … as the ground/sky tracker iterates floors.
+- `spacer`: accepts SMILES strings, ASE `Atoms`, or lists. Lists cycle through `S1`, `S2`, … as the ground/sky tracker iterates floors.
 - `glazer_angles` / `glazer_pattern`: tilts the slabs before spacer placement; top views reveal how tilts stagger the anchoring grid.
 - `penetration`: single float or list. Lists rotate per Ap site while S# floors use the first entry, letting you bias spacer anchoring above/below the slabs.
 

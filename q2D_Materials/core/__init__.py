@@ -1,32 +1,33 @@
 """
-SVC Materials Core Module - Refactored Modular Architecture
+q2D Materials Core Module
 
-This module provides octahedral analysis functionality through a modular architecture:
+This module provides structure creation and analysis for 2D perovskite materials.
 
 Main Classes:
-- q2D_analyzer: Main analysis class (refactored)
-- GeometryCalculator: Geometric calculations and coordinate transformations
-- AngularAnalyzer: Angular analysis between octahedra
-- ConnectivityAnalyzer: Connectivity and network analysis
-- VectorAnalyzer: Vector and plane analysis for salt structures
+- q2D_creator: Create perovskite structures from templates
+- q2D_analyzer: Analyze structures using graph-based methods
+- q2DStructure: Structure wrapper with metadata
 
-Legacy support:
-- The original q2D_analyzer from analyzer.py is still available for backward compatibility
+The analyzer uses a hierarchical graph approach to decompose structures:
+1. Load structure (VASP, CIF, Atoms)
+2. Build connectivity graph
+3. Detect octahedra (BX6 units)
+4. Identify layers/slabs
+5. Find spacer molecules
+6. Classify A-site cations
+7. Infer structure type (bulk, DJ, RP, monolayer)
 """
 
-# Import the refactored main analyzer
-from .analyzer import q2D_analyzer
-
-# Also import the original analyzer for backward compatibility
-try:
-    from .analyzer import q2D_analyzer as q2D_analyzer_legacy
-except ImportError:
-    q2D_analyzer_legacy = None
+# Import the creator
+from .creator import q2D_creator
 
 # Import q2DStructure for structure creation
 from .structure import q2DStructure
 
+# Note: q2D_analyzer should be imported directly from q2D_Materials.analyzer
+# to avoid circular imports (analyzer imports from core.structure)
+
 __all__ = [
-    'q2D_analyzer',
+    'q2D_creator',
     'q2DStructure',
 ] 

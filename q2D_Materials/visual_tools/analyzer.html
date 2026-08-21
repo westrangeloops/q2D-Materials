@@ -1,0 +1,1178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Structure Analyzer - q2D Materials</title>
+    <link rel="stylesheet" href="/static/theme.css">
+    <script src="/lib/vis-9.1.2/vis-network.min.js" onerror="alert('Error loading vis.js library! Please check if /lib/vis-9.1.2/vis-network.min.js exists.')"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+
+    <script>
+    // Apply theme immediately before anything else loads
+    (function() {
+        const currentTheme = localStorage.getItem('theme');
+        if (currentTheme === 'dark') {
+            document.documentElement.setAttribute('data-theme', 'dark');
+        } else if (currentTheme === 'light') {
+            document.documentElement.removeAttribute('data-theme');
+        }
+    })();
+    </script>
+
+    <style>
+        /* Main layout */
+        #app {
+            display: flex;
+            width: 100vw;
+            height: 100vh;
+            gap: 0;
+            overflow: hidden;
+        }
+
+        /* Sidebars */
+        .sidebar {
+            display: flex;
+            flex-direction: column;
+            background: var(--bg-panel);
+            border: 1px solid rgba(255,255,255,0.05);
+            overflow-y: auto;
+            padding: 20px;
+            gap: 15px;
+            flex-shrink: 0;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+        }
+
+        .sidebar-left {
+            width: 320px;
+        }
+
+        .sidebar-right {
+            width: 350px;
+        }
+
+        /* Main center area */
+        .main-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* Header */
+        .header {
+            padding: 15px 20px;
+            background: rgba(255,255,255,0.02);
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-shrink: 0;
+        }
+
+        .header h2 {
+            margin: 0;
+            font-size: 1.1rem;
+            color: var(--fg-primary);
+        }
+
+        /* Graph container */
+        .graph-container {
+            flex: 1;
+            overflow: hidden;
+            position: relative;
+            background: var(--bg-canvas);
+        }
+
+        #network-viz {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Loading overlay */
+        .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+            z-index: 100;
+        }
+
+        /* Debug Overlay */
+        #debug-log {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 150px;
+            background: rgba(0, 0, 0, 0.85);
+            color: #0f0;
+            font-family: monospace;
+            font-size: 12px;
+            padding: 10px;
+            overflow-y: auto;
+            z-index: 9999;
+            border-top: 2px solid #333;
+            display: none; /* Hidden by default, toggle with 'D' key */
+        }
+        .log-entry { margin-bottom: 4px; border-bottom: 1px solid #333; }
+        .log-error { color: #f55; font-weight: bold; }
+        .log-warn { color: #fa0; }
+        .log-info { color: #8cf; }
+
+        .spinner {
+            border: 3px solid rgba(131,211,220,0.2);
+            border-top: 3px solid var(--accent);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Upload area */
+        .upload-area {
+            border: 2px dashed var(--accent);
+            border-radius: var(--radius-lg);
+            padding: 30px;
+            text-align: center;
+            background: rgba(131, 211, 220, 0.05);
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .upload-area:hover {
+            background: rgba(131, 211, 220, 0.1);
+            border-color: var(--accent-hover);
+        }
+
+        .upload-area.dragover {
+            background: rgba(131, 211, 220, 0.2);
+            border-color: var(--accent-hover);
+            transform: scale(1.02);
+        }
+
+        .upload-icon {
+            font-size: 3rem;
+            margin-bottom: 15px;
+        }
+
+        .upload-text h4 {
+            margin: 0 0 8px 0;
+            color: var(--fg-primary);
+            font-size: 0.95rem;
+        }
+
+        .upload-text p {
+            margin: 0;
+            color: var(--fg-secondary);
+            font-size: 0.8rem;
+        }
+
+        #vasp-file-input {
+            display: none;
+        }
+
+        /* Cavity list */
+        .cavity-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+
+        .cavity-item {
+            background: var(--bg-input);
+            border: 1px solid rgba(255,255,255,0.05);
+            border-radius: var(--radius-md);
+            padding: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+        }
+
+        .cavity-item:hover {
+            background: rgba(255,255,255,0.04);
+            border-color: var(--accent);
+            transform: translateX(3px);
+        }
+
+        .cavity-item.active {
+            background: rgba(131, 211, 220, 0.1);
+            border-color: var(--accent);
+        }
+
+        .cavity-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 6px;
+        }
+
+        .cavity-item-title {
+            font-weight: 600;
+            color: var(--fg-primary);
+            font-size: 0.9rem;
+        }
+
+        .cavity-item-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            background: rgba(131, 211, 220, 0.2);
+            color: var(--accent);
+            border-radius: var(--radius-pill);
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .cavity-item-info {
+            display: flex;
+            gap: 15px;
+            font-size: 0.8rem;
+            color: var(--fg-secondary);
+        }
+
+        /* Info card */
+        .info-card {
+            background: var(--bg-input);
+            border-radius: var(--radius-md);
+            padding: 15px;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .info-card h4 {
+            margin: 0 0 10px 0;
+            color: var(--accent);
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.03);
+            font-size: 0.85rem;
+        }
+
+        .info-row:last-child {
+            border-bottom: none;
+        }
+
+        .info-label {
+            color: var(--fg-secondary);
+            font-weight: 500;
+        }
+
+        .info-value {
+            color: var(--fg-primary);
+            font-weight: 600;
+            font-family: monospace;
+        }
+
+        /* Filter section */
+        .filter-section {
+            background: var(--bg-input);
+            border-radius: var(--radius-md);
+            padding: 12px;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .filter-section h5 {
+            margin: 0 0 10px 0;
+            color: var(--accent);
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .filter-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .filter-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.85rem;
+        }
+
+        .filter-item input[type="checkbox"] {
+            cursor: pointer;
+            width: 16px;
+            height: 16px;
+        }
+
+        .filter-item label {
+            cursor: pointer;
+            flex: 1;
+            color: var(--fg-primary);
+        }
+
+        .filter-count {
+            color: var(--fg-secondary);
+            font-size: 0.75rem;
+            margin-left: auto;
+        }
+
+        /* Buttons */
+        button {
+            border: none;
+            border-radius: var(--radius-md);
+            padding: 10px 16px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .primary-btn {
+            background: var(--accent);
+            color: #282a36;
+        }
+
+        .primary-btn:hover {
+            background: var(--accent-hover);
+            transform: translateY(-2px);
+        }
+
+        .danger-btn {
+            background: rgba(255, 85, 85, 0.2);
+            color: #ff5555;
+            border: 1px solid rgba(255, 85, 85, 0.5);
+        }
+
+        .danger-btn:hover {
+            background: rgba(255, 85, 85, 0.3);
+        }
+
+        .secondary-btn {
+            background: rgba(255,255,255,0.1);
+            color: var(--fg-primary);
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+
+        .secondary-btn:hover {
+            background: rgba(255,255,255,0.15);
+        }
+
+        /* Error message */
+        .error-message {
+            background: rgba(255, 85, 85, 0.1);
+            border: 1px solid rgba(255, 85, 85, 0.5);
+            color: #ff5555;
+            padding: 12px;
+            border-radius: var(--radius-md);
+            font-size: 0.85rem;
+        }
+
+        /* Empty state */
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: var(--fg-secondary);
+            text-align: center;
+            padding: 40px;
+        }
+
+        .empty-state-icon {
+            font-size: 4rem;
+            margin-bottom: 20px;
+            opacity: 0.5;
+        }
+
+        /* Responsive */
+        @media (max-width: 1200px) {
+            .sidebar-right {
+                width: 300px;
+            }
+        }
+
+        @media (max-width: 900px) {
+            .sidebar-left, .sidebar-right {
+                width: 250px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div id="app">
+    <!-- Debug Overlay -->
+    <div id="debug-log" style="display: block;">
+        <div style="position: sticky; top: 0; background: #000; padding: 2px; border-bottom: 1px solid #555; display: flex; justify-content: space-between;">
+            <span>🔧 Debug Console</span>
+            <button onclick="document.getElementById('debug-log').style.display='none'" style="padding: 2px 8px; font-size: 10px; background: #333;">Close</button>
+        </div>
+        <div id="debug-content"></div>
+    </div>
+
+    <!-- Left Sidebar: Upload & Cavities -->
+    <div class="sidebar sidebar-left">
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px; cursor: pointer; padding: 10px; border-radius: var(--radius-md); transition: all 0.2s; background: transparent;"
+             @click="goToIndex"
+             @mouseover="$event.currentTarget.style.background='rgba(131, 211, 220, 0.1)'; $event.currentTarget.style.transform='translateX(-2px)'"
+             @mouseout="$event.currentTarget.style.background='transparent'; $event.currentTarget.style.transform='translateX(0)'">
+            <object type="image/svg+xml" data="/Logos/logo_q2D_materials.svg" width="200" height="60" style="pointer-events: none;"></object>
+        </div>
+
+        <div v-if="!analysisData">
+            <!-- Upload Area -->
+            <input type="file" @change="handleFileUpload" ref="fileInput" id="vasp-file-input">
+            <div class="upload-area"
+                 @click="$refs.fileInput.click()"
+                 @dragover.prevent="isDragging = true"
+                 @dragleave="isDragging = false"
+                 @drop.prevent="handleFileDrop"
+                 :class="{ dragover: isDragging }">
+                <div class="upload-icon">📂</div>
+                <div class="upload-text">
+                    <h4>Upload VASP File</h4>
+                    <p>Drop file here or click to browse</p>
+                    <p style="font-size: 0.75rem; margin-top: 4px; opacity: 0.6;">Supported: .vasp, POSCAR, CONTCAR</p>
+            </div>
+            </div>
+        </div>
+
+        <template v-else>
+            <!-- Cavity List Header -->
+            <button class="secondary-btn" style="width: 100%;" @click="returnToMainGraph">
+                ← Back to Main Graph
+            </button>
+
+            <h4 style="margin: 10px 0 8px 0; color: var(--accent); font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.5px;">
+                Cavities ({{ cavities.length }})
+            </h4>
+
+            <!-- Cavity List -->
+            <div class="cavity-list" v-if="cavities.length > 0">
+                <div class="cavity-item" 
+                     v-for="(cavity, idx) in cavities" 
+                     :key="idx"
+                     :class="{ active: selectedCavityIndex === idx }">
+                    <div style="flex: 1;" @click="selectCavity(idx)">
+                        <div class="cavity-item-header">
+                            <span class="cavity-item-title">Cavity {{ cavity.index }}</span>
+                            <span class="cavity-item-badge" v-if="cavity.contains_a_site">A-site</span>
+                        </div>
+                        <div class="cavity-item-info">
+                            <span>{{ cavity.octahedra_count }} Oct</span>
+                            <span>{{ cavity.x_atom_count }} X</span>
+                        </div>
+                    </div>
+                    <button class="primary-btn" 
+                            style="padding: 4px 10px; font-size: 0.75rem; min-width: 60px;"
+                            @click.stop="selectCavity(idx)">
+                        {{ selectedCavityIndex === idx ? 'Viewing' : 'View' }}
+                    </button>
+                </div>
+            </div>
+
+            <div v-else style="padding: 20px; text-align: center; color: var(--fg-secondary); font-size: 0.85rem;">
+                No cavities detected
+            </div>
+        </template>
+
+        <!-- Error message -->
+        <div v-if="errorMessage" class="error-message">
+            {{ errorMessage }}
+                    </div>
+                    </div>
+
+    <!-- Center Panel: Graph Visualization -->
+    <div class="main-panel">
+        <div class="header">
+            <h2 v-if="!analysisData">Structure Analyzer</h2>
+            <h2 v-else-if="currentView === 'main'">{{ analysisData.metadata?.formula || 'Unknown' }} - Main Graph</h2>
+            <h2 v-else>{{ analysisData.metadata?.formula || 'Unknown' }} - Cavity {{ selectedCavityIndex }}</h2>
+            
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <button v-if="analysisData && currentView === 'main'" class="primary-btn" @click="resetView">🔄 Reset</button>
+                <button v-if="analysisData && currentView === 'main'" class="primary-btn" @click="fitGraph">🔍 Fit</button>
+            </div>
+        </div>
+
+        <div class="graph-container">
+            <div v-if="!analysisData" class="empty-state">
+                <div class="empty-state-icon">📊</div>
+                <h3 style="color: var(--fg-primary); margin: 0 0 10px 0;">No Structure Loaded</h3>
+                <p style="max-width: 400px;">Upload a VASP file to visualize the structure and analyze cavities.</p>
+            </div>
+
+            <div v-else id="network-viz"></div>
+
+            <div v-if="isLoading" class="loading-overlay">
+                <div class="spinner"></div>
+                <span v-if="currentView === 'main'">Loading structure...</span>
+                <span v-else>Loading cavity {{ selectedCavityIndex }}...</span>
+            </div>
+                </div>
+            </div>
+
+    <!-- Right Sidebar: Filters & Info -->
+    <div class="sidebar sidebar-right">
+        <template v-if="analysisData && analysisData.metadata">
+            <!-- Structure Info -->
+            <div class="info-card">
+                <h4>📋 Structure Info</h4>
+                <div class="info-row">
+                    <span class="info-label">Formula</span>
+                    <span class="info-value">{{ analysisData.metadata.formula || '-' }}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Type</span>
+                    <span class="info-value">{{ analysisData.metadata.structure_type || '-' }}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Atoms</span>
+                    <span class="info-value">{{ analysisData.metadata.atom_count || 0 }}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Nodes/Edges</span>
+                    <span class="info-value">{{ analysisData.metadata.node_count || 0 }}/{{ analysisData.metadata.edge_count || 0 }}</span>
+                </div>
+            </div>
+
+            <!-- Statistics -->
+            <div class="info-card">
+                <h4>📊 Statistics</h4>
+                <div class="info-row">
+                    <span class="info-label">Octahedra</span>
+                    <span class="info-value">{{ analysisData.metadata.octahedra_count || 0 }}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Layers</span>
+                    <span class="info-value">{{ analysisData.metadata.layer_count || 0 }}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Spacers</span>
+                    <span class="info-value">{{ analysisData.metadata.spacers_count || 0 }}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">A-sites</span>
+                    <span class="info-value">{{ analysisData.metadata.a_sites_count || 0 }}</span>
+                </div>
+            </div>
+
+            <!-- Node Type Filters -->
+            <div class="filter-section">
+                <h5>Node Types</h5>
+                <div class="filter-list">
+                    <div class="filter-item" v-for="type in nodeTypes" :key="type">
+                        <input type="checkbox" 
+                               :id="'node-' + type"
+                               :checked="nodeVisibility[type]"
+                               @change="toggleNodeType(type)">
+                        <label :for="'node-' + type">{{ type }}</label>
+                        <span class="filter-count">({{ getNodeTypeCount(type) }})</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Edge Type Filters -->
+            <div class="filter-section">
+                <h5>Edge Types</h5>
+                <div class="filter-list">
+                    <div class="filter-item" v-for="type in edgeTypes" :key="type">
+                        <input type="checkbox" 
+                               :id="'edge-' + type"
+                               :checked="edgeVisibility[type]"
+                               @change="toggleEdgeType(type)">
+                        <label :for="'edge-' + type">{{ type }}</label>
+                        <span class="filter-count">({{ getEdgeTypeCount(type) }})</span>
+    </div>
+            </div>
+        </div>
+        </template>
+    </div>
+</div>
+
+<script>
+const { createApp, ref, computed, onMounted, onUnmounted, nextTick } = Vue;
+
+// Debug logging helper
+function log(msg, type = 'info') {
+    const debugContent = document.getElementById('debug-content');
+    if (debugContent) {
+        const entry = document.createElement('div');
+        entry.className = `log-entry log-${type}`;
+        const time = new Date().toISOString().split('T')[1].slice(0, -1);
+        entry.textContent = `[${time}] ${msg}`;
+        debugContent.appendChild(entry);
+        debugContent.scrollTop = debugContent.scrollHeight;
+    }
+    console.log(`[${type.toUpperCase()}] ${msg}`);
+}
+
+createApp({
+    setup() {
+        // Initial environment check
+        onMounted(() => {
+            log('🚀 Application mounted');
+            log(`Checking vis.js: ${typeof vis !== 'undefined' ? 'LOADED' : 'MISSING'}`, typeof vis !== 'undefined' ? 'info' : 'error');
+            
+            // Check if lib script tag loaded
+            const scripts = document.getElementsByTagName('script');
+            for(let s of scripts) {
+                if(s.src && s.src.includes('vis')) {
+                    log(`Found vis script tag: ${s.src}`);
+                }
+            }
+        });
+
+        const fileInput = ref(null);
+        const analysisData = ref(null);
+        const cavities = ref([]);
+        const currentView = ref('main'); // 'main' or 'cavity'
+        const selectedCavityIndex = ref(null);
+        const isDragging = ref(false);
+        const isLoading = ref(false);
+        const errorMessage = ref(null);
+        const jobId = ref(null);
+        
+        // Current graph data
+        const currentGraphData = ref(null);
+        const cavityGraphData = ref(null);
+        
+        // Filters
+        const nodeVisibility = ref({});
+        const edgeVisibility = ref({});
+        
+        const nodeTypes = computed(() => Object.keys(nodeVisibility.value).sort());
+        const edgeTypes = computed(() => Object.keys(edgeVisibility.value).sort());
+        
+        // Network visualization
+        let network = null;
+        let isRendering = false; // Guard to prevent multiple renders
+
+        const updateFiltersFromData = (data) => {
+            if (!data) return;
+            
+            // Update Node Types
+            const foundNodeTypes = new Set(data.nodes.map(n => n.node_type));
+            
+            // Keep existing preferences, add new types as visible
+            for (const type of foundNodeTypes) {
+                if (nodeVisibility.value[type] === undefined) {
+                    // Default visibility: Cell is hidden by default, others visible
+                    nodeVisibility.value[type] = type !== 'cell'; 
+                }
+            }
+            
+            // Update Edge Types
+            const foundEdgeTypes = new Set(data.edges.map(e => e.edge_type || 'unknown'));
+            for (const type of foundEdgeTypes) {
+                if (edgeVisibility.value[type] === undefined) {
+                    edgeVisibility.value[type] = true;
+                }
+            }
+            
+            log(`Filters updated: ${foundNodeTypes.size} node types, ${foundEdgeTypes.size} edge types`);
+        };
+
+        const goToIndex = () => {
+            window.location.href = '/';
+        };
+
+        const handleFileUpload = async (event) => {
+            const file = event.target.files[0];
+            if (!file) return;
+            await uploadFile(file);
+        };
+
+        const handleFileDrop = async (event) => {
+            isDragging.value = false;
+            const file = event.dataTransfer.files[0];
+            if (!file) return;
+            await uploadFile(file);
+        };
+
+        const uploadFile = async (file) => {
+            log(`Starting upload for file: ${file.name} (${file.size} bytes)`);
+            
+            if (!isValidVaspFile(file.name)) {
+                const msg = 'File must be .vasp, POSCAR, or CONTCAR format';
+                log(msg, 'error');
+                errorMessage.value = msg;
+                return;
+            }
+
+            isLoading.value = true;
+            errorMessage.value = null;
+
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+
+                log('Sending POST request to /api/vasp/analyze...');
+                const response = await fetch('/api/vasp/analyze', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                log(`Response status: ${response.status} ${response.statusText}`);
+                
+                if (!response.ok) {
+                    const text = await response.text();
+                    log(`Server error body: ${text}`, 'error');
+                    throw new Error(`Server returned ${response.status}: ${text}`);
+                }
+
+                const result = await response.json();
+                log('Response JSON parsed successfully');
+
+                if (result.status === 'success') {
+                    log('✓ Analysis success reported by backend');
+                    log(`Metadata: ${JSON.stringify(result.graph_data?.metadata || {})}`);
+                    
+                    analysisData.value = result;
+                    cavities.value = result.cavities || [];
+                    jobId.value = result.job_id;
+                    currentView.value = 'main';
+                    currentGraphData.value = result.graph_data;
+                    selectedCavityIndex.value = null;
+                    
+                    log(`Graph data loaded: ${result.graph_data?.nodes?.length || 0} nodes, ${result.graph_data?.edges?.length || 0} edges`);
+                    
+                    // Update filters based on actual data
+                    updateFiltersFromData(result.graph_data);
+                    
+                    await nextTick();
+                    log('DOM updated, calling renderNetwork()...');
+                    renderNetwork();
+                    
+                    // Ensure loading is stopped after a short delay to allow network to initialize
+                    setTimeout(() => {
+                        isLoading.value = false;
+                        log('✓ Loading state cleared');
+                    }, 100);
+                } else {
+                    isLoading.value = false;
+                    const msg = result.message || 'Analysis failed';
+                    log(`Analysis failed: ${msg}`, 'error');
+                    if (result.error_details) log(`Details: ${result.error_details}`, 'error');
+                    errorMessage.value = msg;
+                }
+            } catch (error) {
+                isLoading.value = false;
+                const msg = 'Upload error: ' + error.message;
+                log(msg, 'error');
+                console.error('Full error:', error);
+                errorMessage.value = msg;
+            } finally {
+                // Safety net: ensure loading is always stopped
+                setTimeout(() => {
+                    if (isLoading.value) {
+                        log('⚠ Force stopping loading state (safety timeout)', 'warn');
+                        isLoading.value = false;
+                    }
+                }, 10000); // 10 second safety timeout
+            }
+        };
+
+        const isValidVaspFile = (filename) => {
+            const lower = filename.toLowerCase();
+            return lower.endsWith('.vasp') || 
+                   lower === 'poscar' || 
+                   lower === 'contcar' ||
+                   lower.includes('poscar') ||
+                   lower.includes('contcar');
+        };
+
+        const selectCavity = async (index) => {
+            selectedCavityIndex.value = index;
+            currentView.value = 'cavity';
+            isLoading.value = true;
+
+            try {
+                const response = await fetch(`/api/cavity/${jobId.value}/${index}`);
+                const result = await response.json();
+
+                if (result.status === 'success') {
+                    cavityGraphData.value = result;
+                    updateFiltersFromData(result);
+                    await nextTick();
+                    renderNetwork();
+                } else {
+                    errorMessage.value = result.message || 'Failed to load cavity';
+                    currentView.value = 'main';
+                    selectedCavityIndex.value = null;
+                }
+            } catch (error) {
+                errorMessage.value = 'Error loading cavity: ' + error.message;
+                currentView.value = 'main';
+                selectedCavityIndex.value = null;
+            } finally {
+                isLoading.value = false;
+            }
+        };
+
+        const returnToMainGraph = () => {
+            currentView.value = 'main';
+            selectedCavityIndex.value = null;
+            cavityGraphData.value = null;
+            renderNetwork();
+        };
+
+        const toggleNodeType = (type) => {
+            nodeVisibility.value[type] = !nodeVisibility.value[type];
+            updateGraphFilter();
+        };
+
+        const toggleEdgeType = (type) => {
+            edgeVisibility.value[type] = !edgeVisibility.value[type];
+            updateGraphFilter();
+        };
+
+        const getNodeTypeCount = (type) => {
+            if (!currentGraphData.value && !cavityGraphData.value) return 0;
+            const data = currentView.value === 'cavity' ? cavityGraphData.value : currentGraphData.value;
+            if (!data || !data.nodes) return 0;
+            return data.nodes.filter(n => n.node_type === type).length;
+        };
+
+        const getEdgeTypeCount = (type) => {
+            if (!currentGraphData.value && !cavityGraphData.value) return 0;
+            const data = currentView.value === 'cavity' ? cavityGraphData.value : currentGraphData.value;
+            if (!data || !data.edges) return 0;
+            return data.edges.filter(e => e.edge_type === type).length;
+        };
+
+        const updateGraphFilter = () => {
+            if (!network) return;
+            
+            const data = currentView.value === 'cavity' ? cavityGraphData.value : currentGraphData.value;
+            if (!data) return;
+
+            // Update node visibility
+            const nodeIds = network.body.nodes;
+            data.nodes.forEach(nodeData => {
+                const nodeId = nodeData.id;
+                const isVisible = nodeVisibility.value[nodeData.node_type];
+                if (nodeIds[nodeId]) {
+                    nodeIds[nodeId].setOptions({ hidden: !isVisible });
+                }
+            });
+
+            // Update edge visibility
+            const edgeIds = network.body.edges;
+            data.edges.forEach(edgeData => {
+                const edgeId = `${edgeData.from}-${edgeData.to}`;
+                const isVisible = edgeVisibility.value[edgeData.edge_type];
+                // Find edge by from/to
+                Object.values(edgeIds).forEach(edge => {
+                    if ((edge.from.id === edgeData.from && edge.to.id === edgeData.to) ||
+                        (edge.from.id === edgeData.to && edge.to.id === edgeData.from)) {
+                        edge.setOptions({ hidden: !isVisible });
+                    }
+                });
+            });
+        };
+        
+        const resetView = () => {
+            if (network) {
+                network.fit();
+            }
+        };
+
+        const fitGraph = () => {
+            if (network) {
+                network.fit({ animation: true });
+            }
+        };
+
+        const renderNetwork = () => {
+            log('renderNetwork() called');
+            
+            // Guard against multiple simultaneous renders
+            if (isRendering) {
+                log('⚠ Render already in progress, skipping...', 'warn');
+                return;
+            }
+            
+            if (!analysisData.value) {
+                log('✗ No analysis data available', 'error');
+                return;
+            }
+            
+            const container = document.getElementById('network-viz');
+            if (!container) {
+                log('✗ Network container element #network-viz not found in DOM', 'error');
+                return;
+            }
+
+            const data = currentView.value === 'cavity' ? cavityGraphData.value : currentGraphData.value;
+            if (!data) {
+                log(`✗ No graph data for current view: ${currentView.value}`, 'error');
+                return;
+            }
+
+            if (!data.nodes || data.nodes.length === 0) {
+                log('✗ No nodes in graph data', 'error');
+                return;
+            }
+
+            isRendering = true;
+            log(`Creating network: ${data.nodes.length} nodes, ${data.edges ? data.edges.length : 0} edges`);
+
+            try {
+                if (typeof vis === 'undefined') {
+                    throw new Error('vis.js library is not loaded! Check network tab for 404s.');
+                }
+
+                // Enhanced Color Scheme by Element
+                const elementColors = {
+                    // Metals (B-site)
+                    'Pb': '#6272a4', // Blue-grey
+                    'Sn': '#8be9fd', // Cyan
+                    'Ge': '#ffb86c', // Orange
+                    'Ti': '#bd93f9', // Purple
+                    // Halogens (X-site)
+                    'I':  '#ff5555', // Red
+                    'Br': '#ff79c6', // Pink
+                    'Cl': '#50fa7b', // Green
+                    'F':  '#f1fa8c', // Yellow
+                    // A-site / Organic
+                    'Cs': '#50fa7b', // Green
+                    'MA': '#ffb86c', // Orange
+                    'FA': '#ffb86c', // Orange
+                    'C':  '#44475a', // Dark Grey
+                    'N':  '#8be9fd', // Cyan
+                    'H':  '#f8f8f2', // White
+                    // Default Types
+                    'octahedron': '#bd93f9', // Purple
+                    'layer': '#ff79c6',      // Pink
+                    'cavity': '#f1fa8c',     // Yellow
+                    'cell': '#6272a4',       // Grey
+                    'atom': '#50fa7b',       // Default atom
+                    'molecule': '#ffb86c'    // Default molecule
+                };
+
+                // Helper to get color
+                const getNodeColor = (node) => {
+                    // 1. Try symbol property directly
+                    if (node.symbol && elementColors[node.symbol]) return elementColors[node.symbol];
+                    
+                    // 2. Try parsing label (e.g. "Pb1" -> "Pb")
+                    if (node.label) {
+                        const symbolMatch = node.label.match(/^([A-Z][a-z]?)/);
+                        if (symbolMatch && elementColors[symbolMatch[1]]) return elementColors[symbolMatch[1]];
+                    }
+                    
+                    // 3. Fallback to node type
+                    return elementColors[node.node_type] || '#888888';
+                };
+
+                // Build nodes for vis.js
+                const nodes = data.nodes.map(node => ({
+                    id: node.id,
+                    label: node.label,
+                    title: `${node.node_type}: ${node.label}`,
+                    color: getNodeColor(node),
+                    hidden: !nodeVisibility.value[node.node_type],
+                    physics: true,
+                    size: node.node_type === 'octahedron' ? 25 : 
+                           node.node_type === 'layer' ? 30 : 20,
+                }));
+
+                // Build edges for vis.js
+                const edgeColors = {
+                    contains: '#888888',
+                    shares_atoms: '#ff6b6b',
+                    cavity_octahedron: '#ffd700',
+                    contains_a_site: '#ff69b4',
+                    proximity: '#00ff00',
+                    is_contained_in: '#888888',
+                };
+
+                const edges = (data.edges || []).map(edge => {
+                    const type = edge.edge_type || 'unknown';
+                    // Default to true if type is new/unknown
+                    const isVisible = edgeVisibility.value[type] !== undefined ? edgeVisibility.value[type] : true;
+                    
+                    return {
+                        from: edge.from,
+                        to: edge.to,
+                        color: edgeColors[type] || '#888888',
+                        title: type,
+                        hidden: !isVisible,
+                        arrows: 'to',
+                        smooth: { type: 'continuous' }
+                    };
+                });
+
+                // Create new network
+                const networkData = { nodes, edges };
+                
+                // Physics Optimization:
+                // If we have very few edges compared to nodes, we likely have many isolated atoms (spacers/A-sites).
+                // Full physics with many isolated nodes is CPU intensive (N^2 repulsion).
+                // We use BarnesHut which is O(N log N) but still can be heavy.
+                // We'll limit iterations to prevent infinite "gas expansion".
+                
+                const hasEdges = edges.length > 0;
+                const nodeCount = nodes.length;
+                const edgeCount = edges.length;
+                const isSparse = edgeCount < nodeCount * 0.5; // Heuristic for sparse/disconnected graph
+                
+                log(`Physics config: nodes=${nodeCount}, edges=${edgeCount}, sparse=${isSparse}`);
+                
+                const options = {
+                    physics: {
+                        enabled: true, // Always enable initially to layout nodes
+                        stabilization: {
+                            enabled: true,
+                            iterations: 100,  // Fixed iteration count prevents infinite CPU usage
+                            updateInterval: 25,
+                            onlyDynamicEdges: false,
+                            fit: true
+                        },
+                        barnesHut: {
+                            gravitationalConstant: -2000,
+                            centralGravity: 0.3,
+                            springLength: 200,
+                            avoidOverlap: 0.1 // Help separate nodes
+                        },
+                        maxVelocity: 50,
+                        timestep: 0.35,
+                        solver: 'barnesHut',
+                        adaptiveTimestep: true // Helps with performance
+                    },
+                    nodes: {
+                        shape: 'dot',
+                        scaling: {
+                            label: { enabled: true, drawThreshold: 14, maxVisible: 30 }
+                        },
+                        font: { size: 14, color: '#f8f8f2' }
+                    },
+                    edges: {
+                        smooth: { type: 'continuous' },
+                        font: { size: 12 },
+                        color: { opacity: 0.7 }
+                    },
+                    interaction: {
+                        hover: true,
+                        navigationButtons: true,
+                        keyboard: true,
+                        zoomView: true,
+                        dragView: true
+                    }
+                };
+
+                log('Instantiating vis.Network...');
+                network = new vis.Network(container, networkData, options);
+                log('✓ Network created successfully');
+                
+                // --- Interaction Physics Handling ---
+                // Re-enable physics when user drags a node to give "bouncy" feedback
+                network.on("dragStart", function (params) {
+                    if (params.nodes.length > 0) {
+                        network.setOptions({ physics: { enabled: true } });
+                    }
+                });
+
+                // Disable physics again when dragging stops to save CPU
+                network.on("dragEnd", function (params) {
+                    // Wait a bit for nodes to settle, then freeze
+                    setTimeout(() => {
+                        network.setOptions({ physics: { enabled: false } });
+                    }, 1000);
+                });
+                
+                // For zero edges or very sparse graphs, run brief physics then stop
+                if (!hasEdges || isSparse) {
+                     log('ℹ Sparse/Disconnected graph - running brief physics');
+                     // Note: options.physics.stabilization already handles the initial layout
+                }
+                
+                // Stabilize physics and then disable to save CPU
+                let stabilizationTimeout;
+                network.once('stabilizationEnd', () => {
+                    log('✓ Physics stabilization finished');
+                    if (network) {
+                        network.setOptions({ physics: { enabled: false } });
+                    }
+                    isRendering = false;
+                    isLoading.value = false;
+                    if (stabilizationTimeout) clearTimeout(stabilizationTimeout);
+                });
+                
+                // Fallback: disable physics after 2 seconds if not stabilized
+                stabilizationTimeout = setTimeout(() => {
+                    if (network && network.physics && network.physics.physicsEnabled) {
+                        log('⚠ Force disabling physics after timeout (stabilization took too long)', 'warn');
+                        network.setOptions({ physics: { enabled: false } });
+                    }
+                    isRendering = false;
+                    isLoading.value = false;
+                }, 2000);
+                
+            } catch (e) {
+                const msg = 'Error rendering graph: ' + e.message;
+                log(msg, 'error');
+                console.error('Render error:', e);
+                errorMessage.value = msg;
+                isRendering = false;
+                isLoading.value = false;
+            }
+        };
+        
+        onMounted(() => {
+            // Any initialization if needed
+        });
+
+            return {
+            fileInput,
+            analysisData,
+            cavities,
+            currentView,
+            selectedCavityIndex,
+            isDragging,
+            isLoading,
+            errorMessage,
+            nodeVisibility,
+            edgeVisibility,
+            nodeTypes,
+            edgeTypes,
+            goToIndex,
+            handleFileUpload,
+            handleFileDrop,
+            selectCavity,
+            returnToMainGraph,
+            toggleNodeType,
+            toggleEdgeType,
+            getNodeTypeCount,
+            getEdgeTypeCount,
+            resetView,
+            fitGraph,
+        };
+    }
+}).mount('#app');
+</script>
+
+</body>
+</html>

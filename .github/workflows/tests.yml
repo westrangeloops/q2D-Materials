@@ -1,0 +1,62 @@
+name: Tests
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+  push:
+    branches:
+      - main
+      - develop
+
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+
+    defaults:
+      run:
+        shell: devenv shell bash -- -e {0}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v26
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+
+      - name: Set up Cachix
+        uses: cachix/cachix-action@v12
+        with:
+          name: q2d-materials
+          # Note: This reads-only, no push needed for test workflows
+          skipNixBuild: false
+
+      - name: Install devenv
+        shell: bash
+        run: nix profile install nixpkgs#devenv
+
+      - name: Build devenv shell
+        run: devenv test
+
+      - name: Run pytest
+        run: pytest tests/ -v --cov=q2D_Materials --cov-report=term-missing
+
+      - name: Run type checking (if available)
+        run: |
+          if command -v mypy &> /dev/null; then
+            mypy q2D_Materials --ignore-missing-imports
+          fi
+
+      - name: Verify module imports
+        run: |
+          python -c "from q2D_Materials.core.creator import q2D_creator; print('✅ q2D_creator imported successfully')"
+          python -c "from q2D_Materials.analyzer.core import Analyzer; print('✅ Analyzer imported successfully')"
+
+
