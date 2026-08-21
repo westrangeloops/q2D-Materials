@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "q2D-Materials"
-version = "0.3.0"
+version = "0.4.0"
 description = "Template-driven toolkit for stacking quasi-2D perovskite architectures"
 readme = "README.md"
 requires-python = ">=3.11"
