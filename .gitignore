@@ -1,0 +1,56 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+dist/
+build/
+*.egg
+.installed.cfg
+
+# Virtualenvs / local devenv
+.venv/
+venv/
+.devenv/
+.direnv/
+
+# Test / structure outputs
+*.vasp
+MAPb*_*.json
+MAPb*_*.png
+perfect.vasp
+base.vasp
+modify_*.vasp
+
+# Local analysis / notebooks / large artifacts
+Sn_twist.zip
+*.zip
+batch_analysis_plots/
+correlation_plots/
+Graphs/
+.specstory/
+
+# Package-local scratch (not part of the library)
+q2D_Materials/Images/
+q2D_Materials/MACE_traj_to erase/
+q2D_Materials/gen_twist.ipynb
+q2D_Materials/mace_sim.py
+q2D_Materials/stacking_analysis.ipynb
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+.cursor/
+
+# Coverage / caches
+.coverage
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local paper workspace (datasets, notebooks, subprojects; not in the bundle)
+TEMPORAL/

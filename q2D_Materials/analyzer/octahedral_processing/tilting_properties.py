@@ -131,6 +131,8 @@ def compute_mean_tilt_profile(
     for i, oct_id in enumerate(tilt_data.octahedron_ids):
         if oct_id not in filtered_oct_ids:
             continue
+        if tilt_data.valid_mask is not None and not tilt_data.valid_mask[i]:
+            continue
 
         # Tilt magnitude: ||T|| = sqrt(α² + β² + γ²)
         magnitude = np.linalg.norm(tilt_data.euler_angles[i])

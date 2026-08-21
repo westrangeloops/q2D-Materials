@@ -21,6 +21,9 @@ find_shared_atoms
     Identify which octahedra share atoms
 """
 
+from typing import Dict, List, Optional, Tuple
+
+import networkx as nx
 import numpy as np
 import sys
 
@@ -123,6 +126,99 @@ def _find_neighbors_27img(
     final_distances = all_distances[sorted_idx[:target_neighbors]]
 
     return final_indices, final_distances
+
+
+def build_octahedra_ligand_info(
+    graph: nx.Graph,
+    atom_symbols: Optional[List[str]] = None,
+) -> Tuple[List[Dict], List[List[int]]]:
+    """Build octahedra info and ligand neighbor lists from a structural graph.
+
+    Walks octahedron --contains(role=center)--> B atom --bonded_to(role=ligand)--> X
+    and classifies ligands using atom node flags (is_terminal, is_interlayer, etc.).
+
+    Parameters
+    ----------
+    graph : nx.Graph
+        Structural connectivity graph from ``_graph_inorganic_ontology``.
+    atom_symbols : list of str, optional
+        Chemical symbols for all atoms (for central_atom_symbol in output).
+
+    Returns
+    -------
+    tuple
+        (octahedra_info, neighbor_indices) where:
+        - octahedra_info: list of dicts with id, central_atom_index, terminal_atoms,
+          interlayer_atoms, intralayer_atoms, ligand_atoms
+        - neighbor_indices: list of ligand index lists (one per octahedron), same order
+    """
+    octahedra_info: List[Dict] = []
+    neighbor_indices: List[List[int]] = []
+
+    for node, data in graph.nodes(data=True):
+        if data.get('node_type') != 'octahedron':
+            continue
+
+        central_idx = None
+        b_atom_node = None
+
+        for neighbor in graph.neighbors(node):
+            edge_data = graph.get_edge_data(node, neighbor)
+            if (
+                edge_data
+                and edge_data.get('edge_type') == 'contains'
+                and edge_data.get('role') == 'center'
+            ):
+                neighbor_data = graph.nodes.get(neighbor, {})
+                if neighbor_data.get('node_type') == 'atom':
+                    atom_idx = neighbor_data.get('vasp_index')
+                    if atom_idx is not None:
+                        central_idx = atom_idx
+                        b_atom_node = neighbor
+                        break
+
+        terminal_atoms: List[int] = []
+        interlayer_atoms: List[int] = []
+        intralayer_atoms: List[int] = []
+
+        if b_atom_node:
+            for neighbor in graph.neighbors(b_atom_node):
+                edge_data = graph.get_edge_data(b_atom_node, neighbor)
+                if (
+                    edge_data
+                    and edge_data.get('edge_type') == 'bonded_to'
+                    and edge_data.get('role') == 'ligand'
+                ):
+                    neighbor_data = graph.nodes.get(neighbor, {})
+                    if neighbor_data.get('node_type') == 'atom':
+                        atom_idx = neighbor_data.get('vasp_index')
+                        if atom_idx is not None:
+                            if neighbor_data.get('is_terminal', False):
+                                terminal_atoms.append(atom_idx)
+                            elif neighbor_data.get('is_interlayer', False):
+                                interlayer_atoms.append(atom_idx)
+                            else:
+                                intralayer_atoms.append(atom_idx)
+
+        ligand_atoms = terminal_atoms + interlayer_atoms + intralayer_atoms
+
+        oct_info = {
+            'id': node,
+            'central_atom_index': central_idx,
+            'terminal_atoms': terminal_atoms,
+            'interlayer_atoms': interlayer_atoms,
+            'intralayer_atoms': intralayer_atoms,
+            'ligand_atoms': ligand_atoms,
+        }
+        if atom_symbols is not None and central_idx is not None:
+            oct_info['central_atom_symbol'] = atom_symbols[central_idx]
+        else:
+            oct_info['central_atom_symbol'] = None
+
+        octahedra_info.append(oct_info)
+        neighbor_indices.append(ligand_atoms)
+
+    return octahedra_info, neighbor_indices
 
 
 def find_shared_atoms(neighbor_indices_list):

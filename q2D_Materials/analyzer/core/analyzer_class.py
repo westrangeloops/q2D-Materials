@@ -32,6 +32,7 @@ from ...core.structure import q2DStructure
 
 if TYPE_CHECKING:
     from .layers_wrapper import Layers
+    from .slabs_wrapper import Slabs
 
 
 class q2D_analyzer:
@@ -77,7 +78,11 @@ class q2D_analyzer:
         self._structure_type: Optional[str] = None
         self._analyzed: bool = False
         self._b_x_atoms_cache: Optional[Dict[str, np.ndarray]] = None
+        self._octahedral_distortions_cache: Optional[Dict[tuple, Dict]] = None
         self._layers: Optional["Layers"] = None
+        self._stacks_info: Optional[Dict[str, Any]] = None
+        self._octahedra_info: Optional[List[Dict]] = None
+        self._slabs: Optional["Slabs"] = None
 
         if source is not None:
             self.load(source)
@@ -99,9 +104,15 @@ class q2D_analyzer:
         if isinstance(source, str):
             self.file_path = source
             self.experiment_name = source.split('/')[-1].split('.')[0]
-            self.cell = read(source)
+            from ...utils.molecules.hydrogen_cleanup import prepare_experimental_structure
+            self.cell, self._structure_cleanup = prepare_experimental_structure(
+                source, hint=source
+            )
+            self._n_hydrogens_merged = int(self._structure_cleanup.get("n_h_merged", 0))
         elif isinstance(source, Atoms):
-            self.cell = source.copy()
+            from ...utils.molecules.hydrogen_cleanup import prepare_experimental_structure
+            self.cell, self._structure_cleanup = prepare_experimental_structure(source)
+            self._n_hydrogens_merged = int(self._structure_cleanup.get("n_h_merged", 0))
             self.experiment_name = "atoms_input"
         else:
             raise TypeError(f"source must be str or Atoms, got {type(source)}")
@@ -112,7 +123,11 @@ class q2D_analyzer:
         self._graph = None
         self._structure_type = None
         self._b_x_atoms_cache = None
+        self._octahedral_distortions_cache = None
         self._layers = None
+        self._stacks_info = None
+        self._octahedra_info = None
+        self._slabs = None
 
         return self
     
@@ -192,6 +207,7 @@ class q2D_analyzer:
         self._atom_positions = np.array(atom_positions)
         self._atom_symbols = list(atom_symbols)
         self._cell = cell_matrix
+        self._octahedral_distortions_cache = None
 
         self._graph = _graph_inorganic_ontology(
             atom_positions,
@@ -250,8 +266,41 @@ class q2D_analyzer:
             import sys
             print(f"ERROR: Graph integrity failure - {n_atoms} atoms but only {final_total} nodes (no structural nodes!)", file=sys.stderr)
 
-        # Structure type inference uses graph patterns
-        self._structure_type = self._infer_structure_type_from_graph()
+        # Structure type inference uses graph patterns (after slab enrichment)
+        from ..octahedral_processing.octahedral_detection import build_octahedra_ligand_info
+        from ..twister_processing.stack_detection import detect_stacks
+        from ..twister_processing.graph_construction import enrich_graph_with_slabs
+
+        atom_symbols = list(atom_symbols)
+        octahedra_info, neighbor_indices = build_octahedra_ligand_info(
+            self._graph, atom_symbols=atom_symbols
+        )
+        self._octahedra_info = octahedra_info
+        self._stacks_info = detect_stacks(
+            self._graph,
+            octahedra_info,
+            neighbor_indices,
+            np.array(atom_positions),
+            cell=np.array(self.cell.get_cell()),
+        )
+        enrich_graph_with_slabs(
+            self._graph,
+            self._stacks_info,
+            atom_positions=np.array(atom_positions),
+        )
+
+        # Twister is user/creator-declared only; never inferred from multi-slab geometry.
+        declared_type = getattr(self.cell, 'structure_type', None)
+        if declared_type == 'twister':
+            self._structure_type = 'twister'
+        else:
+            self._structure_type = self._infer_structure_type_from_graph()
+
+        structure_node = self._graph.graph.get('structure_node', 'structure_0')
+        if structure_node in self._graph:
+            self._graph.nodes[structure_node]['is_twister'] = (
+                self._structure_type == 'twister'
+            )
 
         # Create B/X atom cache during analysis so all functions can access it
         self._compute_b_x_atoms_cache()
@@ -260,51 +309,41 @@ class q2D_analyzer:
         return self
 
     def _infer_structure_type_from_graph(self) -> str:
-        """Infer structure type from graph patterns."""
+        """Infer structure type from graph patterns.
+
+        Reuses slab/octahedra results already computed in ``analyze()`` so
+        ligand walking and slab-continuity are not repeated.
+        """
         from .structure_classification import _infer_structure_type_from_graph
-        from .layer_identification import _identify_slabs_by_continuity
-        from ..octahedral_processing.octahedral_detection import find_shared_atoms
 
-        atom_positions = self.cell.get_positions()
+        if self._stacks_info is None:
+            from .layer_identification import _identify_slabs_by_continuity
+            from ..octahedral_processing.octahedral_detection import (
+                build_octahedra_ligand_info,
+                find_shared_atoms,
+            )
 
-        # Query octahedra data directly from graph
-        octahedra_info = []
-        neighbor_indices = []
-        for node, data in self._graph.nodes(data=True):
-            if data.get('node_type') == 'octahedron':
-                # Get central atom index from graph
-                central_atom_idx = None
-                for neighbor in self._graph.neighbors(node):
-                    edge_data = self._graph.get_edge_data(node, neighbor)
-                    if edge_data and edge_data.get('edge_type') == 'contains':
-                        if edge_data.get('role') == 'center':
-                            neighbor_data = self._graph.nodes.get(neighbor, {})
-                            if neighbor_data.get('node_type') == 'atom':
-                                central_atom_idx = neighbor_data.get('vasp_index')
-                                break
-                
-                octahedra_info.append({
-                    'id': node,
-                    'central_atom_index': central_atom_idx
-                })
-                
-                # Get ligand atoms from CONTAINS edges
-                ligand_atoms = []
-                for neighbor in self._graph.neighbors(node):
-                    edge_data = self._graph.get_edge_data(node, neighbor)
-                    if edge_data and edge_data.get('edge_type') == 'contains':
-                        if edge_data.get('role') == 'ligand':
-                            neighbor_data = self._graph.nodes.get(neighbor, {})
-                            if neighbor_data.get('node_type') == 'atom':
-                                atom_idx = neighbor_data.get('vasp_index')
-                                if atom_idx is not None:
-                                    ligand_atoms.append(atom_idx)
-                neighbor_indices.append(ligand_atoms)
+            atom_positions = self.cell.get_positions()
+            atom_symbols = self.cell.get_chemical_symbols()
+            octahedra_info, neighbor_indices = build_octahedra_ligand_info(
+                self._graph, atom_symbols=atom_symbols
+            )
+            shared_atoms = find_shared_atoms(neighbor_indices)
+            slab_info = _identify_slabs_by_continuity(
+                octahedra_info,
+                shared_atoms,
+                atom_positions,
+                cell=np.array(self.cell.get_cell()),
+            )
+        else:
+            slab_info = self._stacks_info
+            octahedra_info = self._octahedra_info
+            if not octahedra_info and self._graph is not None:
+                octahedra_info = [
+                    n for n, d in self._graph.nodes(data=True)
+                    if d.get('node_type') == 'octahedron'
+                ]
 
-        shared_atoms = find_shared_atoms(neighbor_indices)
-        slab_info = _identify_slabs_by_continuity(octahedra_info, shared_atoms, atom_positions)
-
-        # Get spacers from Molecule nodes (without calling public API to avoid circular dependency)
         spacers = self._get_spacers_internal()
 
         return _infer_structure_type_from_graph(
@@ -347,6 +386,7 @@ class q2D_analyzer:
                     spacer_atoms.info['original_indices'] = atom_indices
                     spacer_atoms.info['spacer_formula'] = data.get('formula')
                     spacer_atoms.info['template_match'] = data.get('formula')
+                    spacer_atoms.info['nh3_count'] = data.get('nh3_count', 0)
                     spacers.append(spacer_atoms)
 
         return spacers
@@ -532,71 +572,15 @@ class q2D_analyzer:
             - 'ligand_atoms': list of ligand (X-site) atom indices
         """
         self._ensure_analyzed()
-        
-        octahedra = []
-        atom_symbols = self.cell.get_chemical_symbols()
-        
-        # Query octahedra directly from graph
-        for node, data in self._graph.nodes(data=True):
-            if data.get('node_type') == 'octahedron':
-                # Find center atom (B-site) via CONTAINS edge with role='center'
-                central_idx = None
-                b_atom_node = None
-                
-                for neighbor in self._graph.neighbors(node):
-                    edge_data = self._graph.get_edge_data(node, neighbor)
-                    if (edge_data and
-                        edge_data.get('edge_type') == 'contains' and
-                        edge_data.get('role') == 'center'):
-                        neighbor_data = self._graph.nodes.get(neighbor, {})
-                        if neighbor_data.get('node_type') == 'atom':
-                            atom_idx = neighbor_data.get('vasp_index')
-                            if atom_idx is not None:
-                                central_idx = atom_idx
-                                b_atom_node = neighbor
-                                break
-                
-                # Get ligand atoms via B atom → X atoms (BONDED_TO edges)
-                # Classify into terminal, interlayer, and intralayer
-                terminal_atoms = []
-                interlayer_atoms = []
-                intralayer_atoms = []
-                
-                if b_atom_node:
-                    for neighbor in self._graph.neighbors(b_atom_node):
-                        edge_data = self._graph.get_edge_data(b_atom_node, neighbor)
-                        if (edge_data and
-                            edge_data.get('edge_type') == 'bonded_to' and
-                            edge_data.get('role') == 'ligand'):
-                            neighbor_data = self._graph.nodes.get(neighbor, {})
-                            if neighbor_data.get('node_type') == 'atom':
-                                atom_idx = neighbor_data.get('vasp_index')
-                                if atom_idx is not None:
-                                    # Classify based on graph properties
-                                    if neighbor_data.get('is_terminal', False):
-                                        terminal_atoms.append(atom_idx)
-                                    elif neighbor_data.get('is_interlayer', False):
-                                        interlayer_atoms.append(atom_idx)
-                                    else:
-                                        # Equatorial atoms that are not interlayer are intralayer
-                                        intralayer_atoms.append(atom_idx)
-                
-                # Combine all ligand atoms for backward compatibility
-                ligand_atoms = terminal_atoms + interlayer_atoms + intralayer_atoms
-                
-                oct_info = {
-                    'id': node,
-                    'central_atom_index': central_idx,
-                    'central_atom_symbol': atom_symbols[central_idx] if central_idx is not None else None,
-                    'ligand_atoms': ligand_atoms,  # Keep for backward compatibility
-                    'terminal_atoms': terminal_atoms,
-                    'interlayer_atoms': interlayer_atoms,
-                    'intralayer_atoms': intralayer_atoms,
-                }
-                octahedra.append(oct_info)
-                
+        if self._octahedra_info is not None:
+            return self._octahedra_info
 
-        return octahedra
+        from ..octahedral_processing.octahedral_detection import build_octahedra_ligand_info
+
+        atom_symbols = self.cell.get_chemical_symbols()
+        octahedra_info, _ = build_octahedra_ligand_info(self._graph, atom_symbols=atom_symbols)
+        self._octahedra_info = octahedra_info
+        return octahedra_info
 
     def get_layers(self) -> Dict:
         """
@@ -632,6 +616,18 @@ class q2D_analyzer:
                 }
 
         return layers
+
+    def get_inorganic_n(self) -> Optional[int]:
+        """Inorganic perovskite thickness n (octahedral sheets per slab).
+
+        This matches NMSE ``n_layers`` / RP–DJ formula n, and is **not** the
+        number of layer or slab graph nodes in the cell (bilayer RP n=1 cells
+        typically have two layer nodes).
+        """
+        self._ensure_analyzed()
+        from .inorganic_n import infer_inorganic_n_from_slabs
+
+        return infer_inorganic_n_from_slabs(self.get_slabs(), self._graph, self.cell)
 
     @property
     def layers(self) -> "Layers":
@@ -670,6 +666,199 @@ class q2D_analyzer:
             from .layers_wrapper import Layers
             self._layers = Layers(self)
         return self._layers
+
+    def get_slabs(self) -> Dict[str, Dict[str, Any]]:
+        """Get slab (stack) information from the graph.
+
+        Returns
+        -------
+        dict
+            Slab ID -> info with ``layer_ids``, ``octahedra``, ``octahedra_count``,
+            ``z_range``.
+        """
+        self._ensure_analyzed()
+        slabs: Dict[str, Dict[str, Any]] = {}
+
+        for node, data in self._graph.nodes(data=True):
+            if data.get('node_type') != 'slab':
+                continue
+            slab_id = str(node).replace('slab_', '')
+            layer_ids = list(data.get('layer_ids', []))
+            octahedra: List[str] = []
+            for lid in layer_ids:
+                layer_node = f'layer_{lid}'
+                if layer_node not in self._graph:
+                    continue
+                for neighbor in self._graph.neighbors(layer_node):
+                    edge_data = self._graph.get_edge_data(layer_node, neighbor)
+                    if edge_data and edge_data.get('edge_type') == 'contains':
+                        if str(neighbor).startswith('octahedron_'):
+                            octahedra.append(neighbor)
+
+            slabs[slab_id] = {
+                'layer_ids': layer_ids,
+                'octahedra': octahedra,
+                'octahedra_count': len(octahedra),
+                'z_range': data.get('z_range'),
+            }
+
+        if not slabs and self._stacks_info:
+            layers_dict = self.get_layers()
+            oct_to_layer: Dict[str, str] = {}
+            for lid, ldata in layers_dict.items():
+                for oct_id in ldata.get('octahedra', []):
+                    oct_to_layer[oct_id] = str(lid)
+            for slab_id, oct_list in self._stacks_info.get('slabs', {}).items():
+                key = str(slab_id)
+                z_ranges = self._stacks_info.get('slab_z_ranges', {})
+                layer_ids = sorted(
+                    {oct_to_layer[o] for o in oct_list if o in oct_to_layer},
+                    key=lambda x: int(x) if x.isdigit() else 0,
+                )
+                slabs[key] = {
+                    'layer_ids': layer_ids,
+                    'octahedra': oct_list,
+                    'octahedra_count': len(oct_list),
+                    'z_range': z_ranges.get(slab_id),
+                }
+
+        return slabs
+
+    @property
+    def is_twister(self) -> bool:
+        """True only when structure_type was declared as twister by the user/creator.
+
+        Multi-slab geometry (n_slabs >= 2) is common for RP/DJ cells and does
+        not imply a twister. Stack detection and stacking-registry APIs remain
+        available whenever n_slabs >= 2 regardless of this flag.
+        """
+        self._ensure_analyzed()
+        return self._structure_type == 'twister'
+
+    @property
+    def n_slabs(self) -> int:
+        """Number of independent perovskite stacks (slabs)."""
+        self._ensure_analyzed()
+        structure_node = self._graph.graph.get('structure_node', 'structure_0')
+        if structure_node in self._graph and 'n_slabs' in self._graph.nodes[structure_node]:
+            return int(self._graph.nodes[structure_node]['n_slabs'])
+        if self._stacks_info:
+            return int(self._stacks_info.get('n_slabs', 1))
+        return len(self.get_slabs()) or 1
+
+    @property
+    def slabs(self) -> "Slabs":
+        """Slabs wrapper for stack-scoped analysis."""
+        self._ensure_analyzed()
+        if self._slabs is None:
+            from .slabs_wrapper import Slabs
+            self._slabs = Slabs(self)
+        return self._slabs
+
+    def get_stack_interface(self, slab_id1: str = '0', slab_id2: str = '1') -> Dict[str, Any]:
+        """Return interface molecules/cations bridging two slabs.
+
+        Parameters
+        ----------
+        slab_id1, slab_id2 : str
+            Slab identifiers (order normalized internally).
+
+        Returns
+        -------
+        dict
+            ``bridging_nodes``, ``formulas``, ``atom_indices`` for interface species.
+        """
+        self._ensure_analyzed()
+        pair = tuple(sorted((str(slab_id1), str(slab_id2)), key=lambda x: int(x) if x.isdigit() else 0))
+
+        bridging_nodes: List[str] = []
+        formulas: List[str] = []
+        atom_indices: List[List[int]] = []
+
+        for node, data in self._graph.nodes(data=True):
+            if data.get('node_type') not in ('a_site', 'spacer'):
+                continue
+            bridges = data.get('bridges_slabs')
+            if not bridges:
+                continue
+            bridge_set = {str(b) for b in bridges}
+            if set(pair) != bridge_set and not set(pair).issubset(bridge_set):
+                continue
+            bridging_nodes.append(node)
+            formulas.append(data.get('formula', ''))
+            indices = []
+            for neighbor in self._graph.neighbors(node):
+                edge_data = self._graph.get_edge_data(node, neighbor)
+                if edge_data and edge_data.get('edge_type') == 'contains':
+                    nd = self._graph.nodes.get(neighbor, {})
+                    if nd.get('node_type') == 'atom':
+                        vasp_idx = nd.get('vasp_index')
+                        if vasp_idx is not None:
+                            indices.append(vasp_idx)
+            atom_indices.append(indices)
+
+        return {
+            'slab_pair': pair,
+            'bridging_nodes': bridging_nodes,
+            'formulas': formulas,
+            'atom_indices': atom_indices,
+        }
+
+    def get_stacking_registry(
+        self,
+        slab_id1: str = '0',
+        slab_id2: str = '1',
+        x_frac: float = 0.25,
+        cation_frac: float = 0.5,
+        x_symbols: Optional[List[str]] = None,
+        cation_symbols: Optional[List[str]] = None,
+    ):
+        """Compute inter-slab stacking registry metrics between two slabs.
+
+        Available for any structure with 2+ independent stacks (slabs),
+        including RP, DJ, and user-declared twisters. Requires a
+        z-discontinuity between slabs; not gated on ``is_twister``.
+        """
+        self._ensure_analyzed()
+        if self.n_slabs < 2:
+            raise ValueError(
+                "get_stacking_registry() requires 2+ independent stacks (slabs); "
+                "available for any structure_type (bulk/dj/rp/twister) with a "
+                "z-discontinuity between slabs."
+            )
+        from ..twister_processing.stacking_analysis import analyze_stack_interface
+        return analyze_stack_interface(
+            self,
+            slab_id1=slab_id1,
+            slab_id2=slab_id2,
+            x_frac=x_frac,
+            cation_frac=cation_frac,
+            x_symbols=x_symbols,
+            cation_symbols=cation_symbols,
+        )
+
+    def plot_stacking_heatmap(
+        self,
+        registry=None,
+        output_path: Optional[str] = None,
+        show_atoms: bool = True,
+        grid_pts: int = 300,
+        smoothing: Optional[float] = None,
+        colorbar_label: Optional[str] = None,
+    ) -> None:
+        """Plot stacking ratio heatmap for a registry result."""
+        self._ensure_analyzed()
+        from ..twister_processing.stacking_plots import plot_stacking_heatmap as _plot
+        if registry is None:
+            registry = self.get_stacking_registry()
+        _plot(
+            registry,
+            output_path=output_path,
+            show_atoms=show_atoms,
+            grid_pts=grid_pts,
+            smoothing=smoothing,
+            colorbar_label=colorbar_label,
+        )
 
     def get_spacers(self) -> List[Atoms]:
         """
@@ -1035,6 +1224,27 @@ class q2D_analyzer:
         else:
             result_data = result_tuple
 
+        if result_data is None:
+            if group_by == 'layer':
+                return {
+                    'global': {
+                        'bxb_angles': None,
+                        'bxb_mean': None,
+                        'bxb_std': None,
+                    }
+                }
+            return {
+                'bxb_angles': None,
+                'bxb_equatorial_angles': None,
+                'bxb_interlayer_angles': None,
+                'bxb_deviation_mean': None,
+                'bxb_deviation_std': None,
+                'bxb_equatorial_deviation_mean': None,
+                'bxb_equatorial_deviation_std': None,
+                'bxb_interlayer_deviation_mean': None,
+                'bxb_interlayer_deviation_std': None,
+            }
+
         # Handle grouped results
         if group_by == 'layer':
             result = {}
@@ -1086,6 +1296,16 @@ class q2D_analyzer:
             result = {
                 # Raw angles (local features)
                 "bxb_angles": bxb_all,
+                "bxb_mean": (
+                    float(np.mean(bxb_all))
+                    if bxb_all is not None and len(bxb_all) > 0
+                    else None
+                ),
+                "bxb_std": (
+                    float(np.std(bxb_all))
+                    if bxb_all is not None and len(bxb_all) > 0
+                    else None
+                ),
                 "bxb_equatorial_angles": bxb_equatorial,
                 "bxb_interlayer_angles": bxb_interlayer,
                 
@@ -1771,121 +1991,47 @@ class q2D_analyzer:
         >>> for oct_id, vol in volumes_dict.items():
         ...     print(f"{oct_id}: {vol:.2f} Å³")
         """
-        from ..octahedral_processing.octahedral_analysis import calculate_octahedral_volumes_convex_hull
         self._ensure_analyzed()
-        
-        # Get B and X atom data
-        b_x_data = self.get_b_x_atoms()
-        b_indices = b_x_data['b_indices']
-        x_indices = b_x_data['x_indices']
-        
-        # Filter octahedra if specified
-        graph = self.get_graph()
-        if octahedra is not None:
-            selected_octahedra = [oct for oct in octahedra if oct in graph.nodes()]
-        else:
-            selected_octahedra = [
-                node for node, data in graph.nodes(data=True)
-                if data.get('node_type') == 'octahedron'
-            ]
-        
-        # Build neigh_list from graph
-        # Map B atom indices to octahedron IDs and their X atoms
-        b_to_oct = {}  # b_index -> octahedron_id
-        oct_to_x_indices = {}  # octahedron_id -> list of x_indices (in x_indices array)
-        
-        for oct_node in selected_octahedra:
-            # Get B atom for this octahedron
-            b_atom_node = None
-            b_vasp_idx = None
-            for neighbor in graph.neighbors(oct_node):
-                edge_data = graph.get_edge_data(oct_node, neighbor)
-                if (edge_data and
-                    edge_data.get('edge_type') == 'contains' and
-                    edge_data.get('role') == 'center'):
-                    neighbor_data = graph.nodes.get(neighbor, {})
-                    if neighbor_data.get('node_type') == 'atom':
-                        b_vasp_idx = neighbor_data.get('vasp_index')
-                        b_atom_node = neighbor
-                        break
-            
-            if b_vasp_idx is None:
-                continue
-            
-            # Find index in b_indices array
-            try:
-                b_idx_in_array = np.where(b_indices == b_vasp_idx)[0][0]
-            except IndexError:
-                continue
-            
-            b_to_oct[b_idx_in_array] = oct_node
-            
-            # Get X atoms for this octahedron via B atom → X atoms (BONDED_TO edges)
-            x_vasp_indices = []
-            if b_atom_node:
-                for neighbor in graph.neighbors(b_atom_node):
-                    edge_data = graph.get_edge_data(b_atom_node, neighbor)
-                    if (edge_data and
-                        edge_data.get('edge_type') == 'bonded_to'):
-                        neighbor_data = graph.nodes.get(neighbor, {})
-                        if (neighbor_data.get('node_type') == 'atom' and
-                            neighbor_data.get('is_X', False)):
-                            x_vasp_idx = neighbor_data.get('vasp_index')
-                            if x_vasp_idx is not None:
-                                x_vasp_indices.append(x_vasp_idx)
-            
-            # Map to indices in x_indices array
-            x_indices_in_array = []
-            for x_vasp_idx in x_vasp_indices:
-                try:
-                    x_idx_in_array = np.where(x_indices == x_vasp_idx)[0][0]
-                    x_indices_in_array.append(x_idx_in_array)
-                except IndexError:
-                    continue
-            
-            # Store (should have 6 X atoms)
-            if len(x_indices_in_array) == 6:
-                oct_to_x_indices[oct_node] = x_indices_in_array
-            else:
-                # Store with NaN padding if not exactly 6
-                oct_to_x_indices[oct_node] = x_indices_in_array + [np.nan] * (6 - len(x_indices_in_array))
-        
-        # Build neigh_list array
-        neigh_list = np.full((len(b_indices), 6), np.nan)
-        for b_idx, oct_node in b_to_oct.items():
-            if oct_node in oct_to_x_indices:
-                x_idx_list = oct_to_x_indices[oct_node]
-                if len(x_idx_list) == 6 and not any(np.isnan(x_idx_list)):
-                    neigh_list[b_idx, :] = x_idx_list
-        
-        # Convert ASE Atoms to pymatgen Structure
-        from pymatgen.io.ase import AseAtomsAdaptor
-        struct = AseAtomsAdaptor.get_structure(self.cell)
-        
-        # Calculate volumes and displacements (returns tuple of raw arrays)
-        volumes_array, displacements_array = calculate_octahedral_volumes_convex_hull(
-            struct, neigh_list, b_indices.tolist(), x_indices.tolist(),
-            mode='raw'
-        )
-        
-        # Process based on mode
+        detailed = self.get_octahedral_distortions(octahedra=octahedra)
+        volumes_dict = {
+            oct_id: (
+                float(metrics.get("volume", np.nan))
+                if metrics.get("status") == "valid"
+                else np.nan
+            )
+            for oct_id, metrics in detailed.items()
+        }
+
         if mode == 'global':
-            # Return mean volume, ignoring NaN values
-            valid_volumes = volumes_array[~np.isnan(volumes_array)]
+            valid_volumes = np.asarray(
+                [
+                    value
+                    for value in volumes_dict.values()
+                    if np.isfinite(value) and value > 0
+                ],
+                dtype=float,
+            )
             if len(valid_volumes) == 0:
                 return np.nan
             return float(np.mean(valid_volumes))
-        
         elif mode == 'local':
-            # Return dict mapping octahedron_id -> volume
-            # Map volumes back to octahedron IDs
-            volumes_dict = {}
-            for b_idx, oct_node in b_to_oct.items():
-                volumes_dict[oct_node] = float(volumes_array[b_idx])
             return volumes_dict
-        
         else:
             raise ValueError(f"Unknown mode '{mode}'. Use 'global' or 'local'.")
+
+    def get_octahedral_validity(
+        self,
+        octahedra: Optional[List[str]] = None,
+    ) -> Dict[str, Dict[str, str]]:
+        """Return explicit validity states for reconstructed octahedra."""
+        detailed = self.get_octahedral_distortions(octahedra=octahedra)
+        return {
+            oct_id: {
+                "status": str(metrics.get("status", "failed")),
+                "reason": str(metrics.get("status_reason", "unknown")),
+            }
+            for oct_id, metrics in detailed.items()
+        }
     
     def get_xeq_xeq_and_xax_xax_distances(
         self,
@@ -2533,8 +2679,8 @@ class q2D_analyzer:
 
     def mol_validate(
         self,
-        molecule: Union[Atoms, str],
-        spacer_type: str = "DJ",
+        molecule: Union[Atoms, str, nx.Graph],
+        spacer_type: Optional[str] = "DJ",
         initial_pattern: Union[str, List[str]] = None,
         final_pattern: Union[str, List[str]] = None,
         min_chain_length: int = 2,
@@ -2544,23 +2690,23 @@ class q2D_analyzer:
         allow_same_carbon: bool = False
     ):
         """
-        Validate if molecule is suitable as DJ or RP spacer using pattern matching.
+        Validate molecule chemistry and optionally DJ/RP spacer patterns.
 
-        DJ (Dion-Jacobson) spacers require 2 terminal groups with valid paths between them.
-        RP (Ruddlesden-Popper) spacers require at least 1 terminal group.
+        Stage 1 (always): chemical completeness (valence, hydrogens, connectivity).
+        Stage 2 (when spacer_type is DJ/RP): SMARTS terminal / path checks.
 
         Parameters
         ----------
-        molecule : Atoms or str
-            ASE Atoms object or SMILES string
-        spacer_type : str
-            Type of spacer: "DJ" or "RP" (default: "DJ")
+        molecule : Atoms, str, or nx.Graph
+            ASE Atoms, SMILES string, or molecular/CIF atom subgraph
+        spacer_type : str or None
+            ``"DJ"``, ``"RP"``, or ``None`` / ``"none"`` for chemistry only
         initial_pattern : str or List[str], optional
             SMILES pattern(s) for initial terminal (default: 'NH2C')
             Examples: '[NH3+]C', 'NH2C', ['[NH3+]C', 'NH2C']
         final_pattern : str or List[str], optional
             SMILES pattern(s) for final terminal (default: 'NH2C')
-            Ignored for RP spacers
+            Ignored for RP spacers and chemistry-only mode
         min_chain_length : int
             Minimum atoms between terminal carbons for DJ (default: 2)
             Ignored for RP spacers
@@ -2585,15 +2731,15 @@ class q2D_analyzer:
         >>> # Validate as DJ spacer
         >>> result = analyzer.mol_validate("NCCCCN", spacer_type="DJ")
         >>> print(f"Valid: {result.is_valid}")
-        >>> 
-        >>> # Validate as RP spacer
-        >>> result = analyzer.mol_validate("NCCCCC", spacer_type="RP")
-        >>> print(f"Valid: {result.is_valid}")
+        >>>
+        >>> # Chemistry only (no spacer pattern)
+        >>> result = analyzer.mol_validate("C[NH3+]", spacer_type=None)
+        >>> print(result.reason)
         """
         from ..molecular_processing.molecule_candidates import analyze_molecule_candidate
         return analyze_molecule_candidate(
             molecule,
-            spacer_type=spacer_type.upper(),
+            spacer_type=spacer_type,
             initial_pattern=initial_pattern,
             final_pattern=final_pattern,
             min_chain_length=min_chain_length,
@@ -2602,6 +2748,56 @@ class q2D_analyzer:
             max_non_carbon_ratio=max_non_carbon_ratio,
             allow_same_carbon=allow_same_carbon
         )
+
+    def validate_molecules(self) -> Dict[str, Any]:
+        """Validate chemical completeness of all organic spacer/A-site molecules.
+
+        Requires ``analyze()`` first. Iterates spacer and a_site nodes in the
+        structural graph, skips inorganic-only sites, and runs ``mol_validate``
+        chemistry-only on each organic subgraph.
+
+        Returns
+        -------
+        dict
+            ``is_valid``: True iff every organic molecule passes stage 1
+            ``molecules``: list of per-molecule results
+            ``n_organic`` / ``n_failed``: counts
+        """
+        self._ensure_analyzed()
+        from .graph_construction import get_molecule_atoms
+        from ..molecular_processing.molecule_chemistry import is_organic_molecule
+
+        graph = self._graph
+        results = []
+        n_failed = 0
+
+        for node, data in graph.nodes(data=True):
+            if data.get("node_type") not in ("spacer", "a_site"):
+                continue
+            atom_ids = get_molecule_atoms(graph, node)
+            if not atom_ids:
+                continue
+            sub = graph.subgraph(atom_ids).copy()
+            if not is_organic_molecule(sub):
+                continue
+
+            mol_result = self.mol_validate(sub, spacer_type=None)
+            entry = {
+                "node": node,
+                "node_type": data.get("node_type"),
+                "is_valid": mol_result.is_valid,
+                "reason": mol_result.reason,
+            }
+            results.append(entry)
+            if not mol_result.is_valid:
+                n_failed += 1
+
+        return {
+            "is_valid": n_failed == 0,
+            "molecules": results,
+            "n_organic": len(results),
+            "n_failed": n_failed,
+        }
 
     def convert_molecule_nh2_to_nh3(
         self,
@@ -2713,7 +2909,12 @@ class q2D_analyzer:
 
         spacers = self.get_spacers()
         spacer = spacers if spacers else None
-        
+
+        slab_layer_map = {
+            sid: info.get('layer_ids', [])
+            for sid, info in self.get_slabs().items()
+        }
+
         return q2DStructure(
             self.cell,
             structure_type=self._structure_type,
@@ -2724,6 +2925,9 @@ class q2D_analyzer:
             analysis_graph=self._graph,
             octahedra=octahedra,
             layers=self.get_layers(),
+            n_slabs=self.n_slabs,
+            is_twister=self.is_twister,
+            slab_layer_map=slab_layer_map,
         )
     
     def export_graph_data(self, output_path: Optional[str] = None) -> str:

@@ -242,7 +242,7 @@ def create_twisted_bilayer(mono1, mono2, m, n, interlayer_distance=11.0, vacuum=
 
     return q2DStructure(
         bilayer_atoms,
-        structure_type='monolayer',
+        structure_type='twister',
         BX_dist=mono1.BX_dist,
         A_ions=mono1.A_ions,
         B_ions=mono1.B_ions,
@@ -425,7 +425,7 @@ def create_twisted_multilayer(monolayers, twist_angles, interlayer_distances, va
     
     return q2DStructure(
         atoms,
-        structure_type='monolayer',
+        structure_type='twister',
         BX_dist=first_mono.BX_dist,
         A_ions=first_mono.A_ions,
         B_ions=first_mono.B_ions,

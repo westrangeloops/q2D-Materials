@@ -16,6 +16,44 @@ import numpy as np
 import networkx as nx
 
 
+def _min_spacer_nn_path_length(graph: nx.Graph, spacer) -> int | None:
+    """Shortest bonded_to path length between N atoms in a spacer.
+
+    Used to distinguish true diammonium DJ linkers (N–(C)ₙ–N with n≥2,
+    path length ≥ 3) from RP monoammonium pairs that were incorrectly
+    merged by loose organic bonding (path length 1–2: N–N or N–C–N).
+    """
+    if graph is None or not hasattr(spacer, 'info'):
+        return None
+    indices = spacer.info.get('original_indices') or []
+    if len(indices) < 2:
+        return None
+
+    atom_nodes = [f'atom_{i}' for i in indices if f'atom_{i}' in graph]
+    n_nodes = [n for n in atom_nodes if graph.nodes[n].get('symbol') == 'N']
+    if len(n_nodes) < 2:
+        return None
+
+    subgraph = nx.Graph()
+    subgraph.add_nodes_from(atom_nodes)
+    for u in atom_nodes:
+        for v in graph.neighbors(u):
+            if v not in subgraph:
+                continue
+            edge = graph.get_edge_data(u, v) or {}
+            if edge.get('edge_type') == 'bonded_to':
+                subgraph.add_edge(u, v)
+
+    min_len = None
+    for i, n1 in enumerate(n_nodes):
+        for n2 in n_nodes[i + 1:]:
+            if nx.has_path(subgraph, n1, n2):
+                length = nx.shortest_path_length(subgraph, n1, n2)
+                if min_len is None or length < min_len:
+                    min_len = length
+    return min_len
+
+
 def _infer_structure_type_from_graph(
     slab_info: dict,
     spacers: list,
@@ -48,7 +86,12 @@ def _infer_structure_type_from_graph(
     Returns
     -------
     str
-        One of: 'bulk', 'dj', 'rp', 'monolayer', 'unknown'
+        One of: 'bulk', 'dj', 'rp', 'monolayer', 'unknown'.
+
+        ``twister`` is never inferred here. Twisted multilayers are
+        user/creator-declared via ``q2DStructure.structure_type='twister'``
+        and preserved by the analyzer; multi-slab geometry alone is normal
+        for RP/DJ cells and must not promote a structure to twister.
     """
     # Step 1: Check for octahedra - bulk needs at least one
     n_octahedra = 0
@@ -117,14 +160,16 @@ def _infer_structure_type_from_graph(
             has_vacuum = (gap_at_bottom > expected_layer_spacing * 0.5 or 
                           gap_at_top > expected_layer_spacing * 0.5)
     
-    # PRIORITY: If PBC-connected and has octahedra, it's bulk (regardless of other factors)
-    if is_pbc_connected and n_octahedra > 0:
+    # PRIORITY: PBC-connected + octahedra => bulk ONLY when no spacers.
+    # Layered RP/DJ cells often false-trigger is_pbc_connected (e.g. NMSE #6:
+    # total_boundary_gap≈4.4 Å vs expected≈6.3 Å within 30%) and must reach DJ/RP.
+    if is_pbc_connected and n_octahedra > 0 and n_spacers == 0:
         return 'bulk'
-    
-    # Check for monolayer: single slab with significant vacuum AND terminal X atoms
-    # Monolayer has vacuum > 2x expected layer spacing AND terminal X atoms (passivators)
+
+    # Check for monolayer: single slab with significant vacuum AND terminal X atoms.
+    # Skip when spacers exist so DJ/RP spacer voting can run.
     is_monolayer = False
-    if n_slabs == 1 and has_vacuum and has_terminal_x:
+    if n_slabs == 1 and has_vacuum and has_terminal_x and n_spacers == 0:
         if slab_z_ranges:
             all_z_min = min(z[0] for z in slab_z_ranges.values())
             all_z_max = max(z[1] for z in slab_z_ranges.values())
@@ -149,51 +194,48 @@ def _infer_structure_type_from_graph(
             return 'bulk'
     
     elif n_spacers > 0:
-        # Step 3: Classify DJ/RP based on NH3 count in spacers
-        # DJ: 2+ NH3 groups (bifunctional)
-        # RP: 1 NH3 group (monofunctional)
+        # Step 3: Classify DJ/RP based on spacer nitrogen connectivity.
+        # DJ: ≥2 N atoms covalently linked with path length ≥3 (N–X–X–N…).
+        # RP: monofunctional (1 N), or ≥2 N with path length <3 (false merge
+        # of two monoammonium cations from loose organic bonding).
         
         dj_count = 0
         rp_count = 0
         
         for spacer in spacers:
-            # Check for NH3 count in spacer info or graph
             nh3_count = 0
-            
-            # Try to get NH3 count from spacer info
-            if hasattr(spacer, 'info'):
-                nh3_count = spacer.info.get('nh3_count', 0)
-                # Also check n_attachments as fallback
+
+            # Prefer geometry: N count + covalent N–N path in the structural graph.
+            # Raw nh3_count from identify_backbone is often inflated (e.g. 8–12) or
+            # zero on merged RP pairs, so do not trust it alone for DJ/RP.
+            if graph is not None:
+                n_count = spacer.get_chemical_symbols().count('N')
+                nn_path = _min_spacer_nn_path_length(graph, spacer)
+                if n_count >= 2 and nn_path is not None and nn_path >= 3:
+                    nh3_count = 2
+                elif n_count >= 1:
+                    nh3_count = 1
+
+            # Fallback when no graph: attachments / stored nh3_count
+            if nh3_count == 0 and hasattr(spacer, 'info'):
+                stored = spacer.info.get('nh3_count', 0)
+                if stored:
+                    nh3_count = 2 if stored >= 2 else 1
                 if nh3_count == 0:
                     n_attach = spacer.info.get('n_attachments', 0)
                     if n_attach >= 2:
-                        nh3_count = 2  # Assume DJ
+                        nh3_count = 2
                     elif n_attach == 1:
-                        nh3_count = 1  # Assume RP
+                        nh3_count = 1
             
-            # If still no count, try to count from graph
-            if nh3_count == 0 and graph:
-                # Find spacer node in graph
-                spacer_symbols = spacer.get_chemical_symbols()
-                n_count = spacer_symbols.count('N')
-                # Rough estimate: if 2+ N atoms, likely DJ; 1 N atom, likely RP
-                if n_count >= 2:
-                    nh3_count = 2
-                elif n_count == 1:
-                    nh3_count = 1
-            
-            # Classify based on NH3 count
             if nh3_count >= 2:
                 dj_count += 1
             elif nh3_count == 1:
                 rp_count += 1
             else:
-                # Unknown - check if atomic spacer
                 if hasattr(spacer, 'info') and spacer.info.get('mol_type') == 'atomic':
-                    # Atomic spacers default to DJ-like
                     dj_count += 1
                 else:
-                    # Default to RP for unknown
                     rp_count += 1
         
         if dj_count > rp_count:
@@ -201,7 +243,6 @@ def _infer_structure_type_from_graph(
         elif rp_count > dj_count:
             return 'rp'
         else:
-            # Default to DJ if equal or unknown
             return 'dj' if dj_count > 0 else 'bulk'
     
     elif n_slabs > 1:

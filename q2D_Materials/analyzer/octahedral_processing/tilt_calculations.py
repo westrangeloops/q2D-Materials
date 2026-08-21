@@ -69,6 +69,7 @@ class OctahedralTiltData:
     reference_axes: np.ndarray
     inclination_angles: Optional[np.ndarray] = None
     axial_directions: Optional[np.ndarray] = None
+    valid_mask: Optional[np.ndarray] = None
 
 
 def calculate_euler_angles_from_bonds(
@@ -371,6 +372,7 @@ def compute_octahedral_tilts(
     rotation_matrices_list = []
     octahedron_ids = []
     b_atom_indices_list = []
+    valid_mask = []
 
     for oct_data in octahedra_list:
         b_idx = oct_data.get("central_atom_index")
@@ -379,6 +381,7 @@ def compute_octahedral_tilts(
             rotation_matrices_list.append(np.eye(3))
             octahedron_ids.append(oct_data['id'])
             b_atom_indices_list.append(-1)
+            valid_mask.append(False)
             continue
 
         b_pos = atom_positions[b_idx]
@@ -419,11 +422,13 @@ def compute_octahedral_tilts(
                 v_z_proj = projs[2]
 
         # Calculate Euler angles and rotation matrix
+        is_valid = sum(vector is not None for vector in (v_x, v_y, v_z)) >= 2
         euler, R = calculate_euler_angles_from_bonds(v_x, v_y, v_z, ref_axes)
         euler_angles_list.append(euler)
         rotation_matrices_list.append(R)
         octahedron_ids.append(oct_data['id'])
         b_atom_indices_list.append(b_idx)
+        valid_mask.append(is_valid)
 
     # Compute inclination angles (angle between axial direction and AB plane normal)
     inclination_angles, axial_directions = compute_inclination_from_rotations(
@@ -438,6 +443,7 @@ def compute_octahedral_tilts(
         reference_axes=ref_axes,
         inclination_angles=inclination_angles,
         axial_directions=axial_directions,
+        valid_mask=np.asarray(valid_mask, dtype=bool),
     )
 
 

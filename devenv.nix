@@ -68,8 +68,11 @@
       
       if [ ! -f .venv/.installed ]; then
         echo "Installing q2D-Materials in editable mode..."
-        pip install -e . --config-settings editable_mode=compat
-        touch .venv/.installed
+        if pip install -e . --config-settings editable_mode=compat; then
+          touch .venv/.installed
+        else
+          echo "⚠️  Editable install failed; PYTHONPATH fallback is still active."
+        fi
       fi
       
       echo ""

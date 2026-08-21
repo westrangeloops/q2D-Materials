@@ -89,19 +89,24 @@ def create_molecule_graph(
     # Convert input to molecular graph (atom-level connectivity)
     if isinstance(molecule, nx.Graph):
         # Already a graph - check if it's a full structural graph or just molecular
-        if any(node.startswith('molecule_') for node in molecule.nodes()):
+        has_mol_wrapper = any(
+            isinstance(node, str) and node.startswith('molecule_')
+            for node in molecule.nodes()
+        )
+        if has_mol_wrapper:
             # Already has molecule nodes - return as is
             return molecule
         else:
             # Just atom connectivity graph - wrap it
             mol_graph = molecule
     elif isinstance(molecule, str):
-        # SMILES string
+        # SMILES string — AddHs so stage-1 valence sees explicit hydrogens
         try:
             validate_smiles(molecule)
             mol = Chem.MolFromSmiles(molecule)
             if mol is None:
                 raise ValueError(f"RDKit could not parse SMILES: {molecule}")
+            mol = Chem.AddHs(mol)
             mol_graph = rdkit_to_graph(mol, coords=None)
         except Exception as e:
             raise ValueError(f"Invalid SMILES string: {e}")
@@ -271,26 +276,19 @@ def identify_backbone(
     # Store nh3_count on molecule node
     graph.nodes[molecule_node]['nh3_count'] = nh3_count
     
+    # Build non-H subgraph once for all path queries.
+    non_h_graph = _non_h_subgraph(mol_subgraph)
+
     # Find backbone path
     backbone_atoms = set()
     
     if nh3_count >= 2:
-        # Find longest path between any pair of NH3 groups through CHON
-        longest_path = []
-        
-        for i, anchor1 in enumerate(unique_nh3_anchors):
-            for anchor2 in unique_nh3_anchors[i+1:]:
-                # Find path avoiding H atoms (dead ends)
-                path = _find_path_avoiding_h(mol_subgraph, anchor1, anchor2)
-                if path and len(path) > len(longest_path):
-                    longest_path = path
-        
+        longest_path = _longest_path_between_anchors(non_h_graph, unique_nh3_anchors)
         backbone_atoms = set(longest_path)
     
     elif nh3_count == 1:
-        # Find longest path from the single NH3 group through CHON
         anchor = unique_nh3_anchors[0]
-        longest_path = _find_longest_path_from_node(mol_subgraph, anchor)
+        longest_path = _find_longest_path_from_node(non_h_graph, anchor)
         backbone_atoms = set(longest_path)
     
     # Mark atoms with roles
@@ -309,71 +307,103 @@ def identify_backbone(
     return nh3_count
 
 
-def _find_path_avoiding_h(graph: nx.Graph, start: int, end: int) -> List[int]:
+def _non_h_subgraph(graph: nx.Graph) -> nx.Graph:
+    """Return a view/subgraph of ``graph`` excluding H atoms."""
+    non_h_nodes = [
+        n for n in graph.nodes()
+        if graph.nodes[n].get('symbol', '') != 'H'
+    ]
+    return graph.subgraph(non_h_nodes)
+
+
+def _find_path_avoiding_h(
+    graph: nx.Graph,
+    start: int,
+    end: int,
+    non_h_graph: Optional[nx.Graph] = None,
+) -> List[int]:
     """Find shortest path between two nodes, avoiding H atoms.
     
     Parameters
     ----------
     graph : nx.Graph
-        Molecular graph with atom nodes
+        Molecular graph with atom nodes (used only if ``non_h_graph`` is None)
     start : int
         Starting node
     end : int
         Ending node
+    non_h_graph : nx.Graph, optional
+        Precomputed non-H subgraph. Prefer passing this to avoid rebuilding.
     
     Returns
     -------
     List[int]
         Path as list of node indices, or empty list if no path found
     """
-    # Create subgraph without H atoms
-    non_h_nodes = [n for n in graph.nodes() if graph.nodes[n].get('symbol', '') != 'H']
-    subgraph = graph.subgraph(non_h_nodes)
+    subgraph = non_h_graph if non_h_graph is not None else _non_h_subgraph(graph)
     
     try:
-        path = nx.shortest_path(subgraph, start, end)
-        return path
+        return nx.shortest_path(subgraph, start, end)
     except (nx.NetworkXNoPath, nx.NodeNotFound):
         return []
 
 
-def _find_longest_path_from_node(graph: nx.Graph, start: int) -> List[int]:
-    """Find longest simple path from a starting node, avoiding H atoms.
+def _longest_path_between_anchors(
+    non_h_graph: nx.Graph,
+    anchors: List[int],
+) -> List[int]:
+    """Longest shortest-path among NH3 anchors on a non-H graph.
+
+    Runs one BFS tree per anchor (O(K·(V+E))) instead of rebuilding a
+    filtered subgraph for every anchor pair.
+    """
+    if len(anchors) < 2:
+        return list(anchors) if anchors else []
+
+    longest_path: List[int] = []
+
+    for i, source in enumerate(anchors[:-1]):
+        if source not in non_h_graph:
+            continue
+        paths = nx.single_source_shortest_path(non_h_graph, source)
+        for target in anchors[i + 1 :]:
+            path = paths.get(target)
+            if path is not None and len(path) > len(longest_path):
+                longest_path = path
+
+    return longest_path
+
+
+def _find_longest_path_from_node(
+    graph: nx.Graph,
+    start: int,
+    non_h_graph: Optional[nx.Graph] = None,
+) -> List[int]:
+    """Find longest shortest-path from a starting node, avoiding H atoms.
     
     Parameters
     ----------
     graph : nx.Graph
-        Molecular graph with atom nodes
+        Molecular graph with atom nodes (used only if ``non_h_graph`` is None)
     start : int
         Starting node
+    non_h_graph : nx.Graph, optional
+        Precomputed non-H subgraph
     
     Returns
     -------
     List[int]
         Longest path as list of node indices
     """
-    # Create subgraph without H atoms
-    non_h_nodes = [n for n in graph.nodes() if graph.nodes[n].get('symbol', '') != 'H']
-    subgraph = graph.subgraph(non_h_nodes)
+    subgraph = non_h_graph if non_h_graph is not None else _non_h_subgraph(graph)
     
     if start not in subgraph:
         return [start]
-    
-    # Use BFS to find all reachable nodes and their distances
+
+    paths = nx.single_source_shortest_path(subgraph, start)
     longest_path = [start]
-    max_distance = 0
-    
-    # For each reachable node, find the path
-    for target in subgraph.nodes():
-        if target == start:
-            continue
-        
-        try:
-            path = nx.shortest_path(subgraph, start, target)
-            if len(path) > len(longest_path):
-                longest_path = path
-        except (nx.NetworkXNoPath, nx.NodeNotFound):
-            continue
-    
+    for path in paths.values():
+        if len(path) > len(longest_path):
+            longest_path = path
     return longest_path
 

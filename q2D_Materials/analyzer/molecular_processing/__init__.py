@@ -40,6 +40,11 @@ from .molecule_candidates import (
     SpacerCandidateResult,
     TerminalGroup,
 )
+from .molecule_chemistry import (
+    check_molecule_chemistry,
+    bonded_symbols,
+    is_organic_molecule,
+)
 from .molecule_classification import (
     _classify_molecules_by_continuity,
     _find_molecular_components,
@@ -66,6 +71,10 @@ __all__ = [
     'clean_molecule',
     'SpacerCandidateResult',
     'TerminalGroup',
+    # molecule_chemistry
+    'check_molecule_chemistry',
+    'bonded_symbols',
+    'is_organic_molecule',
     # molecule_classification
     '_classify_molecules_by_continuity',
     '_find_molecular_components',

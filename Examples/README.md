@@ -24,7 +24,7 @@ These guides are grouped by intent. Each Markdown file explains how to configure
 15. [15_BX.md](15_BX.md) — Track B–X pair frequencies across a batch of samples.
 16. [16_GraphQuery.md](16_GraphQuery.md) — Query the graph representation of a structure.
 17. [17_MoleculeAnalyzer.md](17_MoleculeAnalyzer.md) — Analyze organic spacers and their penetration depths.
-18. [18_TwisterAnalyzer.md](18_TwisterAnalyzer.md) — Study twist interfaces and interlayer separation.
+18. [18_TwisterAnalyzer.md](18_TwisterAnalyzer.md) — Analyze twister slabs, stacking registry (\(r\) vs \(R\)), and dual-ratio maps for five creator examples.
 19. [19_MoleculeModifier.md](19_MoleculeModifier.md) — Replace spacers or add new functional groups.
 20. [20_MoleculeValidator.md](20_MoleculeValidator.md) — Validate linker chemistry against SMARTS patterns.
 21. [21_BackboneQuery.md](21_BackboneQuery.md) — Walk the inorganic backbone graph and annotate connectors.

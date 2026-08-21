@@ -101,6 +101,20 @@ class q2DStructure(Atoms):
             setattr(self, key, value)
 
     @property
+    def is_twister(self) -> bool:
+        """True if this structure is a twisted multilayer stack."""
+        return self.structure_type == 'twister'
+
+    @property
+    def n_layers_stacked(self) -> Optional[int]:
+        """Number of stacked monolayer slabs (from twist metadata)."""
+        if hasattr(self, '_metadata') and 'n_layers' in self._metadata:
+            return self._metadata['n_layers']
+        if self.is_twister:
+            return 2
+        return None
+
+    @property
     def atoms(self) -> Atoms:
         """
         Access underlying ASE Atoms object.

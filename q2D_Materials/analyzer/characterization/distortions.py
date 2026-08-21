@@ -6,6 +6,7 @@ using the graph-based analyzer.
 
 from typing import Dict, List, Optional, Tuple, Union
 import numpy as np
+from ase.data import atomic_numbers, covalent_radii
 from ..utils.geometry_helpers import (
     apply_pbc_to_vector,
     calculate_angle_between_vectors,
@@ -16,6 +17,91 @@ from ...utils.geometry.pbc_distances import (
     find_nearest_image_positions,
     calculate_pbc_distances,
 )
+
+
+def _reconstruct_validated_octahedron(
+    analyzer,
+    central_idx: int,
+    n_neighbors: int = 6,
+    cutoff_scale: float = 1.45,
+    cutoff_padding: float = 0.25,
+) -> Tuple[Optional[Dict], str]:
+    """Reconstruct one BX6 unit from periodic X images and validate its bonds.
+
+    The same representation is used by bond, angle, distortion, and volume
+    descriptors. Repeated crystallographic X indices are allowed when their
+    periodic image labels differ, which is required for primitive cells.
+    """
+    b_x_data = analyzer.get_b_x_atoms()
+    all_x_indices = np.asarray(b_x_data["x_indices"], dtype=int)
+    all_x_positions = np.asarray(b_x_data["x_positions"], dtype=float)
+    if len(all_x_indices) == 0:
+        return None, "no_x_candidates"
+
+    atom_positions = analyzer.cell.get_positions()
+    atom_symbols = analyzer.cell.get_chemical_symbols()
+    cell = np.asarray(analyzer.cell.get_cell(), dtype=float)
+    central_pos = atom_positions[central_idx]
+
+    x_indices, x_positions, distances, image_labels = find_nearest_image_positions(
+        reference_position=central_pos,
+        candidate_positions=all_x_positions,
+        candidate_indices=all_x_indices,
+        cell=cell,
+        n_neighbors=n_neighbors,
+        pbc=True,
+    )
+    if len(x_indices) != n_neighbors:
+        return None, "insufficient_periodic_x_images"
+    if not np.all(np.isfinite(distances)) or np.any(distances <= 1e-8):
+        return None, "invalid_bond_distances"
+
+    image_keys = {
+        (int(idx), *(int(value) for value in image))
+        for idx, image in zip(x_indices, image_labels)
+    }
+    if len(image_keys) != n_neighbors:
+        return None, "duplicate_periodic_x_images"
+
+    b_symbol = atom_symbols[central_idx]
+    b_radius = covalent_radii[atomic_numbers[b_symbol]]
+    cutoffs = []
+    for x_idx in x_indices:
+        x_symbol = atom_symbols[int(x_idx)]
+        x_radius = covalent_radii[atomic_numbers[x_symbol]]
+        cutoffs.append(cutoff_scale * (b_radius + x_radius) + cutoff_padding)
+    if np.any(distances > np.asarray(cutoffs)):
+        return None, "bond_distance_exceeds_chemical_cutoff"
+
+    bond_vectors = x_positions - central_pos
+    plane_normal = np.cross(cell[0], cell[1])
+    norm = np.linalg.norm(plane_normal)
+    if norm < 1e-10:
+        plane_normal = cell[2]
+        norm = np.linalg.norm(plane_normal)
+    plane_normal = plane_normal / norm
+    alignments = np.abs(
+        np.asarray(
+            [
+                np.dot(vector / np.linalg.norm(vector), plane_normal)
+                for vector in bond_vectors
+            ]
+        )
+    )
+    axial_positions = set(np.argsort(alignments)[-2:].tolist())
+    geometry_labels = [
+        "axial" if i in axial_positions else "equatorial"
+        for i in range(n_neighbors)
+    ]
+
+    return {
+        "indices": x_indices,
+        "positions": x_positions,
+        "distances": distances,
+        "image_labels": image_labels,
+        "bond_vectors": bond_vectors,
+        "geometry_labels": geometry_labels,
+    }, "valid"
 
 
 def _get_x_atoms_from_octahedron_node(graph, octahedron_node: str) -> List[int]:
@@ -184,6 +270,17 @@ def _filter_octahedra_by_selection(
     return []
 
 
+def _octahedral_distortions_cache_key(
+    octahedra: Optional[List[str]],
+    layer: Optional[str],
+    layers: Optional[List[str]],
+) -> tuple:
+    """Hashable selection key for distortion-detail caching."""
+    oct_key = tuple(sorted(octahedra)) if octahedra is not None else None
+    layers_key = tuple(sorted(layers)) if layers is not None else None
+    return (oct_key, layer, layers_key)
+
+
 def _get_octahedral_distortions_detailed(
     analyzer,
     octahedra: Optional[List[str]] = None,
@@ -197,6 +294,9 @@ def _get_octahedral_distortions_detailed(
     - Octahedron → CONTAINS (role='center') → Atom (B-site)
     - Octahedron → CONTAINS (role='ligand') → Atom (X-site)
     - Layer → CONTAINS → Octahedron
+
+    Results are cached on ``analyzer`` for the selection key within one
+    analyze session (cleared on ``load`` / ``analyze``).
 
     Bond lengths are separated into axial and equatorial categories based on
     X atom geometry from the graph. This is important because axial B-X bonds
@@ -235,6 +335,28 @@ def _get_octahedral_distortions_detailed(
         - 'central_atom_symbol': Element symbol of B-site
         - 'geometry': Dict mapping X atom index to geometry type
     """
+    cache_key = _octahedral_distortions_cache_key(octahedra, layer, layers)
+    cache = getattr(analyzer, "_octahedral_distortions_cache", None)
+    if cache is None:
+        cache = {}
+        analyzer._octahedral_distortions_cache = cache
+    if cache_key in cache:
+        return cache[cache_key]
+
+    result = _compute_octahedral_distortions_detailed(
+        analyzer, octahedra=octahedra, layer=layer, layers=layers
+    )
+    cache[cache_key] = result
+    return result
+
+
+def _compute_octahedral_distortions_detailed(
+    analyzer,
+    octahedra: Optional[List[str]] = None,
+    layer: Optional[str] = None,
+    layers: Optional[List[str]] = None,
+) -> Dict[str, Dict[str, Union[float, np.ndarray, str]]]:
+    """Uncached implementation of per-octahedron distortion metrics."""
     graph = analyzer.get_graph()
 
     # Filter octahedra by selection
@@ -265,115 +387,79 @@ def _get_octahedral_distortions_detailed(
             UserWarning
         )
 
-    atom_positions = analyzer.cell.get_positions()
     cell = np.array(analyzer.cell.get_cell())
     atom_symbols = analyzer.cell.get_chemical_symbols()
-
-    # Get pre-computed X atom data from cache (computed once, reused for all octahedra)
-    b_x_data = analyzer.get_b_x_atoms()
-    all_x_indices = b_x_data['x_indices']
-    all_x_positions = b_x_data['x_positions']
-
-    if len(all_x_indices) < 6:
-        # Not enough X atoms in structure - return empty results
-        return {}
 
     results = {}
 
     for oct_node in selected_octahedra_nodes:
-        # Get B atom using graph traversal
         central_idx = _get_b_atom_from_octahedron_node(graph, oct_node)
-
         if central_idx is None:
+            results[oct_node] = {
+                "status": "failed",
+                "status_reason": "missing_central_atom",
+                "bond_lengths": np.array([]),
+                "bond_lengths_axial": np.array([]),
+                "bond_lengths_equatorial": np.array([]),
+                "bond_angles": np.array([]),
+                "volume": np.nan,
+                "layer": oct_to_layer.get(oct_node, "unknown"),
+                "central_atom_index": None,
+                "central_atom_symbol": None,
+                "geometry": {},
+            }
             continue
 
-        # Reconstruct octahedron using PBC images
-        # The graph may only show 5 atoms (e.g., "1 axial, 4 equatorial") because
-        # some atoms are in different periodic images. We need to find the 6 nearest
-        # X atoms using PBC to reconstruct the full octahedron.
-        central_pos = atom_positions[central_idx]
-
-        # Find 6 nearest X atoms using PBC images
-        # This will find the correct periodic images to reconstruct the full octahedron
-        # Even if the graph only shows 5 atoms, this will find all 6 including PBC images
-        nearest_x_indices, nearest_x_positions, nearest_distances, image_labels = find_nearest_image_positions(
-            reference_position=central_pos,
-            candidate_positions=all_x_positions,
-            candidate_indices=all_x_indices,
-            cell=cell,
-            n_neighbors=6,
-            pbc=True,
+        reconstructed, reason = _reconstruct_validated_octahedron(
+            analyzer, central_idx
         )
+        if reconstructed is None:
+            results[oct_node] = {
+                "status": "not_applicable",
+                "status_reason": reason,
+                "bond_lengths": np.array([]),
+                "bond_lengths_axial": np.array([]),
+                "bond_lengths_equatorial": np.array([]),
+                "bond_angles": np.array([]),
+                "volume": np.nan,
+                "layer": oct_to_layer.get(oct_node, "unknown"),
+                "central_atom_index": central_idx,
+                "central_atom_symbol": atom_symbols[central_idx],
+                "geometry": {},
+            }
+            continue
 
-        # Use the reconstructed positions (with PBC images)
-        # These positions are already in the correct PBC image relative to the B atom
-        x_positions = nearest_x_positions
-        bond_vectors = x_positions - central_pos
+        nearest_x_indices = reconstructed["indices"]
+        nearest_x_positions = reconstructed["positions"]
+        image_labels = reconstructed["image_labels"]
+        bond_vectors = reconstructed["bond_vectors"]
+        geometry_labels = reconstructed["geometry_labels"]
+        central_pos = analyzer.cell.get_positions()[central_idx]
 
-        # Get geometry classification from graph BEFORE computing bond lengths
-        # This allows us to separate axial and equatorial bonds
-        geometry = {}
-        for x_idx in nearest_x_indices:
-            atom_node = f"atom_{x_idx}"
-            node_data = graph.nodes.get(atom_node, {})
-
-            # Check if atom is axial (can be terminal, interlayer, or just axial)
-            is_axial = node_data.get('is_axial', False)
-            is_terminal = node_data.get('is_terminal', False)
-            is_interlayer = node_data.get('is_interlayer', False)
-
-            if is_axial or is_interlayer or is_terminal:
-                # Axial atom: classify as terminal or interlayer
-                if is_terminal:
-                    geometry[x_idx] = 'axial_terminal'
-                else:
-                    geometry[x_idx] = 'axial_interlayer'
-            else:
-                # Equatorial atom
-                geometry[x_idx] = 'equatorial'
-
-        # Fallback: if graph gave no equatorial (e.g. graph geometry not set), classify by c-axis alignment
-        # Axial = along c (2 largest |dot(bond_vec, c_hat)|), equatorial = in ab-plane (4 smallest)
-        n_equatorial_from_graph = sum(1 for g in geometry.values() if g == 'equatorial')
-        if n_equatorial_from_graph == 0 and len(nearest_x_indices) == 6:
-            c_vec = np.array(cell[2], dtype=np.float64)
-            c_norm = np.linalg.norm(c_vec)
-            c_hat = c_vec / c_norm if c_norm >= 1e-10 else np.array([0.0, 0.0, 1.0])
-            alignments = []
-            for i in range(len(bond_vectors)):
-                vec = bond_vectors[i]
-                norm = np.linalg.norm(vec) + 1e-9
-                alignment = np.abs(np.dot(vec / norm, c_hat))
-                alignments.append((i, nearest_x_indices[i], alignment))
-            alignments.sort(key=lambda x: x[2], reverse=True)
-            for k, (_, x_idx, _) in enumerate(alignments):
-                geometry[x_idx] = 'axial_interlayer' if k < 2 else 'equatorial'
-
-        # Compute bond lengths separated by geometry
-        bond_lengths_axial = []
-        bond_lengths_equatorial = []
-        all_bond_lengths = []
-
-        for i, x_idx in enumerate(nearest_x_indices):
-            bond_length = np.linalg.norm(bond_vectors[i])
-            all_bond_lengths.append(bond_length)
-
-            geom_type = geometry.get(x_idx, 'equatorial')
-            if geom_type.startswith('axial'):
-                bond_lengths_axial.append(bond_length)
-            else:
-                bond_lengths_equatorial.append(bond_length)
-
-        bond_lengths_array = np.array(all_bond_lengths)
-        bond_lengths_axial_array = np.array(bond_lengths_axial)
-        bond_lengths_equatorial_array = np.array(bond_lengths_equatorial)
+        bond_lengths_array = np.asarray(reconstructed["distances"], dtype=float)
+        bond_lengths_axial_array = np.asarray(
+            [
+                distance
+                for distance, label in zip(bond_lengths_array, geometry_labels)
+                if label == "axial"
+            ],
+            dtype=float,
+        )
+        bond_lengths_equatorial_array = np.asarray(
+            [
+                distance
+                for distance, label in zip(bond_lengths_array, geometry_labels)
+                if label == "equatorial"
+            ],
+            dtype=float,
+        )
 
         # Compute X-B-X angles (using reconstructed positions)
         angles = []
-        for i in range(len(x_positions)):
-            for j in range(i + 1, len(x_positions)):
-                vec1 = x_positions[i] - central_pos
-                vec2 = x_positions[j] - central_pos
+        for i in range(len(nearest_x_positions)):
+            for j in range(i + 1, len(nearest_x_positions)):
+                vec1 = nearest_x_positions[i] - central_pos
+                vec2 = nearest_x_positions[j] - central_pos
                 angle = calculate_angle_between_vectors(vec1, vec2, cell=cell, apply_pbc=False)
                 angles.append(angle)
 
@@ -399,20 +485,36 @@ def _get_octahedral_distortions_detailed(
         lambda_param = np.var(angle_deviations)
         mean_angle = float(np.mean(angles_array))
 
-        # Compute octahedral volume
+        volume_geometry = {
+            i: (
+                "axial_interlayer"
+                if label == "axial"
+                else "equatorial"
+            )
+            for i, label in enumerate(geometry_labels)
+        }
         try:
             oct_volume = compute_octahedral_volume(
                 central_pos=central_pos,
                 x_positions=nearest_x_positions,
-                x_indices=nearest_x_indices,
-                geometry=geometry
+                x_indices=list(range(6)),
+                geometry=volume_geometry,
             )
         except ValueError as e:
             import warnings
             warnings.warn(f"Volume calculation failed for {oct_node}: {e}")
-            oct_volume = 0.0
+            oct_volume = np.nan
+
+        geometry = {
+            f"{int(x_idx)}@{','.join(str(int(v)) for v in image)}": label
+            for x_idx, image, label in zip(
+                nearest_x_indices, image_labels, geometry_labels
+            )
+        }
 
         results[oct_node] = {
+            'status': 'valid',
+            'status_reason': 'valid',
             'delta': float(delta_param),
             'sigma': float(sigma_param),
             'lambda': float(lambda_param),
@@ -429,6 +531,8 @@ def _get_octahedral_distortions_detailed(
             'central_atom_index': central_idx,
             'central_atom_symbol': atom_symbols[central_idx] if central_idx is not None else None,
             'geometry': geometry,
+            'periodic_x_indices': nearest_x_indices,
+            'periodic_image_labels': image_labels,
         }
 
     return results
@@ -453,6 +557,14 @@ def _aggregate_bond_length_metrics(
     dict
         Aggregated metrics with axial/equatorial separation
     """
+    total_count = len(oct_data_list)
+    oct_data_list = [
+        metrics
+        for metrics in oct_data_list
+        if metrics.get("status") == "valid"
+        and len(metrics.get("bond_lengths", [])) == 6
+    ]
+    valid_count = len(oct_data_list)
     all_bond_lengths = []
     all_bond_lengths_axial = []
     all_bond_lengths_equatorial = []
@@ -472,6 +584,9 @@ def _aggregate_bond_length_metrics(
     # Guard against empty arrays
     if len(bond_lengths_array) == 0:
         return {
+            'status': 'not_applicable' if total_count else 'failed',
+            'valid_octahedra': valid_count,
+            'total_octahedra': total_count,
             'delta': None,
             'sigma': None,
             'lambda': None,
@@ -490,6 +605,9 @@ def _aggregate_bond_length_metrics(
     # Guard against zero or NaN mean_bond_length
     if mean_bond_length == 0 or np.isnan(mean_bond_length):
         return {
+            'status': 'failed',
+            'valid_octahedra': valid_count,
+            'total_octahedra': total_count,
             'delta': None,
             'sigma': None,
             'lambda': None,
@@ -527,6 +645,9 @@ def _aggregate_bond_length_metrics(
         mean_angle = float(np.mean(angles_array))
 
     return {
+        'status': 'valid' if valid_count == total_count else 'partial',
+        'valid_octahedra': valid_count,
+        'total_octahedra': total_count,
         'delta': delta,
         'sigma': sigma,
         'lambda': lambda_param,
@@ -597,6 +718,9 @@ def _compute_octahedral_distortions(
 
     if len(oct_data) == 0:
         empty_result = {
+            'status': 'not_applicable',
+            'valid_octahedra': 0,
+            'total_octahedra': 0,
             'delta': None,
             'sigma': None,
             'lambda': None,

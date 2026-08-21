@@ -389,9 +389,29 @@ def _find_valid_paths_pattern_based(
     return valid_paths
 
 
+def _atom_only_subgraph(full_graph: nx.Graph) -> nx.Graph:
+    """Atom nodes with bonded_to edges only (no molecule_0 wrapper)."""
+    atom_nodes = [
+        n for n, d in full_graph.nodes(data=True)
+        if d.get("node_type") == "atom" or (
+            "symbol" in d
+            and not (isinstance(n, str) and n.startswith(("molecule_", "spacer_", "a_site_")))
+        )
+    ]
+    sub = full_graph.subgraph(atom_nodes).copy()
+    # Drop non-bonded edges if any slipped in
+    to_remove = [
+        (u, v) for u, v, d in sub.edges(data=True)
+        if d.get("edge_type") not in (None, "bonded_to")
+    ]
+    if to_remove:
+        sub.remove_edges_from(to_remove)
+    return sub
+
+
 def analyze_molecule_candidate(
-    molecule: Union[Atoms, str],
-    spacer_type: str = "DJ",
+    molecule: Union[Atoms, str, nx.Graph],
+    spacer_type: Optional[str] = "DJ",
     initial_pattern: Union[str, List[str]] = None,
     final_pattern: Union[str, List[str]] = None,
     min_chain_length: int = 2,
@@ -400,34 +420,30 @@ def analyze_molecule_candidate(
     max_non_carbon_ratio: Optional[float] = None,
     allow_same_carbon: bool = False
 ) -> SpacerCandidateResult:
-    """Analyze if molecule is suitable as DJ or RP spacer using pattern matching.
+    """Validate molecule chemistry and optionally DJ/RP spacer patterns.
 
-    **Pattern-Based Validation**: Users specify SMILES patterns that define
-    valid terminal groups. The system finds all matches and validates paths
-    between them.
+    Stage 1 (always): chemical completeness on the molecular graph
+    (valence, hydrogens, connectivity).
 
-    - DJ (Dion-Jacobson): Bifunctional spacer with paths between two patterns
-    - RP (Ruddlesden-Popper): Monofunctional spacer with at least one pattern match
+    Stage 2 (when ``spacer_type`` is ``DJ`` or ``RP``): existing SMARTS
+    terminal / path checks.
 
     Parameters
     ----------
-    molecule : Atoms or str
-        ASE Atoms object or SMILES string
-    spacer_type : str
-        Type of spacer to analyze: "DJ" or "RP" (default: "DJ")
+    molecule : Atoms, str, or nx.Graph
+        ASE Atoms, SMILES string, or molecular/CIF atom subgraph
+    spacer_type : str or None
+        ``"DJ"``, ``"RP"``, or ``None`` / ``"none"`` for chemistry only
     initial_pattern : str or List[str], optional
         SMILES pattern(s) for initial terminal (default: 'NH2C')
-        Examples: '[NH3+]C', 'NH2C', ['[NH3+]C', 'NH2C']
     final_pattern : str or List[str], optional
         SMILES pattern(s) for final terminal (default: 'NH2C')
-        Can be different from initial_pattern for asymmetric spacers
     min_chain_length : int
         Minimum atoms between terminal carbons for DJ (default: 2)
-        Ignored for RP spacers
     allowed_backbone_elements : Set[str], optional
         Elements allowed in backbone path (default: {'C', 'N', 'O'})
     forbidden_backbone_elements : Set[str], optional
-        Elements forbidden in backbone path (default: {'P', 'Si', 'B', metals...})
+        Elements forbidden in backbone path
     max_non_carbon_ratio : float, optional
         Maximum ratio of non-carbon heavy atoms in backbone (default: 0.3)
     allow_same_carbon : bool
@@ -436,38 +452,68 @@ def analyze_molecule_candidate(
     Returns
     -------
     SpacerCandidateResult
-        Analysis with validity, terminal groups, and paths (DJ only)
-
-    Examples
-    --------
-    >>> from q2D_Materials.analyzer import q2D_analyzer
-    >>> analyzer = q2D_analyzer()
-    >>>
-    >>> # Basic usage with NH2 groups
-    >>> result = analyzer.mol_validate(
-    ...     "NCCCCN",
-    ...     spacer_type="DJ",
-    ...     initial_pattern='NH2C',
-    ...     final_pattern='NH2C'
-    ... )
-    >>>
-    >>> # Ammonium terminals
-    >>> result = analyzer.mol_validate(
-    ...     molecule,
-    ...     spacer_type="DJ",
-    ...     initial_pattern='[NH3+]C',
-    ...     final_pattern='[NH3+]C'
-    ... )
-    >>>
-    >>> # Multiple final patterns
-    >>> result = analyzer.mol_validate(
-    ...     molecule,
-    ...     spacer_type="DJ",
-    ...     initial_pattern='[NH3+]C',
-    ...     final_pattern=['[NH3+]C', 'NH2C']
-    ... )
+        Analysis with validity, reason, and molecular graph
     """
-    spacer_type = spacer_type.upper()
+    from .molecule_graph import create_molecule_graph
+    from .molecule_chemistry import check_molecule_chemistry
+
+    if spacer_type is None:
+        spacer_type_norm = "NONE"
+    else:
+        spacer_type_norm = str(spacer_type).upper()
+        if spacer_type_norm in ("", "NONE", "CHEM", "CHEMISTRY"):
+            spacer_type_norm = "NONE"
+
+    if isinstance(molecule, Atoms):
+        atoms = molecule
+    else:
+        atoms = Atoms()
+
+    try:
+        full_graph = create_molecule_graph(
+            molecule,
+            analyze_backbone=False,
+            initial_pattern=initial_pattern,
+            final_pattern=final_pattern,
+        )
+    except Exception as e:
+        return SpacerCandidateResult(
+            spacer_type=spacer_type_norm,
+            is_valid=False,
+            reason=f"Failed to build molecular graph: {e}",
+            terminal_groups=[],
+            valid_paths=[],
+            original_atoms=atoms,
+            graph=nx.Graph(),
+        )
+
+    graph = _atom_only_subgraph(full_graph)
+
+    # Stage 1: chemical completeness
+    chem_ok, chem_reason, chem_detail = check_molecule_chemistry(graph)
+    if not chem_ok:
+        reason = chem_reason if not chem_detail else f"{chem_reason}: {chem_detail}"
+        return SpacerCandidateResult(
+            spacer_type=spacer_type_norm,
+            is_valid=False,
+            reason=reason,
+            terminal_groups=[],
+            valid_paths=[],
+            original_atoms=atoms,
+            graph=graph,
+        )
+
+    # Chemistry-only mode
+    if spacer_type_norm == "NONE":
+        return SpacerCandidateResult(
+            spacer_type="NONE",
+            is_valid=True,
+            reason="ok",
+            terminal_groups=[],
+            valid_paths=[],
+            original_atoms=atoms,
+            graph=graph,
+        )
 
     # Use default patterns if not specified
     if initial_pattern is None:
@@ -475,7 +521,6 @@ def analyze_molecule_candidate(
     if final_pattern is None:
         final_pattern = DEFAULT_FINAL_PATTERN
 
-    # Convert patterns to lists for uniform handling
     if isinstance(initial_pattern, str):
         initial_patterns = [initial_pattern]
     else:
@@ -486,54 +531,14 @@ def analyze_molecule_candidate(
     else:
         final_patterns = final_pattern
 
-    # Convert SMILES to graph directly (no 3D coordinates needed for pattern matching)
-    if isinstance(molecule, str):
-        try:
-            # Use RDKit for SMILES parsing - fast, graph-based, no 3D coordinates
-            validate_smiles(molecule)
-            mol = Chem.MolFromSmiles(molecule)
-            if mol is None:
-                raise ValueError(f"RDKit could not parse SMILES: {molecule}")
-            graph = rdkit_to_graph(mol, coords=None)
-            # Create empty Atoms object for result (not needed for graph-based matching)
-            atoms = Atoms()
-        except Exception as e:
-            return SpacerCandidateResult(
-                spacer_type=spacer_type,
-                is_valid=False,
-                reason=f"Invalid SMILES string: {e}",
-                terminal_groups=[],
-                valid_paths=[],
-                original_atoms=Atoms(),
-                graph=nx.Graph()
-            )
-    else:
-        # If Atoms object provided, convert to graph using unified converter
-        # This ensures both SMILES and Atoms inputs produce graphs with sequential node indices
-        atoms = molecule
-        try:
-            graph = atoms_to_graph(atoms, preserve_coords=True)
-        except Exception as e:
-            return SpacerCandidateResult(
-                spacer_type=spacer_type,
-                is_valid=False,
-                reason=f"Failed to build molecular graph: {e}",
-                terminal_groups=[],
-                valid_paths=[],
-                original_atoms=atoms,
-                graph=nx.Graph()
-            )
-
-    # Parse patterns and find matches
+    # Stage 2: SMARTS on atom-only subgraph
     try:
-        # Find all initial pattern matches
         all_initial_matches = []
         for pat in initial_patterns:
             pat_mol = _parse_pattern(pat)
             matches = _find_pattern_matches(graph, pat_mol)
             all_initial_matches.extend(matches)
 
-        # Find all final pattern matches
         all_final_matches = []
         for pat in final_patterns:
             pat_mol = _parse_pattern(pat)
@@ -542,7 +547,7 @@ def analyze_molecule_candidate(
 
     except ValueError as e:
         return SpacerCandidateResult(
-            spacer_type=spacer_type,
+            spacer_type=spacer_type_norm,
             is_valid=False,
             reason=f"Pattern parsing error: {e}",
             terminal_groups=[],
@@ -551,10 +556,9 @@ def analyze_molecule_candidate(
             graph=graph
         )
 
-    # Check if patterns were found
     if len(all_initial_matches) == 0:
         return SpacerCandidateResult(
-            spacer_type=spacer_type,
+            spacer_type=spacer_type_norm,
             is_valid=False,
             reason=f"No NH terminal groups found (no matches for pattern(s): {initial_patterns})",
             terminal_groups=[],
@@ -563,12 +567,10 @@ def analyze_molecule_candidate(
             graph=graph
         )
 
-    # Type-specific validation
-    if spacer_type == "DJ":
-        # DJ spacers need final pattern matches
+    if spacer_type_norm == "DJ":
         if len(all_final_matches) == 0:
             return SpacerCandidateResult(
-                spacer_type=spacer_type,
+                spacer_type=spacer_type_norm,
                 is_valid=False,
                 reason=f"No matches found for final pattern(s): {final_patterns}",
                 terminal_groups=[],
@@ -577,7 +579,6 @@ def analyze_molecule_candidate(
                 graph=graph
             )
 
-        # Find valid paths between pattern matches
         valid_paths = _find_valid_paths_pattern_based(
             graph,
             all_initial_matches,
@@ -590,18 +591,17 @@ def analyze_molecule_candidate(
         )
 
         if len(valid_paths) == 0:
-            # Check if we have distinct terminals (for better error message)
             initial_carbons = {m['anchor_idx'] for m in all_initial_matches if m['anchor_idx'] is not None}
             final_carbons = {m['anchor_idx'] for m in all_final_matches if m['anchor_idx'] is not None}
             distinct_terminals = len(initial_carbons | final_carbons)
-            
+
             if distinct_terminals < 2:
                 reason = f"DJ spacer requires at least 2 distinct terminal groups, found {distinct_terminals}"
             else:
                 reason = "No valid backbone path found between pattern matches"
-            
+
             return SpacerCandidateResult(
-                spacer_type=spacer_type,
+                spacer_type=spacer_type_norm,
                 is_valid=False,
                 reason=reason,
                 terminal_groups=[],
@@ -610,9 +610,8 @@ def analyze_molecule_candidate(
                 graph=graph
             )
 
-        # Success!
         return SpacerCandidateResult(
-            spacer_type=spacer_type,
+            spacer_type=spacer_type_norm,
             is_valid=True,
             reason=f"Valid DJ spacer with {len(valid_paths)} path(s) between patterns",
             terminal_groups=[],
@@ -621,12 +620,11 @@ def analyze_molecule_candidate(
             graph=graph
         )
 
-    elif spacer_type == "RP":
-        # RP spacers need at least one match with carbon
+    elif spacer_type_norm == "RP":
         matches_with_carbon = [m for m in all_initial_matches if m['anchor_idx'] is not None]
         if len(matches_with_carbon) == 0:
             return SpacerCandidateResult(
-                spacer_type=spacer_type,
+                spacer_type=spacer_type_norm,
                 is_valid=False,
                 reason="No pattern matches with carbon attachment found",
                 terminal_groups=[],
@@ -635,9 +633,8 @@ def analyze_molecule_candidate(
                 graph=graph
             )
 
-        # Success!
         return SpacerCandidateResult(
-            spacer_type=spacer_type,
+            spacer_type=spacer_type_norm,
             is_valid=True,
             reason=f"Valid RP spacer with {len(all_initial_matches)} pattern match(es)",
             terminal_groups=[],
@@ -648,9 +645,9 @@ def analyze_molecule_candidate(
 
     else:
         return SpacerCandidateResult(
-            spacer_type=spacer_type,
+            spacer_type=spacer_type_norm,
             is_valid=False,
-            reason=f"Unknown spacer_type '{spacer_type}'. Use 'DJ' or 'RP'.",
+            reason=f"Unknown spacer_type '{spacer_type_norm}'. Use 'DJ', 'RP', or None.",
             terminal_groups=[],
             valid_paths=[],
             original_atoms=atoms,

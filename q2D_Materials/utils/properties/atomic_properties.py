@@ -1511,6 +1511,9 @@ def detect_bonds(
     
     This is the unified bond detection function that consolidates logic
     from graph_converter and pymatgen_utils.
+
+    Pairwise distances are computed once via a batched PBC distance matrix
+    (NumPy / Numba), then filtered with vectorized covalent-radius cutoffs.
     
     Parameters
     ----------
@@ -1543,45 +1546,52 @@ def detect_bonds(
     >>> len(bonds)  # C-C + 4 C-H bonds
     5
     """
-    from ..geometry.pbc_distances import calculate_pbc_distances
-    
-    bonds = []
+    from ..geometry.pbc_distances import distance_matrix_pbc
+
+    positions = np.asarray(positions, dtype=np.float64)
     n_atoms = len(symbols)
-    
-    # Calculate all pairwise distances
-    for i in range(n_atoms):
-        for j in range(i + 1, n_atoms):
-            # Skip H-H bonds
-            if symbols[i] == 'H' and symbols[j] == 'H':
-                continue
-            
-            # Calculate distance
-            if cell is not None:
-                pbc_arg = True if pbc is None else pbc
-                distance = calculate_pbc_distances(
-                    positions[i],
-                    positions[j:j+1],
-                    cell,
-                    pbc=pbc_arg,
-                    mode='auto'
-                )[0]
-            else:
-                distance = np.linalg.norm(positions[i] - positions[j])
-            
-            # Check if bonded
-            if are_atoms_bonded(distance, symbols[i], symbols[j], tolerance):
-                # Estimate bond order if requested
-                if estimate_bond_orders:
-                    bond_order = estimate_bond_order(distance, symbols[i], symbols[j], tolerance=0.15)
-                else:
-                    bond_order = 1
-                
-                bonds.append((i, j, distance, bond_order))
-    
-    # Apply hydrogen bonding rules if requested
+    if n_atoms < 2:
+        return []
+    if positions.ndim != 2 or positions.shape[0] != n_atoms or positions.shape[1] != 3:
+        raise ValueError(
+            f"positions must have shape ({n_atoms}, 3); got {positions.shape}"
+        )
+
+    if cell is not None:
+        pbc_arg: Union[bool, List[bool]] = True if pbc is None else pbc
+        dmat = distance_matrix_pbc(
+            positions, positions, np.asarray(cell, dtype=np.float64),
+            pbc=pbc_arg, mode="auto",
+        )
+    else:
+        diff = positions[:, None, :] - positions[None, :, :]
+        dmat = np.linalg.norm(diff, axis=-1)
+
+    radii = np.array([get_covalent_radius(symbol) for symbol in symbols], dtype=np.float64)
+    cutoff = radii[:, None] + radii[None, :] + float(tolerance)
+    is_h = np.array([symbol == "H" for symbol in symbols], dtype=bool)
+
+    i_idx, j_idx = np.triu_indices(n_atoms, k=1)
+    distances = dmat[i_idx, j_idx]
+    keep = (distances <= cutoff[i_idx, j_idx]) & ~(is_h[i_idx] & is_h[j_idx])
+
+    bonds: List[Tuple[int, int, float, int]] = []
+    for i, j, distance in zip(
+        i_idx[keep].tolist(),
+        j_idx[keep].tolist(),
+        distances[keep].tolist(),
+    ):
+        if estimate_bond_orders:
+            bond_order = estimate_bond_order(
+                distance, symbols[i], symbols[j], tolerance=0.15
+            )
+        else:
+            bond_order = 1
+        bonds.append((i, j, float(distance), bond_order))
+
     if enforce_hydrogen_rules:
         bonds = _enforce_hydrogen_single_bond(bonds, symbols)
-    
+
     return bonds
 
 

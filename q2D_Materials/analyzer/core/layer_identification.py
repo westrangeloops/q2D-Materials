@@ -10,16 +10,29 @@ import networkx as nx
 from ..octahedral_processing.octahedral_detection import _calculate_avg_bx_distance
 
 
+def _mic_distance(p1: np.ndarray, p2: np.ndarray, cell: np.ndarray = None) -> float:
+    """Minimum-image Cartesian distance; Euclidean if ``cell`` is None."""
+    delta = np.asarray(p2, dtype=float) - np.asarray(p1, dtype=float)
+    if cell is not None:
+        cell = np.asarray(cell, dtype=float)
+        frac = np.linalg.solve(cell.T, delta)
+        frac -= np.round(frac)
+        delta = cell.T @ frac
+    return float(np.linalg.norm(delta))
+
+
 def _identify_slabs_by_continuity(
     octahedra_info: list,
     shared_atoms: dict,
     atom_positions: np.ndarray,
+    cell: np.ndarray = None,
 ) -> dict:
-    """Partition octahedra into slabs based on z-continuity.
+    """Partition octahedra into slabs based on continuity.
 
-    A slab is a connected group of octahedra where z-changes between
-    adjacent octahedra are smooth (within expected layer spacing).
-    A discontinuity (large z-jump) indicates a slab boundary.
+    A slab is a connected group of octahedra linked by shared ligands and/or
+    B–B proximity within expected layer spacing (MIC-aware). This recovers
+    slabs when ligand classification marks bridges as terminal (e.g. NMSE
+    #209) and when stacking is not along cartesian z.
 
     Parameters
     ----------
@@ -29,6 +42,8 @@ def _identify_slabs_by_continuity(
         Dictionary mapping (oct_i, oct_j) -> list of shared atom indices
     atom_positions : np.ndarray
         Array of all atom positions
+    cell : np.ndarray, optional
+        3x3 cell matrix for minimum-image distances
 
     Returns
     -------
@@ -72,31 +87,48 @@ def _identify_slabs_by_continuity(
 
     max_z_jump = expected_layer_spacing * 1.3
 
-    # Build graph of octahedra with z-coordinates
+    # Build graph of octahedra with z-coordinates (cartesian z kept for ranges)
     oct_graph = nx.Graph()
     oct_z_coords = {}
-    
+    oct_centers = {}
+
     for oct_idx, oct_data in enumerate(octahedra_info):
         central_idx = oct_data.get('central_atom_index')
         if central_idx is not None:
             z_coord = atom_positions[central_idx][2]
             oct_graph.add_node(oct_idx, z_coord=z_coord)
             oct_z_coords[oct_idx] = z_coord
+            oct_centers[oct_idx] = np.asarray(atom_positions[central_idx], dtype=float)
 
-    # Add edges between octahedra that share atoms, filtering by z-difference
+    # Add edges between octahedra that share atoms, filtering by B–B distance
     for (oct_i, oct_j), shared in shared_atoms.items():
-        if oct_i in oct_z_coords and oct_j in oct_z_coords:
-            z_i = oct_z_coords[oct_i]
-            z_j = oct_z_coords[oct_j]
-            z_diff = abs(z_j - z_i)
-            
-            # Only connect if z-difference is within threshold (same slab)
-            if z_diff <= max_z_jump:
+        if oct_i in oct_centers and oct_j in oct_centers:
+            bb_dist = _mic_distance(oct_centers[oct_i], oct_centers[oct_j], cell)
+            if bb_dist <= max_z_jump:
                 oct_graph.add_edge(
                     oct_i, oct_j,
-                    z_difference=z_diff,
+                    z_difference=abs(oct_z_coords[oct_i] - oct_z_coords[oct_j]),
+                    bb_distance=bb_dist,
                     n_shared_atoms=len(shared),
                     shared_atoms=shared,
+                )
+
+    # Fallback: connect by B–B proximity when ligand sharing was missed
+    # (all-terminal misclassification). Does not bridge organic gaps (~2× spacing).
+    oct_ids = list(oct_centers.keys())
+    for i, oct_i in enumerate(oct_ids):
+        for oct_j in oct_ids[i + 1:]:
+            if oct_graph.has_edge(oct_i, oct_j):
+                continue
+            bb_dist = _mic_distance(oct_centers[oct_i], oct_centers[oct_j], cell)
+            if bb_dist <= max_z_jump:
+                oct_graph.add_edge(
+                    oct_i, oct_j,
+                    z_difference=abs(oct_z_coords[oct_i] - oct_z_coords[oct_j]),
+                    bb_distance=bb_dist,
+                    n_shared_atoms=0,
+                    shared_atoms=[],
+                    proximity_fallback=True,
                 )
 
     slabs = {}

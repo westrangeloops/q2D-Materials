@@ -27,6 +27,7 @@ from .core.analyzer_class import q2D_analyzer
 from .core.graph_construction import _graph_inorganic_ontology
 from .core.layer_identification import _identify_layers, _identify_slabs_by_continuity
 from .core.layers_wrapper import Layers
+from .core.slabs_wrapper import Slabs
 from .core.layer_analysis import (
     get_intralayer_bxb,
     get_interlayer_bxb,
@@ -36,7 +37,11 @@ from .molecular_processing.molecule_classification import (
     _classify_molecules_by_continuity,
     _find_molecular_components,
 )
-from .octahedral_processing.octahedral_detection import _count_octahedra, find_shared_atoms
+from .octahedral_processing.octahedral_detection import (
+    _count_octahedra,
+    find_shared_atoms,
+    build_octahedra_ligand_info,
+)
 from .utils.perovskite_constants import (
     PEROVSKITE_BOND_RADII,
     get_bond_cutoff,
@@ -49,6 +54,7 @@ from .core.structure_classification import (
 __all__ = [
     'q2D_analyzer',
     'Layers',
+    'Slabs',
     'get_intralayer_bxb',
     'get_interlayer_bxb',
     'get_all_interlayer_bxb',
@@ -56,6 +62,7 @@ __all__ = [
     'get_bond_cutoff',
     '_count_octahedra',
     'find_shared_atoms',
+    'build_octahedra_ligand_info',
     '_graph_inorganic_ontology',
     '_identify_layers',
     '_identify_slabs_by_continuity',

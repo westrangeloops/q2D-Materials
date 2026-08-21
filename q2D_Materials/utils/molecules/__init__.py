@@ -18,6 +18,12 @@ from .pbc_reconstruction import (
     reconstruct_molecule_pbc,
     reconstruct_molecule_from_nh3,
 )
+from .hydrogen_cleanup import (
+    merge_close_hydrogens,
+    merge_disordered_hydrogens,
+    select_cif_atoms,
+    prepare_experimental_structure,
+)
 
 __all__ = [
     'smiles_to_ase_atoms',
@@ -34,5 +40,10 @@ __all__ = [
     # PBC reconstruction functions
     'reconstruct_molecule_pbc',
     'reconstruct_molecule_from_nh3',
+    # Experimental CIF cleanup
+    'merge_close_hydrogens',
+    'merge_disordered_hydrogens',
+    'select_cif_atoms',
+    'prepare_experimental_structure',
 ]
 
