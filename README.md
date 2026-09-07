@@ -93,4 +93,4 @@ Want to customize templates or automate up a new spacer? The Examples folder als
 2. Stanton, R. & Trivedi, D. J., “Pyrovskite: A software package for high-throughput perovskite construction.” *J. Chem. Phys.* 159, 6 (2023).
 
 ## License
-GNU GENERAL PUBLIC LICENSE v3.0
+MIT License — see [`LICENSE.MD`](LICENSE.MD).
